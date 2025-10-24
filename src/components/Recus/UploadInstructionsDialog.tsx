@@ -1,0 +1,144 @@
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
+
+interface UploadInstructionsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export const UploadInstructionsDialog = ({
+  open,
+  onOpenChange,
+}: UploadInstructionsDialogProps) => {
+  const [selectedClient, setSelectedClient] = useState<string>("");
+  const [fileInputKey, setFileInputKey] = useState(0);
+
+  const handleClientSelect = () => {
+    // TODO: Ouvrir le sélecteur de clients
+    setSelectedClient("Client exemple");
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && selectedClient) {
+      // TODO: Déclencher l'upload du fichier
+      console.log("Upload file:", file, "for client:", selectedClient);
+      onOpenChange(false);
+      setSelectedClient("");
+      setFileInputKey(prev => prev + 1);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-semibold text-center text-foreground mb-8">
+            👉 Quelques consignes avant l'envoi
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          {/* Téléphone en paysage */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="relative">
+              <Smartphone className="w-16 h-16 text-white rotate-90" strokeWidth={1.5} />
+              <div className="absolute -bottom-2 -right-2">
+                <svg
+                  className="w-8 h-8 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M17 8l4 4m0 0l-4 4m4-4H3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Prenez la photo de votre reçu en orientant votre téléphone en mode paysage.
+            </p>
+          </div>
+
+          {/* Lumière / éclairage */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            <Lightbulb className="w-16 h-16 text-white" strokeWidth={1.5} />
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Prenez la photo dans un endroit bien éclairé, sans ombre sur le reçu.
+            </p>
+          </div>
+
+          {/* Reçu bien cadré */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            <Frame className="w-16 h-16 text-white" strokeWidth={1.5} />
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Le reçu doit être entièrement visible et bien cadré dans l'image.
+            </p>
+          </div>
+
+          {/* Éviter texte/objets */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="relative">
+              <Frame className="w-16 h-16 text-white" strokeWidth={1.5} />
+              <X className="w-10 h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" strokeWidth={3} />
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Évitez tout texte ou objet autour du reçu pour une meilleure détection.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-6 pt-4 border-t border-border">
+          <p className="text-center text-sm text-muted-foreground">
+            Veuillez sélectionner un client avant de déposer un reçu.
+          </p>
+
+          <div className="space-y-4">
+            <div className="text-center">
+              <label className="text-sm font-medium text-foreground">
+                Assigner à :
+              </label>
+            </div>
+
+            <Button
+              onClick={handleClientSelect}
+              className="w-full bg-white text-black hover:bg-white/90 font-medium"
+              size="lg"
+            >
+              {selectedClient || "Sélectionner un client"}
+            </Button>
+
+            <div className="relative">
+              <input
+                key={fileInputKey}
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                onChange={handleFileSelect}
+                disabled={!selectedClient}
+                className="hidden"
+                id="receipt-upload"
+              />
+              <Button
+                asChild
+                disabled={!selectedClient}
+                className="w-full bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                size="lg"
+              >
+                <label htmlFor="receipt-upload" className="cursor-pointer">
+                  Choisir un fichier
+                </label>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};

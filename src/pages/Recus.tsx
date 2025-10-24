@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Calendar, ChevronDown, Plus, Search } from "lucide-react";
+import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 
 const Recus = () => {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
   return (
     <MainLayout>
       <div className="p-8 space-y-8">
@@ -12,7 +16,7 @@ const Recus = () => {
           <h1 className="text-3xl font-bold">Reçus</h1>
           <div className="flex gap-3">
             <Button variant="outline">Exporter</Button>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
               Ajouter un reçu
             </Button>
@@ -49,6 +53,11 @@ const Recus = () => {
             </div>
           </CardContent>
         </Card>
+
+        <UploadInstructionsDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+        />
       </div>
     </MainLayout>
   );
