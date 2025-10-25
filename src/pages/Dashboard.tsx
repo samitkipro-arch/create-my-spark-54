@@ -316,7 +316,7 @@ const Dashboard = () => {
                 Aucune donnée disponible
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 320 : 300}>
+              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 240 : 300}>
                 <LineChart data={chart} margin={{ left: window.innerWidth < 768 ? -10 : 0, right: window.innerWidth < 768 ? 10 : 0 }}>
                   <CartesianGrid 
                     strokeDasharray="3 3" 

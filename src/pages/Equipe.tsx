@@ -50,26 +50,27 @@ const Equipe = () => {
         <div className="md:hidden space-y-2.5 transition-all duration-200">
           {mockTeam.map((member) => (
             <Card key={member.name} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
-              <CardContent className="p-3 space-y-2.5 transition-all duration-150">
+              <CardContent className="p-3 transition-all duration-150">
                 <div className="flex items-center gap-2.5">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
                       {member.initials}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1">
-                    <div className="font-semibold text-sm">{member.name}</div>
-                    <Badge variant="secondary" className="mt-1 text-xs h-5">{member.role}</Badge>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                    <span>{member.status}</span>
-                  </div>
-                  <div className="text-muted-foreground">
-                    <span className="text-[10px]">Dernière connexion: </span>
-                    <span>{member.lastConnection}</span>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold text-sm">{member.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        <span className="text-xs">{member.status}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Badge variant="secondary" className="text-xs h-5 w-fit">{member.role}</Badge>
+                      <div className="text-xs text-muted-foreground">
+                        Dernière connexion: {member.lastConnection}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
