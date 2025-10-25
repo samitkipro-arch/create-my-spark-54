@@ -85,52 +85,75 @@ const Recus = () => {
   }, []);
 
   const fetchReceipts = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Construire la requête de base
-      let q = supabase.from("recus_feed" as any).select("*");
-      
-      // Bornes de date (inclusives) - APPLIQUER UNIQUEMENT si l'utilisateur a choisi une période
-      const hasRange = Boolean(dateRange?.from) || Boolean(dateRange?.to);
-      const DATE_COL = "date_traitement";
-      
-      const startIso = dateRange?.from 
-        ? new Date(new Date(dateRange.from).setHours(0, 0, 0, 0)).toISOString() 
-        : null;
-      const endIso = dateRange?.to 
-        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString() 
-        : null;
-      
-      if (hasRange) {
-        if (startIso) q = q.gte(DATE_COL, startIso);
-        if (endIso) q = q.lte(DATE_COL, endIso);
-      }
-      
-      // Filtres client / statut - N'APPLIQUER QUE si ≠ "all"
-      if (selectedClient && selectedClient !== "all") {
-        q = q.eq("client_id", selectedClient);
-      }
-      if (selectedStatus && selectedStatus !== "all") {
-        q = q.eq("status", selectedStatus);
-      }
-      
-      // Recherche texte - ILIKE multi-colonnes
-      if (debouncedQuery) {
-        const s = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
-        q = q.or(`numero_recu.ilike.%${s}%,enseigne.ilike.%${s}%,adresse.ilike.%${s}%`);
-      }
-      
-      // Tri + limite
-      q = q.order(DATE_COL, { ascending: false }).limit(100);
-      
-      const { data, error: fetchError } = await q;
+    setLoading(true);
+    setError(null);
 
-      if (fetchError) throw fetchError;
-      setReceipts((data as unknown as Receipt[]) || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors du chargement");
+    try {
+      // Déterminer la période
+      const hasRange = Boolean(dateRange?.from) || Boolean(dateRange?.to);
+      const startIso = hasRange && dateRange?.from
+        ? new Date(new Date(dateRange.from).setHours(0, 0, 0, 0)).toISOString()
+        : null;
+      const endIso = hasRange && dateRange?.to
+        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
+        : null;
+
+      // Map des filtres ("all" → null)
+      const p_client_id = selectedClient && selectedClient !== "all" ? selectedClient : null;
+      const p_status = selectedStatus && selectedStatus !== "all" ? selectedStatus : null;
+      const p_query = debouncedQuery || null;
+
+      // 🔹 Tentative principale : RPC
+      let data: any[] | null = null;
+      let rpcError: any = null;
+
+      ({ data, error: rpcError } = await (supabase.rpc as any)("recus_feed_list", {
+        p_from: startIso,
+        p_to: endIso,
+        p_client_id,
+        p_status,
+        p_query,
+        p_limit: 100,
+        p_offset: 0,
+      }));
+
+      // 🔸 Fallback : si la RPC échoue, lire directement dans la vue
+      if (rpcError) {
+        let q = supabase.from("recus_feed" as any).select("*");
+        if (startIso) q = q.gte("date_traitement", startIso);
+        if (endIso) q = q.lte("date_traitement", endIso);
+        if (p_client_id) q = q.eq("client_id", p_client_id);
+        if (p_status) q = q.eq("status", p_status);
+        if (p_query) {
+          const s = p_query.replace(/%/g, "\\%").replace(/_/g, "\\_");
+          q = q.or(
+            `numero_recu.ilike.%${s}%,enseigne.ilike.%${s}%,adresse.ilike.%${s}%`
+          );
+        }
+        const fb = await q.order("date_traitement", { ascending: false }).limit(100);
+        data = fb.data ?? [];
+        rpcError = fb.error;
+      }
+
+      if (rpcError) throw rpcError;
+
+      // Mapping propre pour le tableau
+      const safe = (data ?? []).map((r: any) => ({
+        id: r.id,
+        created_at: r.created_at ?? null,
+        date_traitement: r.date_traitement ?? r.created_at ?? null,
+        enseigne: r.enseigne ?? null,
+        adresse: r.adresse ?? null,
+        montant: r.montant ?? null,
+        montant_ttc: r.montant_ttc ?? r.montant ?? null,
+        tva: r.tva ?? null,
+        client_id: r.client_id ?? null,
+        status: r.status ?? null,
+      }));
+
+      setReceipts(safe);
+    } catch (err: any) {
+      setError(err?.message || "Erreur inconnue");
       setReceipts([]);
     } finally {
       setLoading(false);
