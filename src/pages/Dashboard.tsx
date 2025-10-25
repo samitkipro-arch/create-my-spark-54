@@ -252,7 +252,7 @@ const Dashboard = () => {
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-fade-in-up">
-        <div className="flex flex-col gap-2 md:gap-3">
+        <div className="hidden md:flex flex-col gap-2 md:gap-3">
           <h1 className="text-xl md:text-2xl font-bold">Tableau de bord</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Vue d'ensemble de votre activité
