@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Calendar as CalendarIcon, ChevronDown, Plus, Search } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
+import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -69,6 +70,13 @@ const Recus = () => {
   
   // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 350);
+  
+  // Drawer détail
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Charger les clients
   useEffect(() => {
@@ -159,6 +167,63 @@ const Recus = () => {
       setLoading(false);
     }
   };
+
+  // Fetch détail du reçu
+  useEffect(() => {
+    if (!selectedId || !isDrawerOpen) return;
+
+    (async () => {
+      setDetailLoading(true);
+      setDetailError(null);
+
+      try {
+        // 1) lecture principale (vue)
+        const { data: r, error: e1 } = await supabase
+          .from("recus_feed" as any)
+          .select("*")
+          .eq("id", selectedId)
+          .single();
+        if (e1) throw e1;
+
+        const receiptData = r as any;
+        let processedByName: string | null = null;
+        let clientName: string | null = null;
+
+        // 2) profil (traité par)
+        if (receiptData?.processed_by) {
+          const { data: p } = await supabase
+            .from("profiles" as any)
+            .select("first_name, last_name")
+            .eq("user_id", receiptData.processed_by)
+            .maybeSingle();
+          const profileData = p as any;
+          processedByName = profileData ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim() : null;
+        }
+
+        // 3) client assigné
+        if (receiptData?.client_id) {
+          const { data: c } = await supabase
+            .from("clients" as any)
+            .select("name")
+            .eq("id", receiptData.client_id)
+            .maybeSingle();
+          const clientData = c as any;
+          clientName = clientData?.name ?? null;
+        }
+
+        setDetail({
+          ...receiptData,
+          _processedByName: processedByName,
+          _clientName: clientName,
+        });
+      } catch (err: any) {
+        setDetailError(err?.message || "Erreur lors du chargement du reçu");
+        setDetail(null);
+      } finally {
+        setDetailLoading(false);
+      }
+    })();
+  }, [selectedId, isDrawerOpen]);
 
   // Refetch quand les filtres changent
   useEffect(() => {
@@ -322,7 +387,16 @@ const Recus = () => {
                         : "—";
 
                       return (
-                        <tr key={receipt.id} className="border-b border-border hover:bg-muted/50">
+                        <tr 
+                          key={receipt.id} 
+                          className="border-b border-border hover:bg-muted/50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}
+                        >
                           <td className="py-3 px-4 text-sm">{formattedDate}</td>
                           <td className="py-3 px-4 text-sm">{receipt.enseigne || "—"}</td>
                           <td className="py-3 px-4 text-sm text-right">{formattedMontant}</td>
@@ -342,6 +416,21 @@ const Recus = () => {
         <UploadInstructionsDialog
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
+        />
+
+        <ReceiptDetailDrawer
+          open={isDrawerOpen}
+          onOpenChange={(open) => {
+            setIsDrawerOpen(open);
+            if (!open) {
+              setSelectedId(null);
+              setDetail(null);
+              setDetailError(null);
+            }
+          }}
+          detail={detail}
+          loading={detailLoading}
+          error={detailError}
         />
       </div>
     </MainLayout>
