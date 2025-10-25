@@ -34,7 +34,7 @@ export const ReceiptDetailDrawer = ({
         side="right"
         className="
           fixed right-0 top-0 bottom-0 w-full max-w-full rounded-none border-0 bg-card shadow-none
-          md:right-6 md:top-6 md:bottom-6 md:w-full md:max-w-[520px]
+          md:fixed md:right-6 md:top-6 md:h-[calc(100vh-3rem)] md:w-full md:max-w-[520px]
           md:rounded-2xl md:border md:shadow-2xl
           bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80
           overflow-y-auto
