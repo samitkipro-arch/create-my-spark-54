@@ -30,19 +30,23 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   }, [isOpen, value]);
 
   const handleDayClick = (day: Date) => {
+    const clickedDay = startOfDay(day);
+    
     if (!selectionState.from || (selectionState.from && selectionState.to)) {
       // First click or reset after completed range
-      setSelectionState({ from: startOfDay(day), to: startOfDay(day) });
+      setSelectionState({ from: clickedDay, to: clickedDay });
     } else {
-      // Second click
-      const clickedDay = startOfDay(day);
-      if (isBefore(clickedDay, selectionState.from)) {
-        setSelectionState({ from: clickedDay, to: selectionState.from });
-      } else if (isAfter(clickedDay, selectionState.from)) {
-        setSelectionState({ from: selectionState.from, to: clickedDay });
-      } else {
-        // Same day clicked
+      // Second click - check if it's within the same selection or needs reset
+      if (isSameDay(clickedDay, selectionState.from)) {
+        // Same day clicked - keep single day selection
         setSelectionState({ from: clickedDay, to: clickedDay });
+      } else {
+        // Different day - create range
+        if (isBefore(clickedDay, selectionState.from)) {
+          setSelectionState({ from: clickedDay, to: selectionState.from });
+        } else {
+          setSelectionState({ from: selectionState.from, to: clickedDay });
+        }
       }
     }
   };
@@ -230,8 +234,8 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
                         className={cn(
                           "h-10 w-10 text-sm rounded-md transition-colors",
                           isOutside && "text-muted-foreground/30 cursor-not-allowed",
-                          !isOutside && !isSelected && !isInRange && "hover:bg-accent",
-                          isInRange && !isSelected && "bg-primary/20 text-primary",
+                          !isOutside && !isSelected && !isInRange && "hover:bg-accent hover:text-accent-foreground",
+                          isInRange && !isSelected && "bg-primary/10 text-foreground",
                           isSelected && "bg-primary text-primary-foreground font-semibold"
                         )}
                       >

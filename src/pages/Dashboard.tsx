@@ -40,18 +40,31 @@ const Dashboard = () => {
     },
   });
 
-  // Load members (profiles) for filter
+  // Load members from org_members + profiles for filter
   const { data: members = [] } = useQuery({
-    queryKey: ["profiles"],
+    queryKey: ["org-members-with-profiles"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data: orgMembers, error: omError } = await (supabase as any)
+        .from("org_members")
+        .select("user_id")
+        .eq("is_active", true);
+      
+      if (omError) throw omError;
+      if (!orgMembers || orgMembers.length === 0) return [];
+      
+      const userIds = orgMembers.map((om: any) => om.user_id);
+      
+      const { data: profiles, error: pError } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
+        .in("user_id", userIds)
         .order("first_name");
-      if (error) throw error;
-      return (data || []).map((m: any) => ({
-        id: m.user_id,
-        name: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Sans nom',
+      
+      if (pError) throw pError;
+      
+      return (profiles || []).map((p: any) => ({
+        id: p.user_id,
+        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
       })) as any[];
     },
   });
@@ -235,7 +248,7 @@ const Dashboard = () => {
 
           <Select value={selectedMemberId || "all"} onValueChange={(v) => setSelectedMemberId(v === "all" ? null : v)}>
             <SelectTrigger className="w-[250px]">
-              <SelectValue placeholder="Sélectionner un membre" />
+              <SelectValue placeholder="Tous les membres" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les membres</SelectItem>

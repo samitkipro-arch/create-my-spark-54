@@ -1,18 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Calendar as CalendarIcon, ChevronDown, Plus, Search } from "lucide-react";
+import { ArrowDownUp, Plus, Search } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import { cn } from "@/lib/utils";
 
 type Receipt = {
   id: number;
@@ -33,10 +28,6 @@ type Client = {
   display_name?: string | null;
 };
 
-type DateRange = {
-  from: Date | null;
-  to: Date | null;
-};
 
 // Hook debounce
 function useDebounce<T>(value: T, delay: number): T {
@@ -63,7 +54,7 @@ const Recus = () => {
   const [clients, setClients] = useState<Client[]>([]);
   
   // Filtres
-  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [selectedClient, setSelectedClient] = useState<string | "all">("all");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,15 +88,6 @@ const Recus = () => {
     setError(null);
 
     try {
-      // Déterminer la période
-      const hasRange = Boolean(dateRange?.from) || Boolean(dateRange?.to);
-      const startIso = hasRange && dateRange?.from
-        ? new Date(new Date(dateRange.from).setHours(0, 0, 0, 0)).toISOString()
-        : null;
-      const endIso = hasRange && dateRange?.to
-        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
-        : null;
-
       // Map des filtres ("all" → null)
       const p_client_id = selectedClient && selectedClient !== "all" ? selectedClient : null;
       const p_status = selectedStatus && selectedStatus !== "all" ? selectedStatus : null;
@@ -116,20 +98,19 @@ const Recus = () => {
       let rpcError: any = null;
 
       ({ data, error: rpcError } = await (supabase.rpc as any)("recus_feed_list", {
-        p_from: startIso,
-        p_to: endIso,
-        p_client_id,
-        p_status,
-        p_query,
+        p_from: null,
+        p_to: null,
+        p_client_ids: p_client_id ? [p_client_id] : null,
+        p_statuses: p_status ? [p_status] : null,
+        p_search: p_query,
         p_limit: 100,
         p_offset: 0,
       }));
 
       // 🔸 Fallback : si la RPC échoue, lire directement dans la vue
       if (rpcError) {
-        let q = supabase.from("recus_feed" as any).select("*");
-        if (startIso) q = q.gte("date_traitement", startIso);
-        if (endIso) q = q.lte("date_traitement", endIso);
+        let q = (supabase as any).from("recus_feed").select("id, created_at, date_traitement, enseigne, adresse, montant, montant_ttc, tva, client_id, status");
+        
         if (p_client_id) q = q.eq("client_id", p_client_id);
         if (p_status) q = q.eq("status", p_status);
         if (p_query) {
@@ -138,9 +119,22 @@ const Recus = () => {
             `numero_recu.ilike.%${s}%,enseigne.ilike.%${s}%,adresse.ilike.%${s}%`
           );
         }
-        const fb = await q.order("date_traitement", { ascending: false }).limit(100);
+        
+        // Order by date_traitement with fallback to created_at
+        q = q.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
+        q = q.order("created_at", { ascending: sortOrder === "asc" });
+        q = q.limit(100);
+        
+        const fb = await q;
         data = fb.data ?? [];
         rpcError = fb.error;
+      } else {
+        // Sort RPC results client-side
+        data = (data || []).sort((a: any, b: any) => {
+          const dateA = new Date(a.date_traitement || a.created_at || 0).getTime();
+          const dateB = new Date(b.date_traitement || b.created_at || 0).getTime();
+          return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+        });
       }
 
       if (rpcError) throw rpcError;
@@ -228,7 +222,7 @@ const Recus = () => {
   // Refetch quand les filtres changent
   useEffect(() => {
     fetchReceipts();
-  }, [dateRange, selectedClient, selectedStatus, debouncedQuery]);
+  }, [sortOrder, selectedClient, selectedStatus, debouncedQuery]);
 
   // Realtime
   useEffect(() => {
@@ -242,21 +236,7 @@ const Recus = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [dateRange, selectedClient, selectedStatus, debouncedQuery]);
-  
-  // Formater la période affichée
-  const dateRangeLabel = useMemo(() => {
-    if (!dateRange.from && !dateRange.to) {
-      return "Sélectionner une période";
-    }
-    if (dateRange.from && !dateRange.to) {
-      return format(dateRange.from, "dd/MM/yyyy", { locale: fr });
-    }
-    if (dateRange.from && dateRange.to) {
-      return `${format(dateRange.from, "dd/MM/yyyy", { locale: fr })} - ${format(dateRange.to, "dd/MM/yyyy", { locale: fr })}`;
-    }
-    return "Sélectionner une période";
-  }, [dateRange]);
+  }, [sortOrder, selectedClient, selectedStatus, debouncedQuery]);
 
   return (
     <MainLayout>
@@ -273,31 +253,20 @@ const Recus = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <CalendarIcon className="w-4 h-4" />
-                {dateRangeLabel}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="range"
-                selected={dateRange}
-                onSelect={(range) => setDateRange({
-                  from: range?.from,
-                  to: range?.to
-                })}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-                locale={fr}
-              />
-            </PopoverContent>
-          </Popover>
+          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+            <SelectTrigger className="w-[240px]">
+              <ArrowDownUp className="w-4 h-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Du plus récent au plus ancien</SelectItem>
+              <SelectItem value="asc">Du plus ancien au plus récent</SelectItem>
+            </SelectContent>
+          </Select>
           
           <Select value={selectedClient} onValueChange={(v) => setSelectedClient(v as typeof selectedClient)}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Sélectionner un client" />
+              <SelectValue placeholder="Tous les clients" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les clients</SelectItem>
