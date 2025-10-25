@@ -25,9 +25,12 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
   };
 
   const pageSubtitles: Record<string, string> = {
-    "/": "Vue d'ensemble de votre activité",
-    "/clients": "Gérez vos clients, leurs informations légales et leur suivi en un seul endroit.",
-    "/equipe": "Gérez les membres de votre équipe et leurs autorisations.",
+    "/": "Suivez votre activité",
+    "/recus": "Gérez vos reçus et factures",
+    "/clients": "Gérez vos clients et leur suivi",
+    "/equipe": "Gérez les membres et autorisations",
+    "/rapports": "Exportez et analysez vos données",
+    "/parametres": "Configurez votre espace",
   };
 
   const currentTitle = pageTitles[location.pathname] || "Finvisor";
@@ -49,7 +52,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         <div className="fixed top-0 left-0 right-0 z-30 flex flex-col items-center justify-center pt-4 pb-3 pointer-events-none">
           <h1 className="text-lg font-bold text-foreground">{currentTitle}</h1>
           {currentSubtitle && (
-            <p className="text-xs text-muted-foreground mt-0.5 px-4 text-center opacity-60">
+            <p className="text-xs text-muted-foreground/70 mt-1 px-4 text-center">
               {currentSubtitle}
             </p>
           )}
@@ -61,18 +64,14 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild>
             <button 
-              style={{
-                backgroundColor: "rgba(255, 255, 255, 0.06)",
-                backdropFilter: "blur(6px)",
-              }}
-              className="fixed top-4 left-4 z-50 p-2 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-border/30 pointer-events-auto"
+              className="fixed top-4 left-4 z-50 p-2 transition-all duration-200 pointer-events-auto"
             >
               <Menu className="w-5 h-5 text-foreground" />
             </button>
           </SheetTrigger>
           <SheetContent 
             side="left" 
-            className="p-4 w-[280px] bg-sidebar border-sidebar-border m-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.25)] h-auto overflow-auto"
+            className="p-0 w-[280px] bg-sidebar/95 backdrop-blur-xl border-0 m-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.25)] h-auto overflow-hidden"
             style={{
               top: "16px",
               left: "0px",

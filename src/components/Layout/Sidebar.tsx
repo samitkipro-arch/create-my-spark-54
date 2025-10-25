@@ -22,16 +22,13 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const { signOut } = useAuth();
 
   return (
-    <div className="w-full bg-sidebar border-r border-sidebar-border flex flex-col h-full md:border-0">
-      <div className="p-6 border-b border-sidebar-border">
+    <div className="w-full bg-sidebar flex flex-col h-full md:border-r md:border-sidebar-border">
+      <div className="p-6">
         <h1 className="text-2xl font-bold text-primary">Finvisor</h1>
       </div>
       
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 px-4 py-2">
         <div className="space-y-1">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2">
-            Dashboards
-          </div>
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -56,7 +53,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
         </div>
       </nav>
       
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4">
         <Button 
           variant="ghost" 
           className="w-full justify-start gap-3" 

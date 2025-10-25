@@ -67,7 +67,10 @@ const Equipe = () => {
                     <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                     <span>{member.status}</span>
                   </div>
-                  <span className="text-muted-foreground">{member.lastConnection}</span>
+                  <div className="text-muted-foreground">
+                    <span className="text-[10px]">Dernière connexion: </span>
+                    <span>{member.lastConnection}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>

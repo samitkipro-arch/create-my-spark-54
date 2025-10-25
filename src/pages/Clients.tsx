@@ -46,15 +46,15 @@ const Clients = () => {
         </div>
 
         {/* Mobile: Cards */}
-        <div className="md:hidden space-y-3 transition-all duration-200">
+        <div className="md:hidden space-y-2.5 transition-all duration-200">
           {mockClients.map((client) => (
             <Card key={client.email} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
-              <CardContent className="p-4 space-y-2 transition-all duration-150">
-                <div className="font-semibold text-base">{client.name}</div>
-                <div className="text-sm text-primary hover:underline cursor-pointer">
+              <CardContent className="p-3.5 space-y-2 transition-all duration-150">
+                <div className="font-semibold text-sm">{client.name}</div>
+                <div className="text-xs text-primary hover:underline cursor-pointer">
                   {client.email}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[10px] text-muted-foreground">
                   Créé le {client.date}
                 </div>
               </CardContent>
