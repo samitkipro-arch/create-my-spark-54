@@ -316,15 +316,21 @@ const Dashboard = () => {
                 Aucune donnée disponible
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 250 : 300}>
-                <LineChart data={chart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.3} />
+              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 320 : 300}>
+                <LineChart data={chart} margin={{ left: window.innerWidth < 768 ? -10 : 0, right: window.innerWidth < 768 ? 10 : 0 }}>
+                  <CartesianGrid 
+                    strokeDasharray="3 3" 
+                    stroke="hsl(var(--border))" 
+                    vertical={false} 
+                    opacity={window.innerWidth < 768 ? 0.15 : 0.3} 
+                  />
                   <XAxis 
                     dataKey="date" 
                     stroke="hsl(var(--muted-foreground))"
                     tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []}
                     height={window.innerWidth < 768 ? 28 : 40}
+                    padding={{ left: window.innerWidth < 768 ? 15 : 0, right: window.innerWidth < 768 ? 15 : 0 }}
                   />
                   <YAxis 
                     stroke="hsl(var(--muted-foreground))"
@@ -333,10 +339,17 @@ const Dashboard = () => {
                     width={window.innerWidth < 768 ? 40 : 55}
                   />
                   <Tooltip
+                    cursor={{ 
+                      stroke: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(var(--border))", 
+                      strokeWidth: window.innerWidth < 768 ? 1 : 1,
+                      strokeDasharray: "3 3"
+                    }}
+                    animationDuration={window.innerWidth < 768 ? 150 : 300}
+                    animationEasing="ease-out"
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-card/95 backdrop-blur border border-border p-2.5 md:p-3 rounded-lg shadow-[var(--shadow-soft)]">
+                          <div className="bg-card/95 backdrop-blur border border-border p-2.5 md:p-3 rounded-lg shadow-[var(--shadow-soft)] transition-all duration-150">
                             <p className="text-xs md:text-sm font-semibold mb-1.5">{payload[0].payload.date}</p>
                             <p className="text-xs md:text-sm text-muted-foreground">
                               {payload[0].payload.count} reçus traités
@@ -351,12 +364,25 @@ const Dashboard = () => {
                     }}
                   />
                   <Line 
-                    type="monotone" 
+                    type={window.innerWidth < 768 ? "basis" : "monotone"}
                     dataKey="montant_ttc_total" 
-                    stroke="hsl(217 91% 60%)" 
-                    strokeWidth={window.innerWidth < 768 ? 2 : 2.5}
-                    dot={{ fill: "hsl(217 91% 60%)", r: window.innerWidth < 768 ? 1.5 : 2 }}
-                    activeDot={{ r: window.innerWidth < 768 ? 3 : 4, fill: "hsl(217 91% 60%)", stroke: "hsl(var(--card))", strokeWidth: 2 }}
+                    stroke={window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)"} 
+                    strokeWidth={window.innerWidth < 768 ? 2.5 : 2.5}
+                    dot={{ 
+                      fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)", 
+                      r: window.innerWidth < 768 ? 1.5 : 2,
+                      strokeWidth: 0
+                    }}
+                    activeDot={{ 
+                      r: window.innerWidth < 768 ? 5 : 4, 
+                      fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)", 
+                      stroke: "hsl(var(--card))", 
+                      strokeWidth: window.innerWidth < 768 ? 2.5 : 2,
+                      style: { 
+                        transition: "all 0.15s ease-out",
+                        filter: window.innerWidth < 768 ? "drop-shadow(0 0 4px hsl(210 100% 70% / 0.6))" : "none"
+                      }
+                    }}
                   />
                 </LineChart>
               </ResponsiveContainer>
