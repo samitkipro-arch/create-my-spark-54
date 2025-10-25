@@ -13,7 +13,11 @@ const menuItems = [
   { icon: Settings, label: "Paramètres", path: "/parametres" },
 ];
 
-export const Sidebar = () => {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const location = useLocation();
   const { signOut } = useAuth();
 
@@ -36,6 +40,7 @@ export const Sidebar = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={onNavigate}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
                   isActive

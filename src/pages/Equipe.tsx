@@ -24,15 +24,15 @@ const mockTeam = [
 const Equipe = () => {
   return (
     <MainLayout>
-      <div className="p-8 space-y-8">
-        <div className="flex items-center justify-between">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Équipe</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold">Équipe</h1>
+            <p className="text-muted-foreground mt-1 text-sm md:text-base">
               Gérez les membres de votre équipe et leurs autorisations.
             </p>
           </div>
-          <Button className="gap-2">
+          <Button className="gap-2 w-full md:w-auto">
             <Plus className="w-4 h-4" />
             Ajouter un membre
           </Button>
@@ -46,7 +46,42 @@ const Equipe = () => {
           />
         </div>
 
-        <Card className="bg-card border-border">
+        {/* Mobile: Cards */}
+        <div className="md:hidden space-y-3">
+          {mockTeam.map((member) => (
+            <Card key={member.name} className="bg-card/50 border-border">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12">
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {member.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="font-semibold text-base">{member.name}</div>
+                    <Badge variant="secondary" className="mt-1">{member.role}</Badge>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground text-xs">Client assigné: </span>
+                    <span>{member.client}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <span>{member.status}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{member.lastConnection}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Desktop: Table */}
+        <Card className="hidden md:block bg-card border-border">
           <CardContent className="p-0">
             <Table>
               <TableHeader>

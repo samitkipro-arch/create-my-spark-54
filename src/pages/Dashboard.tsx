@@ -249,16 +249,16 @@ const Dashboard = () => {
 
   return (
     <MainLayout>
-      <div className="p-8 space-y-8">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Tableau de bord</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Tableau de bord</h1>
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
           <Select value={storedClientId} onValueChange={setClientId}>
-            <SelectTrigger className="w-[250px]">
+            <SelectTrigger className="w-full md:w-[250px]">
               <SelectValue placeholder="Tous les clients" />
             </SelectTrigger>
             <SelectContent>
@@ -272,7 +272,7 @@ const Dashboard = () => {
           </Select>
 
           <Select value={storedMemberId} onValueChange={setMemberId}>
-            <SelectTrigger className="w-[250px]">
+            <SelectTrigger className="w-full md:w-[250px]">
               <SelectValue placeholder="Tous les membres" />
             </SelectTrigger>
             <SelectContent>
@@ -286,7 +286,7 @@ const Dashboard = () => {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
           {stats.map((stat) => (
             <StatCard key={stat.title} {...stat} />
           ))}
@@ -371,7 +371,36 @@ const Dashboard = () => {
                 Aucune catégorie trouvée
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="space-y-3 md:space-y-0">
+                {/* Mobile: Cards */}
+                <div className="md:hidden space-y-3">
+                  {topCats.map((cat, idx) => (
+                    <div key={idx} className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+                      <div className="font-semibold text-sm">{cat.label}</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Reçus: </span>
+                          <span className="font-medium">{cat.count}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-muted-foreground">TTC: </span>
+                          <span className="font-semibold">{formatCurrency(cat.ttc)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">HT: </span>
+                          <span>{formatCurrency(cat.ht)}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-muted-foreground">TVA: </span>
+                          <span>{formatCurrency(cat.tva)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Desktop: Table */}
+                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
@@ -394,6 +423,7 @@ const Dashboard = () => {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </CardContent>

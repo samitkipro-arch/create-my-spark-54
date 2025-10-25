@@ -23,15 +23,15 @@ const mockClients = [
 const Clients = () => {
   return (
     <MainLayout>
-      <div className="p-8 space-y-8">
-        <div className="flex items-center justify-between">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Clients</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold">Clients</h1>
+            <p className="text-muted-foreground mt-1 text-sm md:text-base">
               Gérez vos clients, leurs informations légales et leur suivi en un seul endroit.
             </p>
           </div>
-          <Button className="gap-2">
+          <Button className="gap-2 w-full md:w-auto">
             <Plus className="w-4 h-4" />
             Ajouter un client
           </Button>
@@ -45,7 +45,25 @@ const Clients = () => {
           />
         </div>
 
-        <Card className="bg-card border-border">
+        {/* Mobile: Cards */}
+        <div className="md:hidden space-y-3">
+          {mockClients.map((client) => (
+            <Card key={client.email} className="bg-card/50 border-border">
+              <CardContent className="p-4 space-y-2">
+                <div className="font-semibold text-base">{client.name}</div>
+                <div className="text-sm text-primary hover:underline cursor-pointer">
+                  {client.email}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Créé le {client.date}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Desktop: Table */}
+        <Card className="hidden md:block bg-card border-border">
           <CardContent className="p-0">
             <Table>
               <TableHeader>

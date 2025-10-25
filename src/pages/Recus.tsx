@@ -288,21 +288,22 @@ const Recus = () => {
 
   return (
     <MainLayout>
-      <div className="p-8 space-y-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Reçus</h1>
-          <div className="flex gap-3">
-            <Button variant="outline">Exporter</Button>
-            <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold">Reçus</h1>
+          <div className="flex gap-3 w-full md:w-auto">
+            <Button variant="outline" className="flex-1 md:flex-initial">Exporter</Button>
+            <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
-              Ajouter un reçu
+              <span className="hidden sm:inline">Ajouter un reçu</span>
+              <span className="sm:hidden">Ajouter</span>
             </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
           <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
-            <SelectTrigger className="w-[240px]">
+            <SelectTrigger className="w-full md:w-[240px]">
               <ArrowDownUp className="w-4 h-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
@@ -313,7 +314,7 @@ const Recus = () => {
           </Select>
           
           <Select value={storedClientId} onValueChange={setClientId}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-full md:w-[220px]">
               <SelectValue placeholder="Tous les clients" />
             </SelectTrigger>
             <SelectContent>
@@ -327,7 +328,7 @@ const Recus = () => {
           </Select>
           
           <Select value={storedMemberId} onValueChange={setMemberId}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-full md:w-[220px]">
               <SelectValue placeholder="Tous les membres" />
             </SelectTrigger>
             <SelectContent>
@@ -344,7 +345,7 @@ const Recus = () => {
           </Select>
           
           <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as typeof selectedStatus)}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-full md:w-[160px]">
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>
@@ -386,7 +387,78 @@ const Recus = () => {
                 Aucun reçu trouvé
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {/* Mobile: Cards */}
+                <div className="md:hidden space-y-3">
+                  {receipts.map((receipt) => {
+                    const dateValue = receipt.date_traitement || receipt.created_at;
+                    const formattedDate = dateValue 
+                      ? new Date(dateValue).toLocaleDateString("fr-FR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })
+                      : "—";
+                    
+                    const formattedMontantTTC = receipt.montant_ttc !== null && receipt.montant_ttc !== undefined
+                      ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ttc)
+                      : "—";
+                    
+                    const formattedMontantHT = receipt.montant_ht !== null && receipt.montant_ht !== undefined
+                      ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ht)
+                      : "—";
+
+                    const statusLabels: Record<string, string> = {
+                      traite: "Traité",
+                      en_cours: "En cours",
+                      en_attente: "En attente"
+                    };
+
+                    return (
+                      <div
+                        key={receipt.id}
+                        className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-colors space-y-3"
+                        onClick={() => {
+                          setSelectedId(receipt.id);
+                          setDetail(null);
+                          setDetailError(null);
+                          setIsDrawerOpen(true);
+                        }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
+                          <div className="text-sm text-muted-foreground">{formattedDate}</div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-muted-foreground text-xs">TTC: </span>
+                            <span className="font-semibold">{formattedMontantTTC}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-muted-foreground text-xs">HT: </span>
+                            <span>{formattedMontantHT}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="text-muted-foreground">{receipt.moyen_paiement || "—"}</div>
+                          <div className="inline-flex px-2 py-1 rounded text-xs bg-primary/10 text-primary">
+                            {statusLabels[receipt.status || ''] || receipt.status || "—"}
+                          </div>
+                        </div>
+                        {(receipt.ville || receipt.numero_recu) && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {receipt.ville && <span>{receipt.ville}</span>}
+                            {receipt.ville && receipt.numero_recu && <span>•</span>}
+                            {receipt.numero_recu && <span>N° {receipt.numero_recu}</span>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop: Table */}
+                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
@@ -457,7 +529,8 @@ const Recus = () => {
                     })}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
