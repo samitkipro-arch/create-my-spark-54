@@ -156,7 +156,7 @@ const Dashboard = () => {
     { title: "Montant TTC total", value: isLoadingReceipts ? "..." : formatCurrency(kpis.ttc), icon: ShoppingCart },
   ];
 
-  // Prepare chart data - group by day or month depending on date range
+  // Prepare chart data - group by day or week depending on date range
   const chartData = () => {
     if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
 
@@ -165,32 +165,44 @@ const Dashboard = () => {
 
     if (groupByDay) {
       const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-      return days.map(day => {
-        const dayReceipts = receipts.filter(r => {
-          const receiptDate = new Date(r.date_traitement || r.created_at);
-          return format(receiptDate, "yyyy-MM-dd") === format(day, "yyyy-MM-dd");
+      // For mobile: show max 1 point per day, but sample intelligently
+      const isMobile = window.innerWidth < 768;
+      const sampleRate = isMobile && days.length > 10 ? Math.ceil(days.length / 10) : 1;
+      
+      return days
+        .filter((_, idx) => idx % sampleRate === 0)
+        .map(day => {
+          const dayReceipts = receipts.filter(r => {
+            const receiptDate = new Date(r.date_traitement || r.created_at);
+            return format(receiptDate, "yyyy-MM-dd") === format(day, "yyyy-MM-dd");
+          });
+          return {
+            date: format(day, "dd/MM/yyyy", { locale: fr }),
+            count: dayReceipts.length,
+            montant_ttc_total: dayReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+          };
         });
-        return {
-          date: format(day, "dd/MM/yyyy", { locale: fr }),
-          count: dayReceipts.length,
-          montant_ttc_total: dayReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
-        };
-      });
     } else {
       const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
-      return months.map(month => {
-        const monthStart = startOfMonth(month);
-        const monthEnd = endOfMonth(month);
-        const monthReceipts = receipts.filter(r => {
-          const receiptDate = new Date(r.date_traitement || r.created_at);
-          return receiptDate >= monthStart && receiptDate <= monthEnd;
+      // For periods > 1 month, group by week for mobile
+      const isMobile = window.innerWidth < 768;
+      const sampleRate = isMobile && months.length > 8 ? Math.ceil(months.length / 8) : 1;
+      
+      return months
+        .filter((_, idx) => idx % sampleRate === 0)
+        .map(month => {
+          const monthStart = startOfMonth(month);
+          const monthEnd = endOfMonth(month);
+          const monthReceipts = receipts.filter(r => {
+            const receiptDate = new Date(r.date_traitement || r.created_at);
+            return receiptDate >= monthStart && receiptDate <= monthEnd;
+          });
+          return {
+            date: format(month, "MMM yyyy", { locale: fr }),
+            count: monthReceipts.length,
+            montant_ttc_total: monthReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+          };
         });
-        return {
-          date: format(month, "MMM yyyy", { locale: fr }),
-          count: monthReceipts.length,
-          montant_ttc_total: monthReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
-        };
-      });
     }
   };
 
@@ -294,10 +306,10 @@ const Dashboard = () => {
 
         <Card className="bg-card border-border transition-all duration-200">
           <CardHeader className="transition-all duration-150">
-            <CardTitle>
+            <CardTitle className="text-base md:text-xl">
               Suivi du nombre de reçus traités et montants sur la période sélectionnée
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[10px] md:text-sm text-muted-foreground">
               {dateRange?.from && dateRange?.to ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}` : "Aucune période sélectionnée"} · Axe X = Période · Axe Y = Montant TTC (€)
             </p>
           </CardHeader>
@@ -315,15 +327,15 @@ const Dashboard = () => {
                   <XAxis 
                     dataKey="date" 
                     stroke="rgba(255,255,255,0.5)"
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 9 : 12 }}
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []}
-                    height={window.innerWidth < 768 ? 30 : 40}
+                    height={window.innerWidth < 768 ? 28 : 40}
                   />
                   <YAxis 
                     stroke="rgba(255,255,255,0.5)"
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 9 : 12 }}
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     domain={[0, "auto"]}
-                    width={window.innerWidth < 768 ? 40 : 50}
+                    width={window.innerWidth < 768 ? 38 : 50}
                   />
                   <Tooltip
                     content={({ active, payload }) => {

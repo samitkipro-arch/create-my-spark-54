@@ -38,21 +38,21 @@ export const UploadInstructionsDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground max-h-[90vh] md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg md:text-2xl font-semibold text-center text-foreground mb-4 md:mb-8">
+          <DialogTitle className="text-base md:text-2xl font-semibold text-center text-foreground mb-3 md:mb-8">
             👉 Quelques consignes avant l'envoi
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-4 md:mb-8">
+        <div className="grid grid-cols-2 gap-3 md:gap-8 mb-3 md:mb-8">
           {/* Téléphone en paysage */}
-          <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
+          <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
             <div className="relative">
-              <Smartphone className="w-12 h-12 md:w-16 md:h-16 text-white rotate-90" strokeWidth={1.5} />
-              <div className="absolute -bottom-1 -right-1 md:-bottom-2 md:-right-2">
+              <Smartphone className="w-10 h-10 md:w-16 md:h-16 text-white rotate-90" strokeWidth={1.5} />
+              <div className="absolute -bottom-0.5 -right-0.5 md:-bottom-2 md:-right-2">
                 <svg
-                  className="w-6 h-6 md:w-8 md:h-8 text-white"
+                  className="w-5 h-5 md:w-8 md:h-8 text-white"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -62,54 +62,54 @@ export const UploadInstructionsDialog = ({
                 </svg>
               </div>
             </div>
-            <p className="text-xs md:text-sm text-muted-foreground leading-snug md:leading-relaxed">
+            <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Prenez la photo de votre reçu en orientant votre téléphone en mode paysage.
             </p>
           </div>
 
           {/* Lumière / éclairage */}
-          <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
-            <Lightbulb className="w-12 h-12 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
-            <p className="text-xs md:text-sm text-muted-foreground leading-snug md:leading-relaxed">
+          <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
+            <Lightbulb className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
+            <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Prenez la photo dans un endroit bien éclairé, sans ombre sur le reçu.
             </p>
           </div>
 
           {/* Reçu bien cadré */}
-          <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
-            <Frame className="w-12 h-12 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
-            <p className="text-xs md:text-sm text-muted-foreground leading-snug md:leading-relaxed">
+          <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
+            <Frame className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
+            <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Le reçu doit être entièrement visible et bien cadré dans l'image.
             </p>
           </div>
 
           {/* Éviter texte/objets */}
-          <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
+          <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
             <div className="relative">
-              <Frame className="w-12 h-12 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
-              <X className="w-8 h-8 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" strokeWidth={3} />
+              <Frame className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
+              <X className="w-7 h-7 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" strokeWidth={3} />
             </div>
-            <p className="text-xs md:text-sm text-muted-foreground leading-snug md:leading-relaxed">
+            <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Évitez tout texte ou objet autour du reçu pour une meilleure détection.
             </p>
           </div>
         </div>
 
-        <div className="space-y-4 md:space-y-6 pt-3 md:pt-4 border-t border-border">
-          <p className="text-center text-xs md:text-sm text-muted-foreground">
+        <div className="space-y-3 md:space-y-6 pt-2 md:pt-4 border-t border-border">
+          <p className="text-center text-[10px] md:text-sm text-muted-foreground">
             Veuillez sélectionner un client avant de déposer un reçu.
           </p>
 
-          <div className="space-y-3 md:space-y-4">
+          <div className="space-y-2 md:space-y-4">
             <div className="text-center">
-              <label className="text-xs md:text-sm font-medium text-foreground">
+              <label className="text-[10px] md:text-sm font-medium text-foreground">
                 Assigner à :
               </label>
             </div>
 
             <Button
               onClick={handleClientSelect}
-              className="w-full bg-white text-black hover:bg-white/90 font-medium text-xs md:text-base h-9 md:h-11"
+              className="w-full bg-white text-black hover:bg-white/90 font-medium text-xs md:text-base h-8 md:h-11"
             >
               {selectedClient || "Sélectionner un client"}
             </Button>
@@ -127,7 +127,7 @@ export const UploadInstructionsDialog = ({
               <Button
                 asChild
                 disabled={!selectedClient}
-                className="w-full bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-9 md:h-11"
+                className="w-full bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-8 md:h-11"
               >
                 <label htmlFor="receipt-upload" className="cursor-pointer">
                   Choisir un fichier
