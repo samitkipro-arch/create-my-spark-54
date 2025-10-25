@@ -24,27 +24,28 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         </aside>
       )}
 
-      {/* Mobile Header with Hamburger */}
+      {/* Mobile Floating Hamburger Button */}
       {isMobile && (
-        <div className="fixed top-0 left-0 right-0 z-40 bg-sidebar border-b border-sidebar-border transition-all duration-200">
-          <div className="flex items-center justify-between p-4 transition-all duration-200">
-            <Sheet open={isOpen} onOpenChange={setIsOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="w-6 h-6" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-[280px] bg-sidebar border-sidebar-border">
-                <Sidebar onNavigate={() => setIsOpen(false)} />
-              </SheetContent>
-            </Sheet>
-            <h1 className="text-xl font-bold text-primary">Finvisor</h1>
-            <div className="w-10" /> {/* Spacer for centering */}
-          </div>
-        </div>
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetTrigger asChild>
+            <Button 
+              variant="default" 
+              size="icon"
+              className="fixed top-4 left-4 z-50 rounded-full w-12 h-12 shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              <Menu className="w-6 h-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent 
+            side="left" 
+            className="p-0 w-[280px] bg-sidebar border-sidebar-border m-4 rounded-2xl shadow-2xl h-[calc(100vh-2rem)] top-4 left-0"
+          >
+            <Sidebar onNavigate={() => setIsOpen(false)} />
+          </SheetContent>
+        </Sheet>
       )}
 
-      <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMobile ? 'pt-16' : ''}`}>
+      <main className="flex-1 overflow-auto transition-all duration-300 ease-in-out">
         {children}
       </main>
     </div>
