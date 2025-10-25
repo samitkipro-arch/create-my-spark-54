@@ -30,13 +30,13 @@ const Recus = () => {
       setError(null);
       
       const { data, error: fetchError } = await supabase
-        .from("recus")
+        .from("recus_feed" as any)
         .select("*")
         .order("date_traitement", { ascending: false })
         .limit(100);
 
       if (fetchError) throw fetchError;
-      setReceipts(data || []);
+      setReceipts((data as unknown as Receipt[]) || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors du chargement");
       setReceipts([]);
