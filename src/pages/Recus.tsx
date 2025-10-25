@@ -1,80 +1,66 @@
-import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
-import { ClientSelect } from "@/components/dashboard/ClientSelect";
-import { ReceiptsTable } from "@/components/receipts/ReceiptsTable";
-import { UploadReceiptDialog } from "@/components/UploadReceiptDialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Calendar, ChevronDown, Plus, Search } from "lucide-react";
+import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 
-const supabase = createClient(import.meta.env.VITE_SUPABASE_URL!, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!);
-
-export default function ReceiptsPage() {
-  const [receipts, setReceipts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<{ from: string | null; to: string | null }>({
-    from: null,
-    to: null,
-  });
-
-  // === Charger les reçus ===
-  async function loadReceipts() {
-    setLoading(true);
-
-    const { data, error } = await supabase.rpc("recus_feed_list", {
-      p_from: dateRange.from,
-      p_to: dateRange.to,
-      p_clients: clientId ? [clientId] : null,
-      p_status: status ? [status] : null,
-      p_search: search || null,
-      p_limit: 20,
-      p_offset: 0,
-    });
-
-    if (error) console.error("Erreur chargement reçus:", error);
-    else setReceipts(data || []);
-
-    setLoading(false);
-  }
-
-  // === Realtime ===
-  useEffect(() => {
-    loadReceipts();
-
-    const channel = supabase
-      .channel("realtime:recus")
-      .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, loadReceipts)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [search, clientId, status, dateRange]);
+const Recus = () => {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-3 items-center">
-          <ClientSelect value={clientId} onChange={setClientId} />
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <Input
-            placeholder="Rechercher un reçu..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-[220px]"
-          />
-          <Button variant="outline" onClick={() => loadReceipts()}>
-            Rafraîchir
-          </Button>
+    <MainLayout>
+      <div className="p-8 space-y-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Reçus</h1>
+          <div className="flex gap-3">
+            <Button variant="outline">Exporter</Button>
+            <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
+              <Plus className="w-4 h-4" />
+              Ajouter un reçu
+            </Button>
+          </div>
         </div>
 
-        <UploadReceiptDialog />
-      </div>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" className="gap-2">
+            <Calendar className="w-4 h-4" />
+            24/09/2025 - 24/10/2025
+          </Button>
+          <Button variant="outline" className="gap-2">
+            <ChevronDown className="w-4 h-4" />
+            Sélectionner un client
+          </Button>
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par client, numéro ou adresse"
+                className="pl-10"
+              />
+            </div>
+          </div>
+        </div>
 
-      <ReceiptsTable receipts={receipts} loading={loading} />
-    </div>
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle>Liste des reçus</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              Aucun reçu trouvé
+            </div>
+          </CardContent>
+        </Card>
+
+        <UploadInstructionsDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+        />
+      </div>
+    </MainLayout>
   );
-}
+};
+
+export default Recus;
