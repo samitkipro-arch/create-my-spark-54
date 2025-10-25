@@ -165,9 +165,10 @@ const Dashboard = () => {
 
     if (groupByDay) {
       const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-      // For mobile: show max 1 point per day, but sample intelligently
+      // Reduce points considerably: max 6 for mobile, max 12 for desktop
       const isMobile = window.innerWidth < 768;
-      const sampleRate = isMobile && days.length > 10 ? Math.ceil(days.length / 10) : 1;
+      const maxPoints = isMobile ? 6 : 12;
+      const sampleRate = Math.max(1, Math.ceil(days.length / maxPoints));
       
       return days
         .filter((_, idx) => idx % sampleRate === 0)
@@ -184,9 +185,10 @@ const Dashboard = () => {
         });
     } else {
       const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
-      // For periods > 1 month, group by week for mobile
+      // Reduce points considerably: max 5 for mobile, max 10 for desktop
       const isMobile = window.innerWidth < 768;
-      const sampleRate = isMobile && months.length > 8 ? Math.ceil(months.length / 8) : 1;
+      const maxPoints = isMobile ? 5 : 10;
+      const sampleRate = Math.max(1, Math.ceil(months.length / maxPoints));
       
       return months
         .filter((_, idx) => idx % sampleRate === 0)
