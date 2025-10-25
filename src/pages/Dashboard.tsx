@@ -14,23 +14,29 @@ import { fr } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
-
 const Dashboard = () => {
   // Global filters store
-  const { dateRange: storedDateRange, clientId: storedClientId, memberId: storedMemberId, setDateRange: setStoredDateRange, setClientId, setMemberId } = useGlobalFilters();
+  const {
+    dateRange: storedDateRange,
+    clientId: storedClientId,
+    memberId: storedMemberId,
+    setDateRange: setStoredDateRange,
+    setClientId,
+    setMemberId
+  } = useGlobalFilters();
 
   // Convert stored date range to DateRange format
   const dateRange = useMemo<DateRange | undefined>(() => {
     if (storedDateRange.from && storedDateRange.to) {
       return {
         from: new Date(storedDateRange.from),
-        to: new Date(storedDateRange.to),
+        to: new Date(storedDateRange.to)
       };
     }
     // Default: last 30 days
     return {
       from: startOfDay(subDays(new Date(), 29)),
-      to: endOfDay(new Date()),
+      to: endOfDay(new Date())
     };
   }, [storedDateRange]);
 
@@ -42,96 +48,90 @@ const Dashboard = () => {
       setStoredDateRange(from.toISOString(), to.toISOString());
     }
   }, []);
-
   const handleDateRangeChange = (range: DateRange | undefined) => {
     if (range?.from && range?.to) {
-      setStoredDateRange(
-        startOfDay(range.from).toISOString(),
-        endOfDay(range.to).toISOString()
-      );
+      setStoredDateRange(startOfDay(range.from).toISOString(), endOfDay(range.to).toISOString());
     }
   };
 
   // Load clients for filter
-  const { data: clients = [] } = useQuery({
+  const {
+    data: clients = []
+  } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("clients")
-        .select("id, name")
-        .order("name");
+      const {
+        data,
+        error
+      } = await (supabase as any).from("clients").select("id, name").order("name");
       if (error) throw error;
       return (data || []) as any[];
-    },
+    }
   });
 
   // Load members from org_members + profiles for filter
-  const { data: members = [] } = useQuery({
+  const {
+    data: members = []
+  } = useQuery({
     queryKey: ["org-members-with-profiles"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any)
-        .from("org_members")
-        .select("user_id")
-        .eq("is_active", true);
-      
+      const {
+        data: orgMembers,
+        error: omError
+      } = await (supabase as any).from("org_members").select("user_id").eq("is_active", true);
       if (omError) throw omError;
       if (!orgMembers || orgMembers.length === 0) return [];
-      
       const userIds = orgMembers.map((om: any) => om.user_id);
-      
-      const { data: profiles, error: pError } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds)
-        .order("first_name");
-      
+      const {
+        data: profiles,
+        error: pError
+      } = await (supabase as any).from("profiles").select("user_id, first_name, last_name").in("user_id", userIds).order("first_name");
       if (pError) throw pError;
-      
       return (profiles || []).map((p: any) => ({
         id: p.user_id,
-        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
+        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom'
       })) as any[];
-    },
+    }
   });
 
   // Load receipts data with filters
-  const { data: receipts = [], isLoading: isLoadingReceipts } = useQuery({
+  const {
+    data: receipts = [],
+    isLoading: isLoadingReceipts
+  } = useQuery({
     queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
-      
-      let query = (supabase as any)
-        .from("recus")
-        .select("*")
-        .gte("date_traitement", dateRange.from.toISOString())
-        .lte("date_traitement", dateRange.to.toISOString());
-
+      let query = (supabase as any).from("recus").select("*").gte("date_traitement", dateRange.from.toISOString()).lte("date_traitement", dateRange.to.toISOString());
       if (storedClientId && storedClientId !== "all") {
         query = query.eq("client_id", storedClientId);
       }
-
       if (storedMemberId && storedMemberId !== "all") {
         query = query.eq("processed_by", storedMemberId);
       }
-
-      const { data, error } = await query;
+      const {
+        data,
+        error
+      } = await query;
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!dateRange?.from && !!dateRange?.to,
+    enabled: !!dateRange?.from && !!dateRange?.to
   });
 
   // Load categories for Top categories section
-  const { data: categories = [] } = useQuery({
+  const {
+    data: categories = []
+  } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("categories")
-        .select("id, label")
-        .order("label");
+      const {
+        data,
+        error
+      } = await (supabase as any).from("categories").select("id, label").order("label");
       if (error) throw error;
       return (data || []) as any[];
-    },
+    }
   });
 
   // Calculate KPIs
@@ -139,47 +139,60 @@ const Dashboard = () => {
     count: receipts.length,
     ht: receipts.reduce((sum, r) => sum + (Number(r.montant_ht) || (Number(r.montant_ttc) || 0) - (Number(r.tva) || 0)), 0),
     tva: receipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0),
-    ttc: receipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+    ttc: receipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0)
   };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("fr-FR", {
       style: "currency",
-      currency: "EUR",
+      currency: "EUR"
     }).format(value);
   };
-
-  const stats = [
-    { title: "Reçus traités", value: isLoadingReceipts ? "..." : kpis.count.toString(), icon: Receipt },
-    { title: "Montant HT total", value: isLoadingReceipts ? "..." : formatCurrency(kpis.ht), icon: Globe },
-    { title: "TVA récupérable", value: isLoadingReceipts ? "..." : formatCurrency(kpis.tva), icon: FileText },
-    { title: "Montant TTC total", value: isLoadingReceipts ? "..." : formatCurrency(kpis.ttc), icon: ShoppingCart },
-  ];
+  const stats = [{
+    title: "Reçus traités",
+    value: isLoadingReceipts ? "..." : kpis.count.toString(),
+    icon: Receipt
+  }, {
+    title: "Montant HT total",
+    value: isLoadingReceipts ? "..." : formatCurrency(kpis.ht),
+    icon: Globe
+  }, {
+    title: "TVA récupérable",
+    value: isLoadingReceipts ? "..." : formatCurrency(kpis.tva),
+    icon: FileText
+  }, {
+    title: "Montant TTC total",
+    value: isLoadingReceipts ? "..." : formatCurrency(kpis.ttc),
+    icon: ShoppingCart
+  }];
 
   // Prepare chart data - group by day or week depending on date range
   const chartData = () => {
     if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
-
     const daysDiff = differenceInDays(dateRange.to, dateRange.from);
     const groupByDay = daysDiff <= 31;
-
     if (groupByDay) {
-      const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-      
+      const days = eachDayOfInterval({
+        start: dateRange.from,
+        end: dateRange.to
+      });
       return days.map(day => {
         const dayReceipts = receipts.filter(r => {
           const receiptDate = new Date(r.date_traitement || r.created_at);
           return format(receiptDate, "yyyy-MM-dd") === format(day, "yyyy-MM-dd");
         });
         return {
-          date: format(day, "dd/MM/yyyy", { locale: fr }),
+          date: format(day, "dd/MM/yyyy", {
+            locale: fr
+          }),
           count: dayReceipts.length,
-          montant_ttc_total: dayReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+          montant_ttc_total: dayReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0)
         };
       });
     } else {
-      const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
-      
+      const months = eachMonthOfInterval({
+        start: dateRange.from,
+        end: dateRange.to
+      });
       return months.map(month => {
         const monthStart = startOfMonth(month);
         const monthEnd = endOfMonth(month);
@@ -188,9 +201,11 @@ const Dashboard = () => {
           return receiptDate >= monthStart && receiptDate <= monthEnd;
         });
         return {
-          date: format(month, "MMM yyyy", { locale: fr }),
+          date: format(month, "MMM yyyy", {
+            locale: fr
+          }),
           count: monthReceipts.length,
-          montant_ttc_total: monthReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+          montant_ttc_total: monthReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0)
         };
       });
     }
@@ -198,39 +213,31 @@ const Dashboard = () => {
 
   // Prepare Top categories data
   const topCategories = () => {
-    const categoryMap = new Map<string, { 
-      label: string; 
-      count: number; 
-      ttc: number; 
-      ht: number; 
-      tva: number; 
+    const categoryMap = new Map<string, {
+      label: string;
+      count: number;
+      ttc: number;
+      ht: number;
+      tva: number;
     }>();
-
     receipts.forEach(r => {
       if (!r.category_id) return;
-      
       const category = categories.find(c => c.id === r.category_id);
       const categoryLabel = category?.label || r.category_label || "Sans catégorie";
-      
       const existing = categoryMap.get(r.category_id) || {
         label: categoryLabel,
         count: 0,
         ttc: 0,
         ht: 0,
-        tva: 0,
+        tva: 0
       };
-
       existing.count += 1;
       existing.ttc += Number(r.montant_ttc) || 0;
       existing.ht += Number(r.montant_ht) || (Number(r.montant_ttc) || 0) - (Number(r.tva) || 0);
       existing.tva += Number(r.tva) || 0;
-
       categoryMap.set(r.category_id, existing);
     });
-
-    return Array.from(categoryMap.values())
-      .sort((a, b) => b.ttc - a.ttc)
-      .slice(0, 10);
+    return Array.from(categoryMap.values()).sort((a, b) => b.ttc - a.ttc).slice(0, 10);
   };
 
   // Calculate team member stats from filtered receipts
@@ -241,16 +248,16 @@ const Dashboard = () => {
       name: member.name,
       role: "Membre",
       receiptsCount: memberReceipts.length,
-      tvaAmount: new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(tvaAmount),
-      initials: member.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+      tvaAmount: new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR"
+      }).format(tvaAmount),
+      initials: member.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     };
   });
-
   const chart = chartData();
   const topCats = topCategories();
-
-  return (
-    <MainLayout>
+  return <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-fade-in-up">
         <div className="hidden md:flex flex-col gap-2 md:gap-3">
           <h1 className="text-xl md:text-2xl font-bold">Tableau de bord</h1>
@@ -268,11 +275,9 @@ const Dashboard = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les clients</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
+              {clients.map(client => <SelectItem key={client.id} value={client.id}>
                   {client.name}
-                </SelectItem>
-              ))}
+                </SelectItem>)}
             </SelectContent>
           </Select>
 
@@ -282,74 +287,60 @@ const Dashboard = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les membres</SelectItem>
-              {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
+              {members.map(member => <SelectItem key={member.id} value={member.id}>
                   {member.name}
-                </SelectItem>
-              ))}
+                </SelectItem>)}
             </SelectContent>
           </Select>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-          {stats.map((stat, index) => (
-            <div key={stat.title} className="animate-fade-in-scale" style={{ animationDelay: `${index * 0.1}s` }}>
+          {stats.map((stat, index) => <div key={stat.title} className="animate-fade-in-scale" style={{
+          animationDelay: `${index * 0.1}s`
+        }}>
               <StatCard {...stat} />
-            </div>
-          ))}
+            </div>)}
         </div>
 
-        <Card className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale" style={{ animationDelay: '0.2s' }}>
+        <Card className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale" style={{
+        animationDelay: '0.2s'
+      }}>
           <CardHeader>
-            <CardTitle className="text-base md:text-lg">
-              Suivi du nombre de reçus traités et montants sur la période sélectionnée
-            </CardTitle>
+            <CardTitle className="md:text-lg text-left font-medium text-sm">Suivi du nombre de reçus traités et montants TTC sur la période sélectionnée</CardTitle>
             <p className="text-[10px] md:text-xs text-muted-foreground leading-relaxed">
               {dateRange?.from && dateRange?.to ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}` : "Aucune période sélectionnée"} · Axe X = Période · Axe Y = Montant TTC (€)
             </p>
           </CardHeader>
           <CardContent>
-            {isLoadingReceipts ? (
-              <Skeleton className="h-64 w-full" />
-            ) : chart.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
+            {isLoadingReceipts ? <Skeleton className="h-64 w-full" /> : chart.length === 0 ? <div className="h-64 flex items-center justify-center text-muted-foreground">
                 Aucune donnée disponible
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 240 : 300}>
-                <LineChart data={chart} margin={{ left: window.innerWidth < 768 ? -10 : 0, right: window.innerWidth < 768 ? 10 : 0 }}>
-                  <CartesianGrid 
-                    strokeDasharray="3 3" 
-                    stroke="hsl(var(--border))" 
-                    vertical={false} 
-                    opacity={window.innerWidth < 768 ? 0.15 : 0.3} 
-                  />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="hsl(var(--muted-foreground))"
-                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
-                    ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []}
-                    height={window.innerWidth < 768 ? 28 : 40}
-                    padding={{ left: window.innerWidth < 768 ? 15 : 0, right: window.innerWidth < 768 ? 15 : 0 }}
-                  />
-                  <YAxis 
-                    stroke="hsl(var(--muted-foreground))"
-                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
-                    domain={[0, "auto"]}
-                    width={window.innerWidth < 768 ? 40 : 55}
-                  />
-                  <Tooltip
-                    cursor={{ 
-                      stroke: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(var(--border))", 
-                      strokeWidth: window.innerWidth < 768 ? 1 : 1,
-                      strokeDasharray: "3 3"
-                    }}
-                    animationDuration={window.innerWidth < 768 ? 150 : 300}
-                    animationEasing="ease-out"
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-card/95 backdrop-blur border border-border p-2.5 md:p-3 rounded-lg shadow-[var(--shadow-soft)] transition-all duration-150">
+              </div> : <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 240 : 300}>
+                <LineChart data={chart} margin={{
+              left: window.innerWidth < 768 ? -10 : 0,
+              right: window.innerWidth < 768 ? 10 : 0
+            }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={window.innerWidth < 768 ? 0.15 : 0.3} />
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{
+                fill: "hsl(var(--muted-foreground))",
+                fontSize: window.innerWidth < 768 ? 8 : 12
+              }} ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []} height={window.innerWidth < 768 ? 28 : 40} padding={{
+                left: window.innerWidth < 768 ? 15 : 0,
+                right: window.innerWidth < 768 ? 15 : 0
+              }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={{
+                fill: "hsl(var(--muted-foreground))",
+                fontSize: window.innerWidth < 768 ? 8 : 12
+              }} domain={[0, "auto"]} width={window.innerWidth < 768 ? 40 : 55} />
+                  <Tooltip cursor={{
+                stroke: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(var(--border))",
+                strokeWidth: window.innerWidth < 768 ? 1 : 1,
+                strokeDasharray: "3 3"
+              }} animationDuration={window.innerWidth < 768 ? 150 : 300} animationEasing="ease-out" content={({
+                active,
+                payload
+              }) => {
+                if (active && payload && payload.length) {
+                  return <div className="bg-card/95 backdrop-blur border border-border p-2.5 md:p-3 rounded-lg shadow-[var(--shadow-soft)] transition-all duration-150">
                             <p className="text-xs md:text-sm font-semibold mb-1.5">{payload[0].payload.date}</p>
                             <p className="text-xs md:text-sm text-muted-foreground">
                               {payload[0].payload.count} reçus traités
@@ -357,60 +348,48 @@ const Dashboard = () => {
                             <p className="text-xs md:text-sm font-semibold text-primary mt-0.5">
                               {formatCurrency(payload[0].payload.montant_ttc_total)}
                             </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Line 
-                    type={window.innerWidth < 768 ? "basis" : "monotone"}
-                    dataKey="montant_ttc_total" 
-                    stroke={window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)"} 
-                    strokeWidth={window.innerWidth < 768 ? 2.5 : 2.5}
-                    dot={{ 
-                      fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)", 
-                      r: window.innerWidth < 768 ? 1.5 : 2,
-                      strokeWidth: 0
-                    }}
-                    activeDot={{ 
-                      r: window.innerWidth < 768 ? 5 : 4, 
-                      fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)", 
-                      stroke: "hsl(var(--card))", 
-                      strokeWidth: window.innerWidth < 768 ? 2.5 : 2,
-                      style: { 
-                        transition: "all 0.15s ease-out",
-                        filter: window.innerWidth < 768 ? "drop-shadow(0 0 4px hsl(210 100% 70% / 0.6))" : "none"
-                      }
-                    }}
-                  />
+                          </div>;
+                }
+                return null;
+              }} />
+                  <Line type={window.innerWidth < 768 ? "basis" : "monotone"} dataKey="montant_ttc_total" stroke={window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)"} strokeWidth={window.innerWidth < 768 ? 2.5 : 2.5} dot={{
+                fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)",
+                r: window.innerWidth < 768 ? 1.5 : 2,
+                strokeWidth: 0
+              }} activeDot={{
+                r: window.innerWidth < 768 ? 5 : 4,
+                fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)",
+                stroke: "hsl(var(--card))",
+                strokeWidth: window.innerWidth < 768 ? 2.5 : 2,
+                style: {
+                  transition: "all 0.15s ease-out",
+                  filter: window.innerWidth < 768 ? "drop-shadow(0 0 4px hsl(210 100% 70% / 0.6))" : "none"
+                }
+              }} />
                 </LineChart>
-              </ResponsiveContainer>
-            )}
+              </ResponsiveContainer>}
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale" style={{ animationDelay: '0.3s' }}>
+        <Card className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale" style={{
+        animationDelay: '0.3s'
+      }}>
           <CardHeader>
             <CardTitle className="text-base md:text-lg">Top catégories</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoadingReceipts ? (
-              <div className="space-y-3">
+            {isLoadingReceipts ? <div className="space-y-3">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
-              </div>
-            ) : topCats.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
+              </div> : topCats.length === 0 ? <div className="flex items-center justify-center py-8 text-muted-foreground">
                 Aucune catégorie trouvée
-              </div>
-            ) : (
-              <div className="space-y-3 md:space-y-0">
+              </div> : <div className="space-y-3 md:space-y-0">
                 {/* Mobile: Cards */}
                 <div className="md:hidden space-y-3">
-                  {topCats.map((cat, idx) => (
-                    <div key={idx} className="p-3.5 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up" style={{ animationDelay: `${0.4 + idx * 0.05}s` }}>
+                  {topCats.map((cat, idx) => <div key={idx} className="p-3.5 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up" style={{
+                animationDelay: `${0.4 + idx * 0.05}s`
+              }}>
                       <div className="font-semibold text-sm">{cat.label}</div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
@@ -430,8 +409,7 @@ const Dashboard = () => {
                           <span>{formatCurrency(cat.tva)}</span>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    </div>)}
                 </div>
                 
                 {/* Desktop: Table */}
@@ -447,44 +425,39 @@ const Dashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {topCats.map((cat, idx) => (
-                      <tr key={idx} className="border-b border-border/50 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up" style={{ animationDelay: `${0.4 + idx * 0.05}s` }}>
+                    {topCats.map((cat, idx) => <tr key={idx} className="border-b border-border/50 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up" style={{
+                    animationDelay: `${0.4 + idx * 0.05}s`
+                  }}>
                         <td className="py-3 px-3.5 text-sm">{cat.label}</td>
                         <td className="py-3 px-3.5 text-sm text-right">{cat.count}</td>
                         <td className="py-3 px-3.5 text-sm text-right font-semibold">{formatCurrency(cat.ttc)}</td>
                         <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.ht)}</td>
                         <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.tva)}</td>
-                      </tr>
-                    ))}
+                      </tr>)}
                   </tbody>
                 </table>
                 </div>
-              </div>
-            )}
+              </div>}
           </CardContent>
         </Card>
 
-        <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+        <div className="space-y-4 animate-fade-in-up" style={{
+        animationDelay: '0.4s'
+      }}>
           <h2 className="text-base md:text-lg font-semibold">
             Suivi de l'activité et la part des reçus traités par chaque membre de votre équipe
           </h2>
-          {teamMemberStats.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
+          {teamMemberStats.length === 0 ? <div className="flex items-center justify-center py-8 text-muted-foreground">
               Aucun membre trouvé
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-              {teamMemberStats.map((member, index) => (
-                <div key={member.name} className="animate-fade-in-scale" style={{ animationDelay: `${0.5 + index * 0.1}s` }}>
+            </div> : <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+              {teamMemberStats.map((member, index) => <div key={member.name} className="animate-fade-in-scale" style={{
+            animationDelay: `${0.5 + index * 0.1}s`
+          }}>
                   <TeamMemberCard {...member} />
-                </div>
-              ))}
-            </div>
-          )}
+                </div>)}
+            </div>}
         </div>
       </div>
-    </MainLayout>
-  );
+    </MainLayout>;
 };
-
 export default Dashboard;
