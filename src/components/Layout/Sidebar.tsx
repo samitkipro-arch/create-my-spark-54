@@ -1,6 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Receipt, Users, UserCog, BarChart3, Settings } from "lucide-react";
+import { LayoutDashboard, Receipt, Users, UserCog, BarChart3, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Tableau de bord", path: "/" },
@@ -13,6 +15,7 @@ const menuItems = [
 
 export const Sidebar = () => {
   const location = useLocation();
+  const { signOut } = useAuth();
 
   return (
     <div className="w-full bg-sidebar border-r border-sidebar-border flex flex-col h-full md:border-0">
@@ -47,6 +50,17 @@ export const Sidebar = () => {
           })}
         </div>
       </nav>
+      
+      <div className="p-4 border-t border-sidebar-border">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start gap-3" 
+          onClick={signOut}
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="text-sm font-medium">Déconnexion</span>
+        </Button>
+      </div>
     </div>
   );
 };
