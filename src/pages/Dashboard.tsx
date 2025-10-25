@@ -261,12 +261,15 @@ const Dashboard = () => {
 
   return (
     <MainLayout>
-      <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
-        <div className="flex items-center justify-between transition-all duration-200">
-          <h1 className="text-2xl md:text-3xl font-bold transition-all duration-150">Tableau de bord</h1>
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-fade-in-up">
+        <div className="flex flex-col gap-2 md:gap-3">
+          <h1 className="text-xl md:text-2xl font-bold">Tableau de bord</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Vue d'ensemble de votre activité
+          </p>
         </div>
 
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-300">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
           <Select value={storedClientId} onValueChange={setClientId}>
@@ -298,56 +301,58 @@ const Dashboard = () => {
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 transition-all duration-300">
-          {stats.map((stat) => (
-            <StatCard key={stat.title} {...stat} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+          {stats.map((stat, index) => (
+            <div key={stat.title} className="animate-fade-in-scale" style={{ animationDelay: `${index * 0.1}s` }}>
+              <StatCard {...stat} />
+            </div>
           ))}
         </div>
 
-        <Card className="bg-card border-border transition-all duration-200">
-          <CardHeader className="transition-all duration-150">
-            <CardTitle className="text-base md:text-xl">
+        <Card className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale" style={{ animationDelay: '0.2s' }}>
+          <CardHeader>
+            <CardTitle className="text-base md:text-lg">
               Suivi du nombre de reçus traités et montants sur la période sélectionnée
             </CardTitle>
-            <p className="text-[10px] md:text-sm text-muted-foreground">
+            <p className="text-[10px] md:text-xs text-muted-foreground leading-relaxed">
               {dateRange?.from && dateRange?.to ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}` : "Aucune période sélectionnée"} · Axe X = Période · Axe Y = Montant TTC (€)
             </p>
           </CardHeader>
           <CardContent>
             {isLoadingReceipts ? (
-              <Skeleton className="h-64 w-full transition-all duration-200" />
+              <Skeleton className="h-64 w-full" />
             ) : chart.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-muted-foreground transition-all duration-150">
+              <div className="h-64 flex items-center justify-center text-muted-foreground">
                 Aucune donnée disponible
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={300} className="transition-all duration-200">
+              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 250 : 300}>
                 <LineChart data={chart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.3} />
                   <XAxis 
                     dataKey="date" 
-                    stroke="rgba(255,255,255,0.5)"
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 8 : 12 }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []}
                     height={window.innerWidth < 768 ? 28 : 40}
                   />
                   <YAxis 
-                    stroke="rgba(255,255,255,0.5)"
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 8 : 12 }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     domain={[0, "auto"]}
-                    width={window.innerWidth < 768 ? 38 : 50}
+                    width={window.innerWidth < 768 ? 40 : 55}
                   />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-background/95 backdrop-blur border border-border p-2 md:p-3 rounded-lg shadow-lg">
-                            <p className="text-xs md:text-sm font-semibold mb-1">{payload[0].payload.date}</p>
+                          <div className="bg-card/95 backdrop-blur border border-border p-2.5 md:p-3 rounded-lg shadow-[var(--shadow-soft)]">
+                            <p className="text-xs md:text-sm font-semibold mb-1.5">{payload[0].payload.date}</p>
                             <p className="text-xs md:text-sm text-muted-foreground">
                               {payload[0].payload.count} reçus traités
                             </p>
-                            <p className="text-xs md:text-sm font-semibold text-primary">
-                              {formatCurrency(payload[0].payload.montant_ttc_total)} montant TTC
+                            <p className="text-xs md:text-sm font-semibold text-primary mt-0.5">
+                              {formatCurrency(payload[0].payload.montant_ttc_total)}
                             </p>
                           </div>
                         );
@@ -358,10 +363,10 @@ const Dashboard = () => {
                   <Line 
                     type="monotone" 
                     dataKey="montant_ttc_total" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={window.innerWidth < 768 ? 1.5 : 2.5}
-                    dot={{ fill: "hsl(var(--primary))", r: window.innerWidth < 768 ? 2 : 4 }}
-                    activeDot={{ r: window.innerWidth < 768 ? 4 : 6, stroke: "hsl(var(--primary))", strokeWidth: 2 }}
+                    stroke="hsl(217 91% 60%)" 
+                    strokeWidth={window.innerWidth < 768 ? 2 : 2.5}
+                    dot={{ fill: "hsl(217 91% 60%)", r: window.innerWidth < 768 ? 2.5 : 4 }}
+                    activeDot={{ r: window.innerWidth < 768 ? 5 : 7, fill: "hsl(217 91% 60%)", stroke: "hsl(var(--card))", strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -369,11 +374,11 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border transition-all duration-200">
-          <CardHeader className="transition-all duration-150">
-            <CardTitle>Top catégories</CardTitle>
+        <Card className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale" style={{ animationDelay: '0.3s' }}>
+          <CardHeader>
+            <CardTitle className="text-base md:text-lg">Top catégories</CardTitle>
           </CardHeader>
-          <CardContent className="transition-all duration-200">
+          <CardContent>
             {isLoadingReceipts ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" />
@@ -385,11 +390,11 @@ const Dashboard = () => {
                 Aucune catégorie trouvée
               </div>
             ) : (
-              <div className="space-y-3 md:space-y-0 transition-all duration-200">
+              <div className="space-y-3 md:space-y-0">
                 {/* Mobile: Cards */}
-                <div className="md:hidden space-y-3 transition-all duration-200">
+                <div className="md:hidden space-y-3">
                   {topCats.map((cat, idx) => (
-                    <div key={idx} className="p-4 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:bg-muted/40">
+                    <div key={idx} className="p-3.5 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up" style={{ animationDelay: `${0.4 + idx * 0.05}s` }}>
                       <div className="font-semibold text-sm">{cat.label}</div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
@@ -418,21 +423,21 @@ const Dashboard = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-semibold">Catégorie</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold">Nb reçus</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold">Montant TTC</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold">Montant HT</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold">TVA</th>
+                      <th className="text-left py-3 px-3.5 text-sm font-semibold">Catégorie</th>
+                      <th className="text-right py-3 px-3.5 text-sm font-semibold">Nb reçus</th>
+                      <th className="text-right py-3 px-3.5 text-sm font-semibold">Montant TTC</th>
+                      <th className="text-right py-3 px-3.5 text-sm font-semibold">Montant HT</th>
+                      <th className="text-right py-3 px-3.5 text-sm font-semibold">TVA</th>
                     </tr>
                   </thead>
                   <tbody>
                     {topCats.map((cat, idx) => (
-                      <tr key={idx} className="border-b border-border/50">
-                        <td className="py-3 px-4 text-sm">{cat.label}</td>
-                        <td className="py-3 px-4 text-sm text-right">{cat.count}</td>
-                        <td className="py-3 px-4 text-sm text-right font-semibold">{formatCurrency(cat.ttc)}</td>
-                        <td className="py-3 px-4 text-sm text-right">{formatCurrency(cat.ht)}</td>
-                        <td className="py-3 px-4 text-sm text-right">{formatCurrency(cat.tva)}</td>
+                      <tr key={idx} className="border-b border-border/50 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up" style={{ animationDelay: `${0.4 + idx * 0.05}s` }}>
+                        <td className="py-3 px-3.5 text-sm">{cat.label}</td>
+                        <td className="py-3 px-3.5 text-sm text-right">{cat.count}</td>
+                        <td className="py-3 px-3.5 text-sm text-right font-semibold">{formatCurrency(cat.ttc)}</td>
+                        <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.ht)}</td>
+                        <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.tva)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -443,8 +448,8 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">
+        <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+          <h2 className="text-base md:text-lg font-semibold">
             Suivi de l'activité et la part des reçus traités par chaque membre de votre équipe
           </h2>
           {teamMemberStats.length === 0 ? (
@@ -452,9 +457,11 @@ const Dashboard = () => {
               Aucun membre trouvé
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {teamMemberStats.map((member) => (
-                <TeamMemberCard key={member.name} {...member} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+              {teamMemberStats.map((member, index) => (
+                <div key={member.name} className="animate-fade-in-scale" style={{ animationDelay: `${0.5 + index * 0.1}s` }}>
+                  <TeamMemberCard {...member} />
+                </div>
               ))}
             </div>
           )}

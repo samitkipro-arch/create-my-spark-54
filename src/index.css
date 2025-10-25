@@ -10,32 +10,36 @@ All colors MUST be HSL.
   :root {
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
-    --card: 220 39% 14%;
+    --card: 220 39% 16%;
     --card-foreground: 210 40% 98%;
-    --popover: 220 39% 14%;
+    --popover: 220 39% 16%;
     --popover-foreground: 210 40% 98%;
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
-    --secondary: 220 39% 18%;
+    --secondary: 220 39% 20%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 220 39% 18%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 220 39% 20%;
+    --muted-foreground: 215 20% 75%;
     --accent: 217 91% 60%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 39% 20%;
-    --input: 220 39% 18%;
+    --border: 220 39% 22%;
+    --input: 220 39% 20%;
     --ring: 217 91% 60%;
-    --radius: 0.75rem;
+    --radius: 0.5rem;
     --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 220 39% 14%;
+    --sidebar-accent: 220 39% 16%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 220 39% 12%;
     --sidebar-ring: 217 91% 60%;
+    
+    /* Shadows */
+    --shadow-soft: 0 4px 16px -2px hsl(220 39% 8% / 0.4);
+    --shadow-hover: 0 6px 20px -2px hsl(220 39% 8% / 0.5);
   }
 }
 
@@ -70,5 +74,53 @@ All colors MUST be HSL.
   /* Smooth card scaling */
   .responsive-card {
     transition: padding 0.2s ease-in-out, margin 0.2s ease-in-out, width 0.3s ease-in-out;
+  }
+
+  /* Page fade-in animation */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInScale {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.4s ease-in-out;
+  }
+
+  .animate-fade-in-scale {
+    animation: fadeInScale 0.3s ease-in-out;
+  }
+
+  /* Staggered animation delays */
+  .animation-delay-100 {
+    animation-delay: 0.1s;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 0.4s;
   }
 }
