@@ -1,13 +1,64 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Calendar, ChevronDown, Plus, Search } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
+import { supabase } from "@/integrations/supabase/client";
+
+type Receipt = {
+  id: number;
+  created_at: string | null;
+  date_traitement?: string | null;
+  enseigne?: string | null;
+  adresse?: string | null;
+  montant?: number | null;
+  montant_ttc?: number | null;
+  tva?: number | null;
+};
 
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchReceipts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { data, error: fetchError } = await supabase
+        .from("recus")
+        .select("*")
+        .order("date_traitement", { ascending: false })
+        .limit(100);
+
+      if (fetchError) throw fetchError;
+      setReceipts(data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur lors du chargement");
+      setReceipts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReceipts();
+
+    const channel = supabase
+      .channel("recus-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => {
+        fetchReceipts();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <MainLayout>
@@ -48,9 +99,68 @@ const Recus = () => {
             <CardTitle>Liste des reçus</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              Aucun reçu trouvé
-            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-16 text-muted-foreground">
+                Chargement…
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-16 text-destructive">
+                {error}
+              </div>
+            ) : receipts.length === 0 ? (
+              <div className="flex items-center justify-center py-16 text-muted-foreground">
+                Aucun reçu trouvé
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA récupérable</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Assigné à</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Traité par</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receipts.map((receipt) => {
+                      const dateValue = receipt.date_traitement || receipt.created_at;
+                      const formattedDate = dateValue 
+                        ? new Date(dateValue).toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })
+                        : "—";
+                      
+                      const montantTTC = receipt.montant_ttc ?? receipt.montant;
+                      const formattedMontant = montantTTC !== null && montantTTC !== undefined
+                        ? `${montantTTC.toFixed(2)} €`
+                        : "—";
+                      
+                      const formattedTVA = receipt.tva !== null && receipt.tva !== undefined
+                        ? `${receipt.tva.toFixed(2)} €`
+                        : "—";
+
+                      return (
+                        <tr key={receipt.id} className="border-b border-border hover:bg-muted/50">
+                          <td className="py-3 px-4 text-sm">{formattedDate}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.enseigne || "—"}</td>
+                          <td className="py-3 px-4 text-sm text-right">{formattedMontant}</td>
+                          <td className="py-3 px-4 text-sm text-right">{formattedTVA}</td>
+                          <td className="py-3 px-4 text-sm">—</td>
+                          <td className="py-3 px-4 text-sm">—</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
