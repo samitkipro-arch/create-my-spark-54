@@ -165,46 +165,34 @@ const Dashboard = () => {
 
     if (groupByDay) {
       const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-      // Reduce points considerably: max 6 for mobile, max 12 for desktop
-      const isMobile = window.innerWidth < 768;
-      const maxPoints = isMobile ? 6 : 12;
-      const sampleRate = Math.max(1, Math.ceil(days.length / maxPoints));
       
-      return days
-        .filter((_, idx) => idx % sampleRate === 0)
-        .map(day => {
-          const dayReceipts = receipts.filter(r => {
-            const receiptDate = new Date(r.date_traitement || r.created_at);
-            return format(receiptDate, "yyyy-MM-dd") === format(day, "yyyy-MM-dd");
-          });
-          return {
-            date: format(day, "dd/MM/yyyy", { locale: fr }),
-            count: dayReceipts.length,
-            montant_ttc_total: dayReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
-          };
+      return days.map(day => {
+        const dayReceipts = receipts.filter(r => {
+          const receiptDate = new Date(r.date_traitement || r.created_at);
+          return format(receiptDate, "yyyy-MM-dd") === format(day, "yyyy-MM-dd");
         });
+        return {
+          date: format(day, "dd/MM/yyyy", { locale: fr }),
+          count: dayReceipts.length,
+          montant_ttc_total: dayReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+        };
+      });
     } else {
       const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
-      // Reduce points considerably: max 5 for mobile, max 10 for desktop
-      const isMobile = window.innerWidth < 768;
-      const maxPoints = isMobile ? 5 : 10;
-      const sampleRate = Math.max(1, Math.ceil(months.length / maxPoints));
       
-      return months
-        .filter((_, idx) => idx % sampleRate === 0)
-        .map(month => {
-          const monthStart = startOfMonth(month);
-          const monthEnd = endOfMonth(month);
-          const monthReceipts = receipts.filter(r => {
-            const receiptDate = new Date(r.date_traitement || r.created_at);
-            return receiptDate >= monthStart && receiptDate <= monthEnd;
-          });
-          return {
-            date: format(month, "MMM yyyy", { locale: fr }),
-            count: monthReceipts.length,
-            montant_ttc_total: monthReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
-          };
+      return months.map(month => {
+        const monthStart = startOfMonth(month);
+        const monthEnd = endOfMonth(month);
+        const monthReceipts = receipts.filter(r => {
+          const receiptDate = new Date(r.date_traitement || r.created_at);
+          return receiptDate >= monthStart && receiptDate <= monthEnd;
         });
+        return {
+          date: format(month, "MMM yyyy", { locale: fr }),
+          count: monthReceipts.length,
+          montant_ttc_total: monthReceipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
+        };
+      });
     }
   };
 
@@ -367,8 +355,8 @@ const Dashboard = () => {
                     dataKey="montant_ttc_total" 
                     stroke="hsl(217 91% 60%)" 
                     strokeWidth={window.innerWidth < 768 ? 2 : 2.5}
-                    dot={{ fill: "hsl(217 91% 60%)", r: window.innerWidth < 768 ? 2.5 : 4 }}
-                    activeDot={{ r: window.innerWidth < 768 ? 5 : 7, fill: "hsl(217 91% 60%)", stroke: "hsl(var(--card))", strokeWidth: 2 }}
+                    dot={{ fill: "hsl(217 91% 60%)", r: window.innerWidth < 768 ? 1.5 : 2 }}
+                    activeDot={{ r: window.innerWidth < 768 ? 3 : 4, fill: "hsl(217 91% 60%)", stroke: "hsl(var(--card))", strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
