@@ -15,7 +15,7 @@ export const Sidebar = () => {
   const location = useLocation();
 
   return (
-    <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-screen sticky top-0">
+    <div className="w-full bg-sidebar border-r border-sidebar-border flex flex-col h-full md:border-0">
       <div className="p-6 border-b border-sidebar-border">
         <h1 className="text-2xl font-bold text-primary">Finvisor</h1>
       </div>
@@ -47,6 +47,6 @@ export const Sidebar = () => {
           })}
         </div>
       </nav>
-    </aside>
+    </div>
   );
 };

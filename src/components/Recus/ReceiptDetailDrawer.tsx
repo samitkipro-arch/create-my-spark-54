@@ -30,7 +30,16 @@ export const ReceiptDetailDrawer = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+      <SheetContent 
+        side="right"
+        className="
+          fixed right-0 top-0 bottom-0 w-full max-w-full rounded-none border-0 bg-card shadow-none
+          md:right-6 md:top-6 md:bottom-6 md:w-full md:max-w-[520px]
+          md:rounded-2xl md:border md:shadow-2xl
+          bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80
+          overflow-y-auto
+        "
+      >
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">Chargement…</p>
