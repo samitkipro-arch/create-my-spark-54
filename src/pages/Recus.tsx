@@ -15,15 +15,21 @@ type Receipt = {
   id: number;
   created_at: string | null;
   date_traitement?: string | null;
+  date_recu?: string | null;
   numero_recu?: string | null;
   enseigne?: string | null;
   adresse?: string | null;
-  montant?: number | null;
+  ville?: string | null;
+  montant_ht?: number | null;
   montant_ttc?: number | null;
   tva?: number | null;
+  moyen_paiement?: string | null;
+  status?: string | null;
   client_id?: string | null;
   processed_by?: string | null;
-  status?: string | null;
+  category_id?: string | null;
+  org_id?: string | null;
+  notes?: string | null;
 };
 
 type Client = {
@@ -127,7 +133,7 @@ const Recus = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("recus")
-        .select("id, created_at, date_traitement, numero_recu, enseigne, adresse, montant, montant_ttc, tva, client_id, processed_by, status");
+        .select("id, created_at, date_traitement, date_recu, numero_recu, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id, notes");
 
       // Apply date range filter from global store (if set)
       if (storedDateRange.from && storedDateRange.to) {
@@ -172,15 +178,21 @@ const Recus = () => {
         id: r.id,
         created_at: r.created_at ?? null,
         date_traitement: r.date_traitement ?? null,
+        date_recu: r.date_recu ?? null,
         numero_recu: r.numero_recu ?? null,
         enseigne: r.enseigne ?? null,
         adresse: r.adresse ?? null,
-        montant: r.montant ?? null,
+        ville: r.ville ?? null,
+        montant_ht: r.montant_ht ?? null,
         montant_ttc: r.montant_ttc ?? null,
         tva: r.tva ?? null,
+        moyen_paiement: r.moyen_paiement ?? null,
+        status: r.status ?? null,
         client_id: r.client_id ?? null,
         processed_by: r.processed_by ?? null,
-        status: r.status ?? null,
+        category_id: r.category_id ?? null,
+        org_id: r.org_id ?? null,
+        notes: r.notes ?? null,
       })) as Receipt[];
     },
   });
@@ -378,12 +390,15 @@ const Recus = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">N° Reçu</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Adresse</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant HT</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Moyen de paiement</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Statut</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Ville</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">N° de reçu</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -399,14 +414,23 @@ const Recus = () => {
                           })
                         : "—";
                       
-                      const montantTTC = receipt.montant_ttc ?? receipt.montant;
-                      const formattedMontant = montantTTC !== null && montantTTC !== undefined
-                        ? `${Number(montantTTC).toFixed(2)} €`
+                      const formattedMontantTTC = receipt.montant_ttc !== null && receipt.montant_ttc !== undefined
+                        ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ttc)
                         : "—";
                       
                       const formattedTVA = receipt.tva !== null && receipt.tva !== undefined
-                        ? `${Number(receipt.tva).toFixed(2)} €`
+                        ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.tva)
                         : "—";
+
+                      const formattedMontantHT = receipt.montant_ht !== null && receipt.montant_ht !== undefined
+                        ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ht)
+                        : "—";
+
+                      const statusLabels: Record<string, string> = {
+                        traite: "Traité",
+                        en_cours: "En cours",
+                        en_attente: "En attente"
+                      };
 
                       return (
                         <tr 
@@ -420,11 +444,14 @@ const Recus = () => {
                           }}
                         >
                           <td className="py-3 px-4 text-sm">{formattedDate}</td>
-                          <td className="py-3 px-4 text-sm">{receipt.numero_recu || "—"}</td>
                           <td className="py-3 px-4 text-sm">{receipt.enseigne || "—"}</td>
-                          <td className="py-3 px-4 text-sm">{receipt.adresse || "—"}</td>
-                          <td className="py-3 px-4 text-sm text-right font-medium">{formattedMontant}</td>
+                          <td className="py-3 px-4 text-sm text-right font-medium">{formattedMontantTTC}</td>
                           <td className="py-3 px-4 text-sm text-right">{formattedTVA}</td>
+                          <td className="py-3 px-4 text-sm text-right">{formattedMontantHT}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.moyen_paiement || "—"}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.status ? statusLabels[receipt.status] || receipt.status : "—"}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.ville || "—"}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.numero_recu || "—"}</td>
                         </tr>
                       );
                     })}
