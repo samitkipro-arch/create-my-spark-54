@@ -33,8 +33,8 @@ type Client = {
 };
 
 type DateRange = {
-  from: Date | undefined;
-  to: Date | undefined;
+  from: Date | null;
+  to: Date | null;
 };
 
 // Hook debounce
@@ -62,7 +62,7 @@ const Recus = () => {
   const [clients, setClients] = useState<Client[]>([]);
   
   // Filtres
-  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
   const [selectedClient, setSelectedClient] = useState<string | "all">("all");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,27 +89,43 @@ const Recus = () => {
       setLoading(true);
       setError(null);
       
-      // Préparer les paramètres
-      const startIso = dateRange.from 
-        ? new Date(dateRange.from.setHours(0, 0, 0, 0)).toISOString().split('T')[0]
+      // Construire la requête de base
+      let q = supabase.from("recus_feed" as any).select("*");
+      
+      // Bornes de date (inclusives) - APPLIQUER UNIQUEMENT si l'utilisateur a choisi une période
+      const hasRange = Boolean(dateRange?.from) || Boolean(dateRange?.to);
+      const DATE_COL = "date_traitement";
+      
+      const startIso = dateRange?.from 
+        ? new Date(new Date(dateRange.from).setHours(0, 0, 0, 0)).toISOString() 
         : null;
-      const endIso = dateRange.to 
-        ? new Date(dateRange.to.setHours(23, 59, 59, 999)).toISOString().split('T')[0]
+      const endIso = dateRange?.to 
+        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString() 
         : null;
       
-      const clientIds = selectedClient !== "all" ? [selectedClient] : null;
-      const statuses = selectedStatus !== "all" ? [selectedStatus] : null;
+      if (hasRange) {
+        if (startIso) q = q.gte(DATE_COL, startIso);
+        if (endIso) q = q.lte(DATE_COL, endIso);
+      }
       
-      // Utiliser la RPC recus_feed_list
-      const { data, error: fetchError } = await (supabase.rpc as any)("recus_feed_list", {
-        p_from: startIso,
-        p_to: endIso,
-        p_client_ids: clientIds,
-        p_statuses: statuses,
-        p_search: debouncedQuery || null,
-        p_limit: 100,
-        p_offset: 0,
-      });
+      // Filtres client / statut - N'APPLIQUER QUE si ≠ "all"
+      if (selectedClient && selectedClient !== "all") {
+        q = q.eq("client_id", selectedClient);
+      }
+      if (selectedStatus && selectedStatus !== "all") {
+        q = q.eq("status", selectedStatus);
+      }
+      
+      // Recherche texte - ILIKE multi-colonnes
+      if (debouncedQuery) {
+        const s = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
+        q = q.or(`numero_recu.ilike.%${s}%,enseigne.ilike.%${s}%,adresse.ilike.%${s}%`);
+      }
+      
+      // Tri + limite
+      q = q.order(DATE_COL, { ascending: false }).limit(100);
+      
+      const { data, error: fetchError } = await q;
 
       if (fetchError) throw fetchError;
       setReceipts((data as unknown as Receipt[]) || []);
