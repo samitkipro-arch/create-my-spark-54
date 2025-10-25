@@ -157,86 +157,89 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
           {formatDateRange()}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <div className="flex bg-white rounded-lg shadow-lg">
+      <PopoverContent className="w-auto p-0 bg-card/95 backdrop-blur border-border" align="start">
+        <div className="flex rounded-lg shadow-lg overflow-hidden">
           {/* Quick Actions */}
-          <div className="border-r border-border p-4 space-y-2 min-w-[140px]">
+          <div className="bg-card border-r border-border/50 p-3 space-y-1 min-w-[200px]">
             <button
               onClick={() => handleQuickAction("today")}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
             >
               Aujourd'hui
             </button>
             <button
               onClick={() => handleQuickAction(7)}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
             >
               Derniers 7 jours
             </button>
             <button
               onClick={() => handleQuickAction(30)}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
             >
               Derniers 30 jours
             </button>
             <button
               onClick={() => handleQuickAction(90)}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
             >
               Derniers 90 jours
             </button>
           </div>
 
           {/* Calendar */}
-          <div className="p-4">
+          <div className="p-4 bg-card">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                className="p-2 hover:bg-accent rounded-md transition-colors"
+                className="p-1.5 hover:bg-primary/10 rounded-md transition-colors"
+                aria-label="Mois précédent"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <div className="text-lg font-semibold">
-                {format(currentMonth, "MMMM yyyy", { locale: fr }).charAt(0).toUpperCase() + format(currentMonth, "MMMM yyyy", { locale: fr }).slice(1)}
+              <div className="text-base font-semibold capitalize">
+                {format(currentMonth, "MMMM yyyy", { locale: fr })}
               </div>
               <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                className="p-2 hover:bg-accent rounded-md transition-colors"
+                className="p-1.5 hover:bg-primary/10 rounded-md transition-colors"
+                aria-label="Mois suivant"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
 
             {/* Weekdays */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
-                <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {["lu", "ma", "me", "je", "ve", "sa", "di"].map((day) => (
+                <div key={day} className="text-center text-xs font-medium text-muted-foreground py-1.5 w-9">
                   {day}
                 </div>
               ))}
             </div>
 
             {/* Days */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {weeks.map((week, weekIdx) => (
                 <div key={weekIdx} className="grid grid-cols-7 gap-1">
                   {week.map((day, dayIdx) => {
                     const isOutside = isOutsideCurrentMonth(day);
                     const isSelected = isDaySelected(day);
                     const isInRange = isDayInRange(day);
+                    const isToday = isSameDay(day, new Date());
 
                     return (
                       <button
                         key={dayIdx}
-                        onClick={() => handleDayClick(day)}
-                        disabled={isOutside}
+                        onClick={() => !isOutside && handleDayClick(day)}
                         className={cn(
-                          "h-10 w-10 text-sm rounded-md transition-colors",
-                          isOutside && "text-muted-foreground/30 cursor-not-allowed",
-                          !isOutside && !isSelected && !isInRange && "hover:bg-accent hover:text-accent-foreground",
-                          isInRange && !isSelected && "bg-primary/10 text-foreground",
-                          isSelected && "bg-primary text-primary-foreground font-semibold"
+                          "h-9 w-9 text-sm rounded-lg transition-all font-medium",
+                          isOutside && "text-muted-foreground/20 cursor-default",
+                          !isOutside && !isSelected && !isInRange && !isToday && "text-foreground hover:bg-primary/10",
+                          !isOutside && !isSelected && !isInRange && isToday && "text-primary ring-1 ring-primary/50",
+                          isInRange && !isSelected && "bg-primary/20 text-foreground",
+                          isSelected && "bg-primary text-primary-foreground font-semibold shadow-sm"
                         )}
                       >
                         {format(day, "d")}
@@ -248,11 +251,11 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-border">
-              <Button variant="outline" size="sm" onClick={handleCancel}>
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-border/50">
+              <Button variant="outline" size="sm" onClick={handleCancel} className="text-xs">
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleApply} disabled={!selectionState.from}>
+              <Button size="sm" onClick={handleApply} disabled={!selectionState.from} className="text-xs">
                 Appliquer
               </Button>
             </div>
