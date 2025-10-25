@@ -47,33 +47,27 @@ const Equipe = () => {
         </div>
 
         {/* Mobile: Cards */}
-        <div className="md:hidden space-y-3 transition-all duration-200">
+        <div className="md:hidden space-y-2.5 transition-all duration-200">
           {mockTeam.map((member) => (
             <Card key={member.name} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
-              <CardContent className="p-4 space-y-3 transition-all duration-150">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+              <CardContent className="p-3 space-y-2.5 transition-all duration-150">
+                <div className="flex items-center gap-2.5">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
                       {member.initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <div className="font-semibold text-base">{member.name}</div>
-                    <Badge variant="secondary" className="mt-1">{member.role}</Badge>
+                    <div className="font-semibold text-sm">{member.name}</div>
+                    <Badge variant="secondary" className="mt-1 text-xs h-5">{member.role}</Badge>
                   </div>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground text-xs">Client assigné: </span>
-                    <span>{member.client}</span>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                    <span>{member.status}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span>{member.status}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{member.lastConnection}</span>
-                  </div>
+                  <span className="text-muted-foreground">{member.lastConnection}</span>
                 </div>
               </CardContent>
             </Card>

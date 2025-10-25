@@ -198,34 +198,34 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
           {formatDateRange()}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 border-border/30 shadow-2xl" align="start" style={{ backgroundColor: '#0F1525' }}>
-        <div className="flex rounded-lg overflow-hidden max-w-[620px]">
+      <PopoverContent className="w-auto p-0 border-border/30 shadow-2xl max-h-[80vh] overflow-auto" align="start" style={{ backgroundColor: '#0F1525' }}>
+        <div className="flex flex-col md:flex-row rounded-lg overflow-hidden max-w-[620px]">
           {/* Quick Actions */}
-          <div className="border-r px-4 py-3 space-y-1 w-[180px]" style={{ backgroundColor: '#121A2B', borderColor: 'rgba(255,255,255,0.06)' }}>
+          <div className="border-r md:border-b-0 border-b px-3 md:px-4 py-2 md:py-3 space-y-0.5 md:space-y-1 w-full md:w-[180px] flex md:flex-col gap-2 md:gap-0" style={{ backgroundColor: '#121A2B', borderColor: 'rgba(255,255,255,0.06)' }}>
             <button
               onClick={() => handleQuickAction("today")}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              className="flex-1 md:w-full text-left px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm rounded hover:bg-white/5 transition-colors"
               style={{ color: '#A9B4D0' }}
             >
               Aujourd'hui
             </button>
             <button
               onClick={() => handleQuickAction(7)}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              className="flex-1 md:w-full text-left px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm rounded hover:bg-white/5 transition-colors"
               style={{ color: '#A9B4D0' }}
             >
               7 jours
             </button>
             <button
               onClick={() => handleQuickAction(30)}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              className="flex-1 md:w-full text-left px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm rounded hover:bg-white/5 transition-colors"
               style={{ color: '#A9B4D0' }}
             >
               30 jours
             </button>
             <button
               onClick={() => handleQuickAction(90)}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              className="flex-1 md:w-full text-left px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm rounded hover:bg-white/5 transition-colors"
               style={{ color: '#A9B4D0' }}
             >
               90 jours
@@ -233,46 +233,46 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
           </div>
 
           {/* Calendar */}
-          <div className="p-4" style={{ backgroundColor: '#121A2B' }}>
+          <div className="p-3 md:p-4" style={{ backgroundColor: '#121A2B' }}>
             {/* Header */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2 md:mb-3">
               <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                className="p-1.5 hover:bg-white/5 rounded transition-colors"
+                className="p-1 md:p-1.5 hover:bg-white/5 rounded transition-colors"
                 aria-label="Mois précédent"
                 style={{ color: '#E6ECFF' }}
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3 h-3 md:w-4 md:h-4" />
               </button>
-              <div className="text-sm font-semibold capitalize" style={{ color: '#E6ECFF' }}>
+              <div className="text-xs md:text-sm font-semibold capitalize" style={{ color: '#E6ECFF' }}>
                 {format(currentMonth, "MMMM yyyy", { locale: fr })}
               </div>
               <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                className="p-1.5 hover:bg-white/5 rounded transition-colors"
+                className="p-1 md:p-1.5 hover:bg-white/5 rounded transition-colors"
                 aria-label="Mois suivant"
                 style={{ color: '#E6ECFF' }}
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3 h-3 md:w-4 md:h-4" />
               </button>
             </div>
 
             {/* Weekdays */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 md:gap-1 mb-1 md:mb-2">
               {["lu", "ma", "me", "je", "ve", "sa", "di"].map((day) => (
-                <div key={day} className="text-center text-xs font-medium py-1 w-9" style={{ color: '#A9B4D0' }}>
+                <div key={day} className="text-center text-[10px] md:text-xs font-medium py-0.5 md:py-1 w-7 md:w-9" style={{ color: '#A9B4D0' }}>
                   {day}
                 </div>
               ))}
             </div>
 
             {/* Days */}
-            <div className="space-y-1">
+            <div className="space-y-0.5 md:space-y-1">
               {weeks.map((week, weekIdx) => (
-                <div key={weekIdx} className="grid grid-cols-7 gap-1">
+                <div key={weekIdx} className="grid grid-cols-7 gap-0.5 md:gap-1">
                   {week.map((day, dayIdx) => {
                     if (!day) {
-                      return <div key={dayIdx} className="h-9 w-9" />;
+                      return <div key={dayIdx} className="h-7 w-7 md:h-9 md:w-9" />;
                     }
 
                     const isSelected = isDaySelected(day);
@@ -288,7 +288,7 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
                         onMouseEnter={() => handleDayHover(day)}
                         onMouseLeave={() => handleDayHover(null)}
                         className={cn(
-                          "h-9 w-9 text-sm rounded transition-all font-medium",
+                          "h-7 w-7 md:h-9 md:w-9 text-xs md:text-sm rounded transition-all font-medium",
                           !isSelected && !isInRange && !isToday && !isOutside && "hover:bg-white/5",
                           !isSelected && !isInRange && isToday && "ring-1 ring-inset font-semibold",
                           isInRange && !isSelected && !isPreview && "font-normal",
@@ -311,12 +311,12 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2 mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex items-center justify-end gap-2 mt-3 md:mt-4 pt-2 md:pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={handleCancel} 
-                className="text-xs h-8 px-4 hover:bg-white/5"
+                className="text-[10px] md:text-xs h-7 md:h-8 px-3 md:px-4 hover:bg-white/5"
                 style={{ color: '#A9B4D0', borderColor: 'rgba(255,255,255,0.06)' }}
               >
                 Annuler
@@ -325,7 +325,7 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
                 size="sm" 
                 onClick={handleApply} 
                 disabled={!selectionState.from} 
-                className="text-xs h-8 px-4 disabled:opacity-50"
+                className="text-[10px] md:text-xs h-7 md:h-8 px-3 md:px-4 disabled:opacity-50"
                 style={{ 
                   backgroundColor: selectionState.from ? '#2F6BFF' : '#1a2640',
                   color: '#FFFFFF',

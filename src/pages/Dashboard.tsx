@@ -315,24 +315,26 @@ const Dashboard = () => {
                   <XAxis 
                     dataKey="date" 
                     stroke="rgba(255,255,255,0.5)"
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 12 }}
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 9 : 12 }}
                     ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []}
+                    height={window.innerWidth < 768 ? 30 : 40}
                   />
                   <YAxis 
                     stroke="rgba(255,255,255,0.5)"
-                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 12 }}
+                    tick={{ fill: "rgba(255,255,255,0.5)", fontSize: window.innerWidth < 768 ? 9 : 12 }}
                     domain={[0, "auto"]}
+                    width={window.innerWidth < 768 ? 40 : 50}
                   />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-background/95 backdrop-blur border border-border p-3 rounded-lg shadow-lg">
-                            <p className="text-sm font-semibold mb-1">{payload[0].payload.date}</p>
-                            <p className="text-sm text-muted-foreground">
+                          <div className="bg-background/95 backdrop-blur border border-border p-2 md:p-3 rounded-lg shadow-lg">
+                            <p className="text-xs md:text-sm font-semibold mb-1">{payload[0].payload.date}</p>
+                            <p className="text-xs md:text-sm text-muted-foreground">
                               {payload[0].payload.count} reçus traités
                             </p>
-                            <p className="text-sm font-semibold text-primary">
+                            <p className="text-xs md:text-sm font-semibold text-primary">
                               {formatCurrency(payload[0].payload.montant_ttc_total)} montant TTC
                             </p>
                           </div>
@@ -345,9 +347,9 @@ const Dashboard = () => {
                     type="monotone" 
                     dataKey="montant_ttc_total" 
                     stroke="hsl(var(--primary))" 
-                    strokeWidth={2.5}
-                    dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                    activeDot={{ r: 6, stroke: "hsl(var(--primary))", strokeWidth: 2 }}
+                    strokeWidth={window.innerWidth < 768 ? 1.5 : 2.5}
+                    dot={{ fill: "hsl(var(--primary))", r: window.innerWidth < 768 ? 2 : 4 }}
+                    activeDot={{ r: window.innerWidth < 768 ? 4 : 6, stroke: "hsl(var(--primary))", strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>

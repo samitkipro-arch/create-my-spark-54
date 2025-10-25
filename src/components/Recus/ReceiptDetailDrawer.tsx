@@ -31,13 +31,13 @@ export const ReceiptDetailDrawer = ({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent 
-        side="right"
+        side="bottom"
         className="
-          fixed right-0 top-0 bottom-0 w-full max-w-full rounded-none border-0 bg-card shadow-none
-          md:fixed md:right-6 md:top-6 md:h-[calc(100vh-3rem)] md:w-full md:max-w-[520px]
+          fixed bottom-0 left-0 right-0 h-[70vh] w-full rounded-t-[20px] border-t border-border shadow-[0_-8px_30px_rgba(0,0,0,0.3)]
+          md:fixed md:right-6 md:top-6 md:left-auto md:bottom-auto md:h-[calc(100vh-3rem)] md:w-full md:max-w-[520px]
           md:rounded-2xl md:border md:shadow-2xl
           bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80
-          overflow-y-auto
+          overflow-y-auto p-4 md:p-6
         "
       >
         {loading ? (
@@ -53,33 +53,33 @@ export const ReceiptDetailDrawer = ({
             <SheetHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <SheetTitle className="text-2xl">{detail?.enseigne ?? "—"}</SheetTitle>
-                  <p className="text-sm text-muted-foreground">
+                  <SheetTitle className="text-lg md:text-2xl">{detail?.enseigne ?? "—"}</SheetTitle>
+                  <p className="text-xs md:text-sm text-muted-foreground">
                     Reçu n° {detail?.numero_recu ?? "—"}
                   </p>
                 </div>
               </div>
             </SheetHeader>
 
-            <div className="mt-6 space-y-6">
+            <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
               {/* Montant TTC */}
               <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Montant TTC :</p>
-                <p className="text-4xl font-bold">{fmtMoney(ttc)}</p>
+                <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
+                <p className="text-2xl md:text-4xl font-bold">{fmtMoney(ttc)}</p>
               </div>
 
               {/* Cartes Montant HT / TVA */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground mb-1">Montant HT :</p>
-                    <p className="text-2xl font-semibold">{fmtMoney(ht)}</p>
+                  <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
+                    <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
+                    <p className="text-lg md:text-2xl font-semibold">{fmtMoney(ht)}</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground mb-1">TVA :</p>
-                    <p className="text-2xl font-semibold">
+                  <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
+                    <p className="text-xs md:text-sm text-muted-foreground mb-1">TVA :</p>
+                    <p className="text-lg md:text-2xl font-semibold">
                       {fmtMoney(typeof tva === "number" ? tva : null)}
                     </p>
                   </CardContent>
@@ -87,63 +87,63 @@ export const ReceiptDetailDrawer = ({
               </div>
 
               {/* Informations détaillées */}
-              <div className="space-y-4">
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Reçu numéro :</span>
-                  <span className="font-medium">{detail?.numero_recu ?? "—"}</span>
+              <div className="space-y-2 md:space-y-4">
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Reçu numéro :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?.numero_recu ?? "—"}</span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Date de traitement :</span>
-                  <span className="font-medium">
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Date de traitement :</span>
+                  <span className="text-xs md:text-sm font-medium">
                     {fmtDate(detail?.date_traitement ?? detail?.created_at)}
                   </span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Nom de l'enseigne :</span>
-                  <span className="font-medium">{detail?.enseigne ?? "—"}</span>
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Nom de l'enseigne :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?.enseigne ?? "—"}</span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Moyen de paiement :</span>
-                  <span className="font-medium">{detail?.moyen_paiement ?? "—"}</span>
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Moyen de paiement :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?.moyen_paiement ?? "—"}</span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Ville :</span>
-                  <span className="font-medium">{detail?.ville ?? "—"}</span>
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Ville :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?.ville ?? "—"}</span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Adresse :</span>
-                  <span className="font-medium">{detail?.adresse ?? "—"}</span>
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Adresse :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?.adresse ?? "—"}</span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Traité par :</span>
-                  <span className="font-medium">{detail?._processedByName ?? "—"}</span>
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
                 </div>
 
-                <div className="flex justify-between py-2 border-b border-border">
-                  <span className="text-muted-foreground">Client assigné :</span>
-                  <span className="font-medium">{detail?._clientName ?? "—"}</span>
+                <div className="flex justify-between py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
+                  <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
                 </div>
               </div>
 
               {/* Boutons d'action */}
-              <div className="space-y-3 pt-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Button variant="outline" className="w-full">
+              <div className="space-y-2 md:space-y-3 pt-3 md:pt-4">
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
+                  <Button variant="outline" className="w-full text-xs md:text-sm h-9 md:h-10">
                     Valider
                   </Button>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full text-xs md:text-sm h-9 md:h-10">
                     Corriger
                   </Button>
                 </div>
                 <Button
                   variant="outline"
-                  className="w-full"
+                  className="w-full text-xs md:text-sm h-9 md:h-10"
                   disabled={!detail?.analysis_report_url}
                   onClick={() => {
                     if (detail?.analysis_report_url) {
