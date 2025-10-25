@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { StatCard } from "@/components/Dashboard/StatCard";
 import { TeamMemberCard } from "@/components/Dashboard/TeamMemberCard";
@@ -13,19 +13,44 @@ import { subDays, format, startOfDay, endOfDay, differenceInDays, eachDayOfInter
 import { fr } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { DateRange } from "react-day-picker";
+import { useGlobalFilters } from "@/stores/useGlobalFilters";
 
 const Dashboard = () => {
-  // Date filter - default last 30 days
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfDay(subDays(new Date(), 29)),
-    to: endOfDay(new Date()),
-  });
+  // Global filters store
+  const { dateRange: storedDateRange, clientId: storedClientId, memberId: storedMemberId, setDateRange: setStoredDateRange, setClientId, setMemberId } = useGlobalFilters();
 
-  // Client filter - null means all clients
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  // Convert stored date range to DateRange format
+  const dateRange = useMemo<DateRange | undefined>(() => {
+    if (storedDateRange.from && storedDateRange.to) {
+      return {
+        from: new Date(storedDateRange.from),
+        to: new Date(storedDateRange.to),
+      };
+    }
+    // Default: last 30 days
+    return {
+      from: startOfDay(subDays(new Date(), 29)),
+      to: endOfDay(new Date()),
+    };
+  }, [storedDateRange]);
 
-  // Member filter - null means all members
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  // Initialize default date range on mount if not set
+  useEffect(() => {
+    if (!storedDateRange.from || !storedDateRange.to) {
+      const from = startOfDay(subDays(new Date(), 29));
+      const to = endOfDay(new Date());
+      setStoredDateRange(from.toISOString(), to.toISOString());
+    }
+  }, []);
+
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    if (range?.from && range?.to) {
+      setStoredDateRange(
+        startOfDay(range.from).toISOString(),
+        endOfDay(range.to).toISOString()
+      );
+    }
+  };
 
   // Load clients for filter
   const { data: clients = [] } = useQuery({
@@ -71,22 +96,22 @@ const Dashboard = () => {
 
   // Load receipts data with filters
   const { data: receipts = [], isLoading: isLoadingReceipts } = useQuery({
-    queryKey: ["receipts-feed", dateRange, selectedClientId, selectedMemberId],
+    queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
       
       let query = (supabase as any)
-        .from("recus_feed")
+        .from("recus")
         .select("*")
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
 
-      if (selectedClientId) {
-        query = query.eq("client_id", selectedClientId);
+      if (storedClientId && storedClientId !== "all") {
+        query = query.eq("client_id", storedClientId);
       }
 
-      if (selectedMemberId) {
-        query = query.eq("processed_by", selectedMemberId);
+      if (storedMemberId && storedMemberId !== "all") {
+        query = query.eq("processed_by", storedMemberId);
       }
 
       const { data, error } = await query;
@@ -230,11 +255,11 @@ const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
-          <Select value={selectedClientId || "all"} onValueChange={(v) => setSelectedClientId(v === "all" ? null : v)}>
+          <Select value={storedClientId} onValueChange={setClientId}>
             <SelectTrigger className="w-[250px]">
-              <SelectValue placeholder="Sélectionner un client" />
+              <SelectValue placeholder="Tous les clients" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les clients</SelectItem>
@@ -246,7 +271,7 @@ const Dashboard = () => {
             </SelectContent>
           </Select>
 
-          <Select value={selectedMemberId || "all"} onValueChange={(v) => setSelectedMemberId(v === "all" ? null : v)}>
+          <Select value={storedMemberId} onValueChange={setMemberId}>
             <SelectTrigger className="w-[250px]">
               <SelectValue placeholder="Tous les membres" />
             </SelectTrigger>

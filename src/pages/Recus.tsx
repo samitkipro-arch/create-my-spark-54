@@ -8,26 +8,34 @@ import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsD
 import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useGlobalFilters } from "@/stores/useGlobalFilters";
+import { useQuery } from "@tanstack/react-query";
 
 type Receipt = {
   id: number;
   created_at: string | null;
   date_traitement?: string | null;
+  numero_recu?: string | null;
   enseigne?: string | null;
   adresse?: string | null;
   montant?: number | null;
   montant_ttc?: number | null;
   tva?: number | null;
   client_id?: string | null;
+  processed_by?: string | null;
   status?: string | null;
 };
 
 type Client = {
   id: string;
   name: string;
-  display_name?: string | null;
 };
 
+type Member = {
+  id: string;
+  name: string;
+  role?: string;
+};
 
 // Hook debounce
 function useDebounce<T>(value: T, delay: number): T {
@@ -48,19 +56,17 @@ function useDebounce<T>(value: T, delay: number): T {
 
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [clients, setClients] = useState<Client[]>([]);
   
-  // Filtres
+  // Global filters from store
+  const { dateRange: storedDateRange, clientId: storedClientId, memberId: storedMemberId, setClientId, setMemberId } = useGlobalFilters();
+  
+  // Local filters
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-  const [selectedClient, setSelectedClient] = useState<string | "all">("all");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Debounce recherche
-  const debouncedQuery = useDebounce(searchQuery, 350);
+  const debouncedQuery = useDebounce(searchQuery, 400);
   
   // Drawer détail
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -69,98 +75,117 @@ const Recus = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Charger les clients
-  useEffect(() => {
-    const fetchClients = async () => {
-      const { data } = await supabase
-        .from("clients" as any)
+  // Load clients with realtime
+  const { data: clients = [], refetch: refetchClients } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("clients")
         .select("id, name")
         .order("name", { ascending: true });
       
-      setClients((data as unknown as Client[]) || []);
-    };
-    
-    fetchClients();
-  }, []);
+      if (error) throw error;
+      return (data || []) as Client[];
+    },
+  });
 
-  const fetchReceipts = async () => {
-    setLoading(true);
-    setError(null);
+  // Load members with profiles and realtime
+  const { data: members = [], refetch: refetchMembers } = useQuery({
+    queryKey: ["members-with-profiles"],
+    queryFn: async () => {
+      const { data: orgMembers, error: omError } = await (supabase as any)
+        .from("org_members")
+        .select("user_id, role")
+        .eq("is_active", true);
+      
+      if (omError) throw omError;
+      if (!orgMembers || orgMembers.length === 0) return [];
+      
+      const userIds = orgMembers.map((om: any) => om.user_id);
+      
+      const { data: profiles, error: pError } = await (supabase as any)
+        .from("profiles")
+        .select("user_id, first_name, last_name")
+        .in("user_id", userIds);
+      
+      if (pError) throw pError;
+      
+      return (profiles || []).map((p: any) => {
+        const orgMember = orgMembers.find((om: any) => om.user_id === p.user_id);
+        return {
+          id: p.user_id,
+          name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
+          role: orgMember?.role || 'viewer',
+        };
+      }) as Member[];
+    },
+  });
 
-    try {
-      // Map des filtres ("all" → null)
-      const p_client_id = selectedClient && selectedClient !== "all" ? selectedClient : null;
-      const p_status = selectedStatus && selectedStatus !== "all" ? selectedStatus : null;
-      const p_query = debouncedQuery || null;
+  // Load receipts with all filters
+  const { data: receipts = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
+    queryFn: async () => {
+      let query = (supabase as any)
+        .from("recus")
+        .select("id, created_at, date_traitement, numero_recu, enseigne, adresse, montant, montant_ttc, tva, client_id, processed_by, status");
 
-      // 🔹 Tentative principale : RPC
-      let data: any[] | null = null;
-      let rpcError: any = null;
-
-      ({ data, error: rpcError } = await (supabase.rpc as any)("recus_feed_list", {
-        p_from: null,
-        p_to: null,
-        p_client_ids: p_client_id ? [p_client_id] : null,
-        p_statuses: p_status ? [p_status] : null,
-        p_search: p_query,
-        p_limit: 100,
-        p_offset: 0,
-      }));
-
-      // 🔸 Fallback : si la RPC échoue, lire directement dans la vue
-      if (rpcError) {
-        let q = (supabase as any).from("recus_feed").select("id, created_at, date_traitement, enseigne, adresse, montant, montant_ttc, tva, client_id, status");
-        
-        if (p_client_id) q = q.eq("client_id", p_client_id);
-        if (p_status) q = q.eq("status", p_status);
-        if (p_query) {
-          const s = p_query.replace(/%/g, "\\%").replace(/_/g, "\\_");
-          q = q.or(
-            `numero_recu.ilike.%${s}%,enseigne.ilike.%${s}%,adresse.ilike.%${s}%`
-          );
-        }
-        
-        // Order by date_traitement with fallback to created_at
-        q = q.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
-        q = q.order("created_at", { ascending: sortOrder === "asc" });
-        q = q.limit(100);
-        
-        const fb = await q;
-        data = fb.data ?? [];
-        rpcError = fb.error;
-      } else {
-        // Sort RPC results client-side
-        data = (data || []).sort((a: any, b: any) => {
-          const dateA = new Date(a.date_traitement || a.created_at || 0).getTime();
-          const dateB = new Date(b.date_traitement || b.created_at || 0).getTime();
-          return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
-        });
+      // Apply date range filter from global store (if set)
+      if (storedDateRange.from && storedDateRange.to) {
+        query = query.gte("date_traitement", storedDateRange.from);
+        query = query.lte("date_traitement", storedDateRange.to);
       }
 
-      if (rpcError) throw rpcError;
+      // Apply client filter from global store
+      if (storedClientId && storedClientId !== "all") {
+        query = query.eq("client_id", storedClientId);
+      }
 
-      // Mapping propre pour le tableau
-      const safe = (data ?? []).map((r: any) => ({
+      // Apply member filter from global store
+      if (storedMemberId && storedMemberId !== "all") {
+        query = query.eq("processed_by", storedMemberId);
+      }
+
+      // Apply status filter (local)
+      if (selectedStatus && selectedStatus !== "all") {
+        query = query.eq("status", selectedStatus);
+      }
+
+      // Apply search filter (local) with escaped characters
+      if (debouncedQuery) {
+        const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
+        query = query.or(
+          `numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`
+        );
+      }
+
+      // Apply sorting
+      query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
+      query = query.order("created_at", { ascending: sortOrder === "asc" });
+
+      // Limit to 100 for performance
+      query = query.limit(100);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return (data || []).map((r: any) => ({
         id: r.id,
         created_at: r.created_at ?? null,
-        date_traitement: r.date_traitement ?? r.created_at ?? null,
+        date_traitement: r.date_traitement ?? null,
+        numero_recu: r.numero_recu ?? null,
         enseigne: r.enseigne ?? null,
         adresse: r.adresse ?? null,
         montant: r.montant ?? null,
-        montant_ttc: r.montant_ttc ?? r.montant ?? null,
+        montant_ttc: r.montant_ttc ?? null,
         tva: r.tva ?? null,
         client_id: r.client_id ?? null,
+        processed_by: r.processed_by ?? null,
         status: r.status ?? null,
-      }));
+      })) as Receipt[];
+    },
+  });
 
-      setReceipts(safe);
-    } catch (err: any) {
-      setError(err?.message || "Erreur inconnue");
-      setReceipts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const error = queryError ? (queryError as any).message : null;
 
   // Fetch détail du reçu
   useEffect(() => {
@@ -171,9 +196,9 @@ const Recus = () => {
       setDetailError(null);
 
       try {
-        // 1) lecture principale (vue)
-        const { data: r, error: e1 } = await supabase
-          .from("recus_feed" as any)
+        // 1) lecture principale
+        const { data: r, error: e1 } = await (supabase as any)
+          .from("recus")
           .select("*")
           .eq("id", selectedId)
           .single();
@@ -185,8 +210,8 @@ const Recus = () => {
 
         // 2) profil (traité par)
         if (receiptData?.processed_by) {
-          const { data: p } = await supabase
-            .from("profiles" as any)
+          const { data: p } = await (supabase as any)
+            .from("profiles")
             .select("first_name, last_name")
             .eq("user_id", receiptData.processed_by)
             .maybeSingle();
@@ -196,8 +221,8 @@ const Recus = () => {
 
         // 3) client assigné
         if (receiptData?.client_id) {
-          const { data: c } = await supabase
-            .from("clients" as any)
+          const { data: c } = await (supabase as any)
+            .from("clients")
             .select("name")
             .eq("id", receiptData.client_id)
             .maybeSingle();
@@ -219,24 +244,35 @@ const Recus = () => {
     })();
   }, [selectedId, isDrawerOpen]);
 
-  // Refetch quand les filtres changent
+  // Realtime updates
   useEffect(() => {
-    fetchReceipts();
-  }, [sortOrder, selectedClient, selectedStatus, debouncedQuery]);
-
-  // Realtime
-  useEffect(() => {
-    const channel = supabase
-      .channel("recus-rt")
+    const recusChannel = supabase
+      .channel("recus-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => {
-        fetchReceipts();
+        refetch();
+      })
+      .subscribe();
+
+    const clientsChannel = supabase
+      .channel("clients-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
+        refetchClients();
+      })
+      .subscribe();
+
+    const membersChannel = supabase
+      .channel("members-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "org_members" }, () => {
+        refetchMembers();
       })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(recusChannel);
+      supabase.removeChannel(clientsChannel);
+      supabase.removeChannel(membersChannel);
     };
-  }, [sortOrder, selectedClient, selectedStatus, debouncedQuery]);
+  }, []);
 
   return (
     <MainLayout>
@@ -264,15 +300,32 @@ const Recus = () => {
             </SelectContent>
           </Select>
           
-          <Select value={selectedClient} onValueChange={(v) => setSelectedClient(v as typeof selectedClient)}>
+          <Select value={storedClientId} onValueChange={setClientId}>
             <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Tous les clients" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les clients</SelectItem>
-              {clients?.map((client) => (
-                <SelectItem key={client.id} value={String(client.id)}>
+              {clients.map((client) => (
+                <SelectItem key={client.id} value={client.id}>
                   {client.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={storedMemberId} onValueChange={setMemberId}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Tous les membres" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les membres</SelectItem>
+              {members.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.name}
+                  {member.role && member.role !== 'viewer' && (
+                    <span className="ml-2 text-xs text-muted-foreground">({member.role})</span>
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -313,7 +366,7 @@ const Recus = () => {
                 Chargement…
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center py-16 text-destructive">
+              <div className="flex items-center justify-center py-16 text-sm text-destructive">
                 {error}
               </div>
             ) : receipts.length === 0 ? (
@@ -325,19 +378,19 @@ const Recus = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">N° Reçu</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Adresse</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA récupérable</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Assigné à</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Traité par</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
                     </tr>
                   </thead>
                   <tbody>
                     {receipts.map((receipt) => {
                       const dateValue = receipt.date_traitement || receipt.created_at;
                       const formattedDate = dateValue 
-                        ? new Date(dateValue).toLocaleDateString("fr-FR", {
+                        ? new Date(dateValue).toLocaleString("fr-FR", {
                             day: "2-digit",
                             month: "2-digit",
                             year: "numeric",
@@ -348,17 +401,17 @@ const Recus = () => {
                       
                       const montantTTC = receipt.montant_ttc ?? receipt.montant;
                       const formattedMontant = montantTTC !== null && montantTTC !== undefined
-                        ? `${montantTTC.toFixed(2)} €`
+                        ? `${Number(montantTTC).toFixed(2)} €`
                         : "—";
                       
                       const formattedTVA = receipt.tva !== null && receipt.tva !== undefined
-                        ? `${receipt.tva.toFixed(2)} €`
+                        ? `${Number(receipt.tva).toFixed(2)} €`
                         : "—";
 
                       return (
                         <tr 
                           key={receipt.id} 
-                          className="border-b border-border hover:bg-muted/50 cursor-pointer"
+                          className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
                           onClick={() => {
                             setSelectedId(receipt.id);
                             setDetail(null);
@@ -367,11 +420,11 @@ const Recus = () => {
                           }}
                         >
                           <td className="py-3 px-4 text-sm">{formattedDate}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.numero_recu || "—"}</td>
                           <td className="py-3 px-4 text-sm">{receipt.enseigne || "—"}</td>
-                          <td className="py-3 px-4 text-sm text-right">{formattedMontant}</td>
+                          <td className="py-3 px-4 text-sm">{receipt.adresse || "—"}</td>
+                          <td className="py-3 px-4 text-sm text-right font-medium">{formattedMontant}</td>
                           <td className="py-3 px-4 text-sm text-right">{formattedTVA}</td>
-                          <td className="py-3 px-4 text-sm">—</td>
-                          <td className="py-3 px-4 text-sm">—</td>
                         </tr>
                       );
                     })}
