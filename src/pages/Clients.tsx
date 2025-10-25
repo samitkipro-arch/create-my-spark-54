@@ -23,21 +23,21 @@ const mockClients = [
 const Clients = () => {
   return (
     <MainLayout>
-      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Clients</h1>
-            <p className="text-muted-foreground mt-1 text-sm md:text-base">
+            <h1 className="text-2xl md:text-3xl font-bold transition-all duration-150">Clients</h1>
+            <p className="text-muted-foreground mt-1 text-sm md:text-base transition-all duration-150">
               Gérez vos clients, leurs informations légales et leur suivi en un seul endroit.
             </p>
           </div>
-          <Button className="gap-2 w-full md:w-auto">
+          <Button className="gap-2 w-full md:w-auto transition-all duration-200">
             <Plus className="w-4 h-4" />
             Ajouter un client
           </Button>
         </div>
 
-        <div className="relative">
+        <div className="relative transition-all duration-200">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Rechercher"
@@ -46,10 +46,10 @@ const Clients = () => {
         </div>
 
         {/* Mobile: Cards */}
-        <div className="md:hidden space-y-3">
+        <div className="md:hidden space-y-3 transition-all duration-200">
           {mockClients.map((client) => (
-            <Card key={client.email} className="bg-card/50 border-border">
-              <CardContent className="p-4 space-y-2">
+            <Card key={client.email} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
+              <CardContent className="p-4 space-y-2 transition-all duration-150">
                 <div className="font-semibold text-base">{client.name}</div>
                 <div className="text-sm text-primary hover:underline cursor-pointer">
                   {client.email}
@@ -63,8 +63,8 @@ const Clients = () => {
         </div>
 
         {/* Desktop: Table */}
-        <Card className="hidden md:block bg-card border-border">
-          <CardContent className="p-0">
+        <Card className="hidden md:block bg-card border-border transition-all duration-200">
+          <CardContent className="p-0 transition-all duration-150">
             <Table>
               <TableHeader>
                 <TableRow>

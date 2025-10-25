@@ -249,12 +249,12 @@ const Dashboard = () => {
 
   return (
     <MainLayout>
-      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl md:text-3xl font-bold">Tableau de bord</h1>
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
+        <div className="flex items-center justify-between transition-all duration-200">
+          <h1 className="text-2xl md:text-3xl font-bold transition-all duration-150">Tableau de bord</h1>
         </div>
 
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
           <Select value={storedClientId} onValueChange={setClientId}>
@@ -286,14 +286,14 @@ const Dashboard = () => {
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 transition-all duration-300">
           {stats.map((stat) => (
             <StatCard key={stat.title} {...stat} />
           ))}
         </div>
 
-        <Card className="bg-card border-border">
-          <CardHeader>
+        <Card className="bg-card border-border transition-all duration-200">
+          <CardHeader className="transition-all duration-150">
             <CardTitle>
               Suivi du nombre de reçus traités et montants sur la période sélectionnée
             </CardTitle>
@@ -303,13 +303,13 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             {isLoadingReceipts ? (
-              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-64 w-full transition-all duration-200" />
             ) : chart.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
+              <div className="h-64 flex items-center justify-center text-muted-foreground transition-all duration-150">
                 Aucune donnée disponible
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={300} className="transition-all duration-200">
                 <LineChart data={chart}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
                   <XAxis 
@@ -355,11 +355,11 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border">
-          <CardHeader>
+        <Card className="bg-card border-border transition-all duration-200">
+          <CardHeader className="transition-all duration-150">
             <CardTitle>Top catégories</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="transition-all duration-200">
             {isLoadingReceipts ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" />
@@ -371,11 +371,11 @@ const Dashboard = () => {
                 Aucune catégorie trouvée
               </div>
             ) : (
-              <div className="space-y-3 md:space-y-0">
+              <div className="space-y-3 md:space-y-0 transition-all duration-200">
                 {/* Mobile: Cards */}
-                <div className="md:hidden space-y-3">
+                <div className="md:hidden space-y-3 transition-all duration-200">
                   {topCats.map((cat, idx) => (
-                    <div key={idx} className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+                    <div key={idx} className="p-4 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:bg-muted/40">
                       <div className="font-semibold text-sm">{cat.label}</div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>

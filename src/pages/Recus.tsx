@@ -288,10 +288,10 @@ const Recus = () => {
 
   return (
     <MainLayout>
-      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold">Reçus</h1>
-          <div className="flex gap-3 w-full md:w-auto">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
+          <h1 className="text-2xl md:text-3xl font-bold transition-all duration-150">Reçus</h1>
+          <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
             <Button variant="outline" className="flex-1 md:flex-initial">Exporter</Button>
             <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
@@ -301,7 +301,7 @@ const Recus = () => {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
           <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
             <SelectTrigger className="w-full md:w-[240px]">
               <ArrowDownUp className="w-4 h-4 mr-2" />
@@ -369,11 +369,11 @@ const Recus = () => {
           </div>
         </div>
 
-        <Card className="bg-card border-border">
-          <CardHeader>
+        <Card className="bg-card border-border transition-all duration-200">
+          <CardHeader className="transition-all duration-150">
             <CardTitle>Liste des reçus</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="transition-all duration-200">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
                 Chargement…
@@ -389,7 +389,7 @@ const Recus = () => {
             ) : (
               <>
                 {/* Mobile: Cards */}
-                <div className="md:hidden space-y-3">
+                <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
                     const formattedDate = dateValue 
@@ -417,7 +417,7 @@ const Recus = () => {
                     return (
                       <div
                         key={receipt.id}
-                        className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-colors space-y-3"
+                        className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3"
                         onClick={() => {
                           setSelectedId(receipt.id);
                           setDetail(null);

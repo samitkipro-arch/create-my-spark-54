@@ -42,9 +42,33 @@ All colors MUST be HSL.
 @layer base {
   * {
     @apply border-border;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out;
   }
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Smooth responsive transitions */
+  .responsive-transition {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Fluid spacing */
+  .fluid-spacing {
+    padding-left: clamp(1rem, 3vw, 1.5rem);
+    padding-right: clamp(1rem, 3vw, 1.5rem);
+  }
+
+  /* Smooth grid transitions */
+  .responsive-grid {
+    display: grid;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+    transition: grid-template-columns 0.3s ease-in-out, gap 0.2s ease-in-out;
+  }
+
+  /* Smooth card scaling */
+  .responsive-card {
+    transition: padding 0.2s ease-in-out, margin 0.2s ease-in-out, width 0.3s ease-in-out;
   }
 }

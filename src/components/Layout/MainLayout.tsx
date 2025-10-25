@@ -14,11 +14,11 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background transition-all duration-200">
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <aside className="md:ml-6 md:my-6">
-          <div className="sticky top-6 h-[calc(100vh-3rem)] w-[260px] rounded-2xl border bg-card shadow-2xl overflow-hidden bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <aside className="md:ml-6 md:my-6 transition-all duration-300 ease-in-out">
+          <div className="sticky top-6 h-[calc(100vh-3rem)] w-[260px] rounded-2xl border bg-card shadow-2xl overflow-hidden bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 transition-all duration-200">
             <Sidebar />
           </div>
         </aside>
@@ -26,8 +26,8 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
 
       {/* Mobile Header with Hamburger */}
       {isMobile && (
-        <div className="fixed top-0 left-0 right-0 z-40 bg-sidebar border-b border-sidebar-border">
-          <div className="flex items-center justify-between p-4">
+        <div className="fixed top-0 left-0 right-0 z-40 bg-sidebar border-b border-sidebar-border transition-all duration-200">
+          <div className="flex items-center justify-between p-4 transition-all duration-200">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -44,7 +44,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         </div>
       )}
 
-      <main className={`flex-1 overflow-auto ${isMobile ? 'pt-16' : ''}`}>
+      <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMobile ? 'pt-16' : ''}`}>
         {children}
       </main>
     </div>
