@@ -14,63 +14,362 @@ export type Database = {
   }
   public: {
     Tables: {
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          org_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          org_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          org_id: string
+          phone: string | null
+          vat_number: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          org_id: string
+          phone?: string | null
+          vat_number?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          phone?: string | null
+          vat_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_members: {
+        Row: {
+          comment: string | null
+          created_at: string
+          is_active: boolean
+          last_sign_in_at: string | null
+          org_id: string
+          receipts_processed_count: number
+          role: Database["public"]["Enums"]["role_type"]
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          is_active?: boolean
+          last_sign_in_at?: string | null
+          org_id: string
+          receipts_processed_count?: number
+          role?: Database["public"]["Enums"]["role_type"]
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          is_active?: boolean
+          last_sign_in_at?: string | null
+          org_id?: string
+          receipts_processed_count?: number
+          role?: Database["public"]["Enums"]["role_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orgs: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company: string | null
+          created_at: string
+          first_name: string | null
+          last_name: string | null
+          phone: string | null
+          role_title: string | null
+          user_id: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          first_name?: string | null
+          last_name?: string | null
+          phone?: string | null
+          role_title?: string | null
+          user_id: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          first_name?: string | null
+          last_name?: string | null
+          phone?: string | null
+          role_title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       recus: {
         Row: {
           adresse: string | null
-          catégorie: string | null
+          analysis_report_url: string | null
+          category_id: string | null
+          client_id: string | null
           created_at: string
-          Date: string | null
+          date_recu: string | null
+          date_traitement: string | null
           enseigne: string | null
           id: number
+          image_url: string | null
           montant_ht: number | null
           montant_ttc: number | null
-          "moyen de paiement": string | null
+          moyen_paiement: string | null
+          notes: string | null
           numero_recu: string | null
+          org_id: string
+          processed_by: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["receipt_status"]
           tva: number | null
-          user_id: string | null
+          updated_at: string
           ville: string | null
         }
         Insert: {
           adresse?: string | null
-          catégorie?: string | null
+          analysis_report_url?: string | null
+          category_id?: string | null
+          client_id?: string | null
           created_at?: string
-          Date?: string | null
+          date_recu?: string | null
+          date_traitement?: string | null
           enseigne?: string | null
           id?: number
+          image_url?: string | null
           montant_ht?: number | null
           montant_ttc?: number | null
-          "moyen de paiement"?: string | null
+          moyen_paiement?: string | null
+          notes?: string | null
           numero_recu?: string | null
+          org_id: string
+          processed_by?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["receipt_status"]
           tva?: number | null
-          user_id?: string | null
+          updated_at?: string
           ville?: string | null
         }
         Update: {
           adresse?: string | null
-          catégorie?: string | null
+          analysis_report_url?: string | null
+          category_id?: string | null
+          client_id?: string | null
           created_at?: string
-          Date?: string | null
+          date_recu?: string | null
+          date_traitement?: string | null
           enseigne?: string | null
           id?: number
+          image_url?: string | null
           montant_ht?: number | null
           montant_ttc?: number | null
-          "moyen de paiement"?: string | null
+          moyen_paiement?: string | null
+          notes?: string | null
           numero_recu?: string | null
+          org_id?: string
+          processed_by?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["receipt_status"]
           tva?: number | null
-          user_id?: string | null
+          updated_at?: string
           ville?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "recus_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recus_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recus_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
-      [_ in never]: never
+      recus_feed: {
+        Row: {
+          adresse: string | null
+          analysis_report_url: string | null
+          category_id: string | null
+          category_label: string | null
+          client_id: string | null
+          client_name: string | null
+          created_at: string | null
+          date_recu: string | null
+          date_traitement: string | null
+          enseigne: string | null
+          id: number | null
+          image_url: string | null
+          montant_ht: number | null
+          montant_ttc: number | null
+          moyen_paiement: string | null
+          notes: string | null
+          numero_recu: string | null
+          org_id: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["receipt_status"] | null
+          tva: number | null
+          ville: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recus_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recus_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recus_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      [_ in never]: never
+      is_org_member: { Args: { p_org: string }; Returns: boolean }
+      recus_feed_list: {
+        Args: {
+          p_client_ids: string[]
+          p_from: string
+          p_limit: number
+          p_offset: number
+          p_search: string
+          p_statuses: Database["public"]["Enums"]["receipt_status"][]
+          p_to: string
+        }
+        Returns: {
+          adresse: string | null
+          analysis_report_url: string | null
+          category_id: string | null
+          category_label: string | null
+          client_id: string | null
+          client_name: string | null
+          created_at: string | null
+          date_recu: string | null
+          date_traitement: string | null
+          enseigne: string | null
+          id: number | null
+          image_url: string | null
+          montant_ht: number | null
+          montant_ttc: number | null
+          moyen_paiement: string | null
+          notes: string | null
+          numero_recu: string | null
+          org_id: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["receipt_status"] | null
+          tva: number | null
+          ville: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "recus_feed"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
-      [_ in never]: never
+      payment_method: "CB" | "Virement" | "Especes" | "Cheque" | "Autre"
+      receipt_status: "en_attente" | "en_cours" | "traite" | "rejete"
+      role_type: "owner" | "admin" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -197,6 +496,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      payment_method: ["CB", "Virement", "Especes", "Cheque", "Autre"],
+      receipt_status: ["en_attente", "en_cours", "traite", "rejete"],
+      role_type: ["owner", "admin", "viewer"],
+    },
   },
 } as const
