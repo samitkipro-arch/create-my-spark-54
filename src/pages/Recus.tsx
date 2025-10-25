@@ -63,8 +63,8 @@ const Recus = () => {
   
   // Filtres
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
-  const [selectedClient, setSelectedClient] = useState<string>("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [selectedClient, setSelectedClient] = useState<string | "all">("all");
+  const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Debounce recherche
@@ -97,8 +97,8 @@ const Recus = () => {
         ? new Date(dateRange.to.setHours(23, 59, 59, 999)).toISOString().split('T')[0]
         : null;
       
-      const clientIds = selectedClient ? [selectedClient] : null;
-      const statuses = selectedStatus ? [selectedStatus] : null;
+      const clientIds = selectedClient !== "all" ? [selectedClient] : null;
+      const statuses = selectedStatus !== "all" ? [selectedStatus] : null;
       
       // Utiliser la RPC recus_feed_list
       const { data, error: fetchError } = await (supabase.rpc as any)("recus_feed_list", {
@@ -191,29 +191,29 @@ const Recus = () => {
             </PopoverContent>
           </Popover>
           
-          <Select value={selectedClient} onValueChange={setSelectedClient}>
-            <SelectTrigger className="w-[200px]">
+          <Select value={selectedClient} onValueChange={(v) => setSelectedClient(v as typeof selectedClient)}>
+            <SelectTrigger className="w-[220px]">
               <SelectValue placeholder="Sélectionner un client" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tous les clients</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
+              <SelectItem value="all">Tous les clients</SelectItem>
+              {clients?.map((client) => (
+                <SelectItem key={client.id} value={String(client.id)}>
                   {client.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           
-          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-            <SelectTrigger className="w-[180px]">
+          <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as typeof selectedStatus)}>
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tous les statuts</SelectItem>
-              <SelectItem value="en_attente">En attente</SelectItem>
-              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="all">Tous les statuts</SelectItem>
               <SelectItem value="traite">Traité</SelectItem>
+              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="en_attente">En attente</SelectItem>
             </SelectContent>
           </Select>
           
