@@ -16,29 +16,41 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectionState, setSelectionState] = useState<{ from: Date | null; to: Date | null }>({
-    from: value?.from || null,
-    to: value?.to || null,
+    from: null,
+    to: null,
   });
   const [hoveredDay, setHoveredDay] = useState<Date | null>(null);
 
   useEffect(() => {
     if (isOpen) {
+      // Don't pre-select, just show current applied range visually if exists
       setSelectionState({
-        from: value?.from || null,
-        to: value?.to || null,
+        from: null,
+        to: null,
       });
       setHoveredDay(null);
     }
-  }, [isOpen, value]);
+  }, [isOpen]);
 
   const handleDayClick = (day: Date) => {
     const clickedDay = startOfDay(day);
     
-    if (!selectionState.from || (selectionState.from && selectionState.to)) {
-      // First click or reset after completed range
+    // Check if clicking outside existing range - if so, reset
+    if (selectionState.from && selectionState.to) {
+      const isOutsideRange = isBefore(clickedDay, selectionState.from) || isAfter(clickedDay, selectionState.to);
+      if (isOutsideRange) {
+        // Reset and start new selection
+        setSelectionState({ from: clickedDay, to: null });
+        setHoveredDay(null);
+        return;
+      }
+    }
+    
+    if (!selectionState.from) {
+      // First click
       setSelectionState({ from: clickedDay, to: null });
       setHoveredDay(null);
-    } else {
+    } else if (!selectionState.to) {
       // Second click - auto-order the range
       if (isSameDay(clickedDay, selectionState.from)) {
         // Same day clicked - keep single day selection
@@ -51,6 +63,10 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
           setSelectionState({ from: selectionState.from, to: clickedDay });
         }
       }
+      setHoveredDay(null);
+    } else {
+      // Already have a range, clicking within - reset and start new
+      setSelectionState({ from: clickedDay, to: null });
       setHoveredDay(null);
     }
   };
@@ -73,12 +89,9 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
       to = startOfDay(today);
     }
     
-    // Apply directly and close
-    onChange({
-      from: startOfDay(from),
-      to: endOfDay(to),
-    });
-    setIsOpen(false);
+    // Preview the range immediately
+    setSelectionState({ from, to });
+    setHoveredDay(null);
   };
 
   const handleApply = () => {
@@ -102,22 +115,19 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
   const renderCalendar = () => {
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
-    const startDate = monthStart;
     
-    const weeks: Date[][] = [];
-    let days: Date[] = [];
+    const weeks: (Date | null)[][] = [];
+    let days: (Date | null)[] = [];
     let day = new Date(monthStart);
     
-    // Add days from previous month
+    // Add empty cells for days before the start of the month
     const firstDayOfWeek = day.getDay();
     const daysFromPrevMonth = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-    for (let i = daysFromPrevMonth; i > 0; i--) {
-      const prevDay = new Date(monthStart);
-      prevDay.setDate(prevDay.getDate() - i);
-      days.push(prevDay);
+    for (let i = 0; i < daysFromPrevMonth; i++) {
+      days.push(null);
     }
 
-    // Add days of current month
+    // Add days of current month only
     while (day <= monthEnd) {
       days.push(new Date(day));
       if (days.length === 7) {
@@ -127,13 +137,10 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
       day.setDate(day.getDate() + 1);
     }
 
-    // Add days from next month
+    // Add empty cells to complete the last week
     if (days.length > 0) {
-      const remainingDays = 7 - days.length;
-      for (let i = 1; i <= remainingDays; i++) {
-        const nextDay = new Date(monthEnd);
-        nextDay.setDate(nextDay.getDate() + i);
-        days.push(nextDay);
+      while (days.length < 7) {
+        days.push(null);
       }
       weeks.push(days);
     }
@@ -168,8 +175,9 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
     return false;
   };
 
-  const isOutsideCurrentMonth = (day: Date) => {
-    return day.getMonth() !== currentMonth.getMonth();
+  const isOutsideRange = (day: Date) => {
+    if (!selectionState.from || !selectionState.to) return false;
+    return isBefore(day, selectionState.from) || isAfter(day, selectionState.to);
   };
 
   const formatDateRange = () => {
@@ -190,94 +198,109 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
           {formatDateRange()}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-card/95 backdrop-blur border-border shadow-xl" align="start">
-        <div className="flex rounded-lg overflow-hidden max-w-[640px]">
+      <PopoverContent className="w-auto p-0 border-border/30 shadow-2xl" align="start" style={{ backgroundColor: '#0F1525' }}>
+        <div className="flex rounded-lg overflow-hidden max-w-[620px]">
           {/* Quick Actions */}
-          <div className="bg-card/80 border-r border-border/50 px-2 py-3 space-y-0.5 min-w-[110px]">
+          <div className="border-r px-4 py-3 space-y-1 w-[180px]" style={{ backgroundColor: '#121A2B', borderColor: 'rgba(255,255,255,0.06)' }}>
             <button
               onClick={() => handleQuickAction("today")}
-              className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-primary/15 hover:text-primary transition-colors font-medium"
+              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              style={{ color: '#A9B4D0' }}
             >
               Aujourd'hui
             </button>
             <button
               onClick={() => handleQuickAction(7)}
-              className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-primary/15 hover:text-primary transition-colors font-medium"
+              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              style={{ color: '#A9B4D0' }}
             >
               7 jours
             </button>
             <button
               onClick={() => handleQuickAction(30)}
-              className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-primary/15 hover:text-primary transition-colors font-medium"
+              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              style={{ color: '#A9B4D0' }}
             >
               30 jours
             </button>
             <button
               onClick={() => handleQuickAction(90)}
-              className="w-full text-left px-2.5 py-1.5 text-xs rounded hover:bg-primary/15 hover:text-primary transition-colors font-medium"
+              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-white/5 transition-colors"
+              style={{ color: '#A9B4D0' }}
             >
               90 jours
             </button>
           </div>
 
           {/* Calendar */}
-          <div className="p-3 bg-card">
+          <div className="p-4" style={{ backgroundColor: '#121A2B' }}>
             {/* Header */}
-            <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center justify-between mb-3">
               <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                className="p-1 hover:bg-primary/10 rounded transition-colors"
+                className="p-1.5 hover:bg-white/5 rounded transition-colors"
                 aria-label="Mois précédent"
+                style={{ color: '#E6ECFF' }}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <div className="text-sm font-semibold capitalize">
+              <div className="text-sm font-semibold capitalize" style={{ color: '#E6ECFF' }}>
                 {format(currentMonth, "MMMM yyyy", { locale: fr })}
               </div>
               <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                className="p-1 hover:bg-primary/10 rounded transition-colors"
+                className="p-1.5 hover:bg-white/5 rounded transition-colors"
                 aria-label="Mois suivant"
+                style={{ color: '#E6ECFF' }}
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
             {/* Weekdays */}
-            <div className="grid grid-cols-7 gap-0.5 mb-1">
+            <div className="grid grid-cols-7 gap-1 mb-2">
               {["lu", "ma", "me", "je", "ve", "sa", "di"].map((day) => (
-                <div key={day} className="text-center text-[10px] font-medium text-muted-foreground py-1 w-8">
+                <div key={day} className="text-center text-xs font-medium py-1 w-9" style={{ color: '#A9B4D0' }}>
                   {day}
                 </div>
               ))}
             </div>
 
             {/* Days */}
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {weeks.map((week, weekIdx) => (
-                <div key={weekIdx} className="grid grid-cols-7 gap-0.5">
+                <div key={weekIdx} className="grid grid-cols-7 gap-1">
                   {week.map((day, dayIdx) => {
-                    const isOutside = isOutsideCurrentMonth(day);
+                    if (!day) {
+                      return <div key={dayIdx} className="h-9 w-9" />;
+                    }
+
                     const isSelected = isDaySelected(day);
                     const isInRange = isDayInRange(day);
                     const isToday = isSameDay(day, new Date());
                     const isPreview = hoveredDay && selectionState.from && !selectionState.to;
+                    const isOutside = isOutsideRange(day);
 
                     return (
                       <button
                         key={dayIdx}
-                        onClick={() => !isOutside && handleDayClick(day)}
-                        onMouseEnter={() => !isOutside && handleDayHover(day)}
+                        onClick={() => handleDayClick(day)}
+                        onMouseEnter={() => handleDayHover(day)}
                         onMouseLeave={() => handleDayHover(null)}
                         className={cn(
-                          "h-8 w-8 text-xs rounded transition-all",
-                          isOutside && "text-muted-foreground/15 cursor-default",
-                          !isOutside && !isSelected && !isInRange && !isToday && "text-foreground hover:bg-primary/15 hover:scale-105",
-                          !isOutside && !isSelected && !isInRange && isToday && "text-primary font-semibold ring-1 ring-inset ring-primary/40",
-                          isInRange && !isSelected && !isPreview && "bg-primary/25 text-foreground",
-                          isInRange && !isSelected && isPreview && "bg-primary/15 text-foreground",
-                          isSelected && "bg-primary text-primary-foreground font-bold shadow-md scale-105"
+                          "h-9 w-9 text-sm rounded transition-all font-medium",
+                          !isSelected && !isInRange && !isToday && !isOutside && "hover:bg-white/5",
+                          !isSelected && !isInRange && isToday && "ring-1 ring-inset font-semibold",
+                          isInRange && !isSelected && !isPreview && "font-normal",
+                          isInRange && !isSelected && isPreview && "font-normal",
+                          isSelected && "font-bold shadow-lg",
+                          isOutside && "opacity-40"
                         )}
+                        style={{
+                          color: isSelected ? '#FFFFFF' : isToday ? '#2F6BFF' : isOutside ? '#A9B4D0' : '#E6ECFF',
+                          backgroundColor: isSelected ? '#2F6BFF' : isInRange && !isSelected ? 'rgba(47, 107, 255, 0.20)' : 'transparent',
+                          borderColor: isToday && !isSelected ? '#2F6BFF' : 'transparent',
+                        }}
                       >
                         {format(day, "d")}
                       </button>
@@ -288,11 +311,26 @@ export const DateRangePicker = ({ value, onChange }: DateRangePickerProps) => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-1.5 mt-3 pt-2.5 border-t border-border/50">
-              <Button variant="ghost" size="sm" onClick={handleCancel} className="text-xs h-7 px-3">
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleCancel} 
+                className="text-xs h-8 px-4 hover:bg-white/5"
+                style={{ color: '#A9B4D0', borderColor: 'rgba(255,255,255,0.06)' }}
+              >
                 Annuler
               </Button>
-              <Button size="sm" onClick={handleApply} disabled={!selectionState.from} className="text-xs h-7 px-3">
+              <Button 
+                size="sm" 
+                onClick={handleApply} 
+                disabled={!selectionState.from} 
+                className="text-xs h-8 px-4 disabled:opacity-50"
+                style={{ 
+                  backgroundColor: selectionState.from ? '#2F6BFF' : '#1a2640',
+                  color: '#FFFFFF',
+                }}
+              >
                 Appliquer
               </Button>
             </div>
