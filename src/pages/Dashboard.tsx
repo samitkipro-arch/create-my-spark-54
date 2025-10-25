@@ -1,14 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { StatCard } from "@/components/Dashboard/StatCard";
 import { TeamMemberCard } from "@/components/Dashboard/TeamMemberCard";
+import { DateRangePicker } from "@/components/Dashboard/DateRangePicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, ChevronDown, Receipt, Globe, FileText, ShoppingCart } from "lucide-react";
+import { Receipt, Globe, FileText, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { subDays, format, startOfDay, endOfDay, differenceInDays, eachDayOfInterval, eachMonthOfInterval, startOfMonth, endOfMonth } from "date-fns";
@@ -19,14 +17,15 @@ import type { DateRange } from "react-day-picker";
 const Dashboard = () => {
   // Date filter - default last 30 days
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfDay(subDays(new Date(), 30)),
+    from: startOfDay(subDays(new Date(), 29)),
     to: endOfDay(new Date()),
   });
-  const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(dateRange);
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Client filter - null means all clients
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // Member filter - null means all members
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   // Load clients for filter
   const { data: clients = [] } = useQuery({
@@ -41,9 +40,25 @@ const Dashboard = () => {
     },
   });
 
+  // Load members (profiles) for filter
+  const { data: members = [] } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("profiles")
+        .select("user_id, first_name, last_name")
+        .order("first_name");
+      if (error) throw error;
+      return (data || []).map((m: any) => ({
+        id: m.user_id,
+        name: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Sans nom',
+      })) as any[];
+    },
+  });
+
   // Load receipts data with filters
   const { data: receipts = [], isLoading: isLoadingReceipts } = useQuery({
-    queryKey: ["receipts-feed", dateRange, selectedClientId],
+    queryKey: ["receipts-feed", dateRange, selectedClientId, selectedMemberId],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
       
@@ -55,6 +70,10 @@ const Dashboard = () => {
 
       if (selectedClientId) {
         query = query.eq("client_id", selectedClientId);
+      }
+
+      if (selectedMemberId) {
+        query = query.eq("processed_by", selectedMemberId);
       }
 
       const { data, error } = await query;
@@ -174,32 +193,18 @@ const Dashboard = () => {
       .slice(0, 10);
   };
 
-  const teamMembers = [
-    { name: "Natalie Craig", role: "Owner", receiptsCount: 0, tvaAmount: "0,00 €", initials: "NC" },
-    { name: "Mehdi Charmou", role: "Admin", receiptsCount: 0, tvaAmount: "0,00 €", initials: "MC" },
-    { name: "Silvy Berger", role: "Viewer", receiptsCount: 0, tvaAmount: "0,00 €", initials: "SB" },
-    { name: "Jean-Marc Lubriol", role: "Admin", receiptsCount: 0, tvaAmount: "0,00 €", initials: "JL" },
-  ];
-
-  const handleApplyDateRange = () => {
-    if (tempDateRange?.from && tempDateRange?.to) {
-      setDateRange({
-        from: startOfDay(tempDateRange.from),
-        to: endOfDay(tempDateRange.to),
-      });
-      setIsDatePickerOpen(false);
-    }
-  };
-
-  const handleCancelDateRange = () => {
-    setTempDateRange(dateRange);
-    setIsDatePickerOpen(false);
-  };
-
-  const formatDateRange = (range: DateRange | undefined) => {
-    if (!range?.from || !range?.to) return "Sélectionner une période";
-    return `${format(range.from, "dd/MM/yyyy")} - ${format(range.to, "dd/MM/yyyy")}`;
-  };
+  // Calculate team member stats from filtered receipts
+  const teamMemberStats = members.map(member => {
+    const memberReceipts = receipts.filter(r => r.processed_by === member.id);
+    const tvaAmount = memberReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
+    return {
+      name: member.name,
+      role: "Membre",
+      receiptsCount: memberReceipts.length,
+      tvaAmount: new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(tvaAmount),
+      initials: member.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+    };
+  });
 
   const chart = chartData();
   const topCats = topCategories();
@@ -212,35 +217,7 @@ const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
-          <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <CalendarIcon className="w-4 h-4" />
-                {formatDateRange(dateRange)}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="range"
-                selected={tempDateRange}
-                onSelect={setTempDateRange}
-                numberOfMonths={2}
-                locale={fr}
-              />
-              <div className="flex items-center justify-between p-3 border-t">
-                <Button variant="outline" size="sm" onClick={handleCancelDateRange}>
-                  Annuler
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={handleApplyDateRange}
-                  disabled={!tempDateRange?.from || !tempDateRange?.to}
-                >
-                  Appliquer
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
 
           <Select value={selectedClientId || "all"} onValueChange={(v) => setSelectedClientId(v === "all" ? null : v)}>
             <SelectTrigger className="w-[250px]">
@@ -251,6 +228,20 @@ const Dashboard = () => {
               {clients.map((client) => (
                 <SelectItem key={client.id} value={client.id}>
                   {client.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedMemberId || "all"} onValueChange={(v) => setSelectedMemberId(v === "all" ? null : v)}>
+            <SelectTrigger className="w-[250px]">
+              <SelectValue placeholder="Sélectionner un membre" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les membres</SelectItem>
+              {members.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -269,7 +260,7 @@ const Dashboard = () => {
               Suivi du nombre de reçus traités et montants sur la période sélectionnée
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {formatDateRange(dateRange)} · Axe X = Période · Axe Y = Montant TTC (€)
+              {dateRange?.from && dateRange?.to ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}` : "Aucune période sélectionnée"} · Axe X = Période · Axe Y = Montant TTC (€)
             </p>
           </CardHeader>
           <CardContent>
@@ -374,11 +365,17 @@ const Dashboard = () => {
           <h2 className="text-xl font-semibold">
             Suivi de l'activité et la part des reçus traités par chaque membre de votre équipe
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {teamMembers.map((member) => (
-              <TeamMemberCard key={member.name} {...member} />
-            ))}
-          </div>
+          {teamMemberStats.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              Aucun membre trouvé
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {teamMemberStats.map((member) => (
+                <TeamMemberCard key={member.name} {...member} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </MainLayout>
