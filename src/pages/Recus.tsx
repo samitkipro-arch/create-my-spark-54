@@ -1,11 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Calendar, ChevronDown, Plus, Search } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, Plus, Search } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 type Receipt = {
   id: number;
@@ -16,24 +22,94 @@ type Receipt = {
   montant?: number | null;
   montant_ttc?: number | null;
   tva?: number | null;
+  client_id?: string | null;
+  status?: string | null;
 };
+
+type Client = {
+  id: string;
+  name: string;
+  display_name?: string | null;
+};
+
+type DateRange = {
+  from: Date | undefined;
+  to: Date | undefined;
+};
+
+// Hook debounce
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
 
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  
+  // Filtres
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [selectedClient, setSelectedClient] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Debounce recherche
+  const debouncedQuery = useDebounce(searchQuery, 350);
+
+  // Charger les clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      const { data } = await supabase
+        .from("clients" as any)
+        .select("id, name")
+        .order("name", { ascending: true });
+      
+      setClients((data as unknown as Client[]) || []);
+    };
+    
+    fetchClients();
+  }, []);
 
   const fetchReceipts = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const { data, error: fetchError } = await supabase
-        .from("recus_feed" as any)
-        .select("*")
-        .order("date_traitement", { ascending: false })
-        .limit(100);
+      // Préparer les paramètres
+      const startIso = dateRange.from 
+        ? new Date(dateRange.from.setHours(0, 0, 0, 0)).toISOString().split('T')[0]
+        : null;
+      const endIso = dateRange.to 
+        ? new Date(dateRange.to.setHours(23, 59, 59, 999)).toISOString().split('T')[0]
+        : null;
+      
+      const clientIds = selectedClient ? [selectedClient] : null;
+      const statuses = selectedStatus ? [selectedStatus] : null;
+      
+      // Utiliser la RPC recus_feed_list
+      const { data, error: fetchError } = await (supabase.rpc as any)("recus_feed_list", {
+        p_from: startIso,
+        p_to: endIso,
+        p_client_ids: clientIds,
+        p_statuses: statuses,
+        p_search: debouncedQuery || null,
+        p_limit: 100,
+        p_offset: 0,
+      });
 
       if (fetchError) throw fetchError;
       setReceipts((data as unknown as Receipt[]) || []);
@@ -45,9 +121,13 @@ const Recus = () => {
     }
   };
 
+  // Refetch quand les filtres changent
   useEffect(() => {
     fetchReceipts();
+  }, [dateRange, selectedClient, selectedStatus, debouncedQuery]);
 
+  // Realtime
+  useEffect(() => {
     const channel = supabase
       .channel("recus-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => {
@@ -58,7 +138,21 @@ const Recus = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [dateRange, selectedClient, selectedStatus, debouncedQuery]);
+  
+  // Formater la période affichée
+  const dateRangeLabel = useMemo(() => {
+    if (!dateRange.from && !dateRange.to) {
+      return "Sélectionner une période";
+    }
+    if (dateRange.from && !dateRange.to) {
+      return format(dateRange.from, "dd/MM/yyyy", { locale: fr });
+    }
+    if (dateRange.from && dateRange.to) {
+      return `${format(dateRange.from, "dd/MM/yyyy", { locale: fr })} - ${format(dateRange.to, "dd/MM/yyyy", { locale: fr })}`;
+    }
+    return "Sélectionner une période";
+  }, [dateRange]);
 
   return (
     <MainLayout>
@@ -75,20 +169,62 @@ const Recus = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="gap-2">
-            <Calendar className="w-4 h-4" />
-            24/09/2025 - 24/10/2025
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <ChevronDown className="w-4 h-4" />
-            Sélectionner un client
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <CalendarIcon className="w-4 h-4" />
+                {dateRangeLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={dateRange}
+                onSelect={(range) => setDateRange({
+                  from: range?.from,
+                  to: range?.to
+                })}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+                locale={fr}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Select value={selectedClient} onValueChange={setSelectedClient}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Sélectionner un client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Tous les clients</SelectItem>
+              {clients.map((client) => (
+                <SelectItem key={client.id} value={client.id}>
+                  {client.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Statut" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Tous les statuts</SelectItem>
+              <SelectItem value="en_attente">En attente</SelectItem>
+              <SelectItem value="en_cours">En cours</SelectItem>
+              <SelectItem value="traite">Traité</SelectItem>
+            </SelectContent>
+          </Select>
+          
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Rechercher par client, numéro ou adresse"
                 className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
