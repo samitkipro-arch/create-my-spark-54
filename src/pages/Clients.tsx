@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ClientDetailDrawer } from "@/components/Clients/ClientDetailDrawer";
 
 const mockClients = [
   { name: "Société Verne", email: "contact@societe-verne.fr", date: "22/10/2025" },
@@ -21,6 +23,14 @@ const mockClients = [
 ];
 
 const Clients = () => {
+  const [selectedClient, setSelectedClient] = useState<typeof mockClients[0] | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleClientClick = (client: typeof mockClients[0]) => {
+    setSelectedClient(client);
+    setDrawerOpen(true);
+  };
+
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
@@ -48,10 +58,14 @@ const Clients = () => {
         {/* Mobile: Cards */}
         <div className="md:hidden space-y-2.5 transition-all duration-200">
           {mockClients.map((client) => (
-            <Card key={client.email} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
+            <Card 
+              key={client.email} 
+              className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg cursor-pointer"
+              onClick={() => handleClientClick(client)}
+            >
               <CardContent className="p-3.5 space-y-2 transition-all duration-150">
                 <div className="font-semibold text-sm">{client.name}</div>
-                <div className="text-xs text-primary hover:underline cursor-pointer">
+                <div className="text-xs text-primary">
                   {client.email}
                 </div>
                 <div className="text-[10px] text-muted-foreground">
@@ -75,7 +89,11 @@ const Clients = () => {
               </TableHeader>
               <TableBody>
                 {mockClients.map((client) => (
-                  <TableRow key={client.email}>
+                  <TableRow 
+                    key={client.email}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleClientClick(client)}
+                  >
                     <TableCell className="font-medium">{client.name}</TableCell>
                     <TableCell className="text-primary">{client.email}</TableCell>
                     <TableCell>{client.date}</TableCell>
@@ -85,6 +103,12 @@ const Clients = () => {
             </Table>
           </CardContent>
         </Card>
+
+        <ClientDetailDrawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          client={selectedClient}
+        />
       </div>
     </MainLayout>
   );

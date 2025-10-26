@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TeamMemberDetailDrawer } from "@/components/Equipe/TeamMemberDetailDrawer";
 
 const mockTeam = [
   { name: "Natalie Craig", role: "Owner", client: "TechCorp Solutions, Commerce Plus", status: "Actif", lastConnection: "Il y a 6 jours", initials: "NC" },
@@ -22,6 +24,14 @@ const mockTeam = [
 ];
 
 const Equipe = () => {
+  const [selectedMember, setSelectedMember] = useState<typeof mockTeam[0] | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleMemberClick = (member: typeof mockTeam[0]) => {
+    setSelectedMember(member);
+    setDrawerOpen(true);
+  };
+
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
@@ -49,7 +59,11 @@ const Equipe = () => {
         {/* Mobile: Cards */}
         <div className="md:hidden space-y-2.5 transition-all duration-200">
           {mockTeam.map((member) => (
-            <Card key={member.name} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
+            <Card 
+              key={member.name} 
+              className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg cursor-pointer"
+              onClick={() => handleMemberClick(member)}
+            >
               <CardContent className="p-3 transition-all duration-150">
                 <div className="flex items-center gap-2.5">
                   <Avatar className="h-10 w-10">
@@ -93,7 +107,11 @@ const Equipe = () => {
               </TableHeader>
               <TableBody>
                 {mockTeam.map((member) => (
-                  <TableRow key={member.name}>
+                  <TableRow 
+                    key={member.name}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleMemberClick(member)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
@@ -121,6 +139,12 @@ const Equipe = () => {
             </Table>
           </CardContent>
         </Card>
+
+        <TeamMemberDetailDrawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          member={selectedMember}
+        />
       </div>
     </MainLayout>
   );
