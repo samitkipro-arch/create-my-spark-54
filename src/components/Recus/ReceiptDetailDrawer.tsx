@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { X } from "lucide-react";
+import { useState } from "react";
 
 interface ReceiptDetailDrawerProps {
   open: boolean;
@@ -20,6 +22,7 @@ export const ReceiptDetailDrawer = ({
   error,
 }: ReceiptDetailDrawerProps) => {
   const isMobile = useIsMobile();
+  const [isEditing, setIsEditing] = useState(false);
   
   const fmtMoney = (v: number | null | undefined) =>
     typeof v === "number" ? `${v.toFixed(2)} €` : "—";
@@ -30,6 +33,17 @@ export const ReceiptDetailDrawer = ({
   const ttc = detail?.montant_ttc ?? detail?.montant ?? null;
   const tva = detail?.tva ?? 0;
   const ht = typeof ttc === "number" ? Math.max(ttc - (typeof tva === "number" ? tva : 0), 0) : null;
+
+  const handleValidate = () => {
+    console.log("Validating receipt...");
+    // TODO: Implement validation logic
+  };
+
+  const handleCorrect = () => {
+    setIsEditing(true);
+    console.log("Correcting receipt...");
+    // TODO: Implement correction logic
+  };
 
   const content = (
     <div className="overflow-y-auto h-full p-4 md:p-6">
@@ -51,6 +65,16 @@ export const ReceiptDetailDrawer = ({
                   Reçu n° {detail?.numero_recu ?? "—"}
                 </p>
               </div>
+              {isMobile && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onOpenChange(false)}
+                  className="shrink-0"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
             </div>
           </SheetHeader>
 
@@ -127,10 +151,10 @@ export const ReceiptDetailDrawer = ({
             {/* Boutons d'action */}
             <div className="space-y-2 md:space-y-3 pt-3 md:pt-4">
               <div className="grid grid-cols-2 gap-2 md:gap-3">
-                <Button variant="outline" className="w-full text-xs md:text-sm h-9 md:h-10">
+                <Button variant="outline" className="w-full text-xs md:text-sm h-9 md:h-10" onClick={handleValidate}>
                   Valider
                 </Button>
-                <Button variant="outline" className="w-full text-xs md:text-sm h-9 md:h-10">
+                <Button variant="outline" className="w-full text-xs md:text-sm h-9 md:h-10" onClick={handleCorrect}>
                   Corriger
                 </Button>
               </div>
@@ -159,7 +183,7 @@ export const ReceiptDetailDrawer = ({
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent 
           className="
-            mx-4 mb-6 h-[85vh] rounded-2xl 
+            mx-4 mb-6 h-[75vh] rounded-2xl 
             bg-card/95 backdrop-blur-lg 
             shadow-[0_10px_40px_rgba(0,0,0,0.4)]
             border border-border/50

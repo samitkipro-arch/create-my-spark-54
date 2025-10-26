@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useState } from "react";
 
 interface TeamMemberDetailDrawerProps {
   open: boolean;
@@ -25,11 +26,18 @@ export const TeamMemberDetailDrawer = ({
   member,
 }: TeamMemberDetailDrawerProps) => {
   const isMobile = useIsMobile();
+  const [isEditing, setIsEditing] = useState(false);
 
   // Extract first name and last name from full name
   const nameParts = member?.name ? member.name.split(" ") : [];
   const firstName = nameParts[0] || "";
   const lastName = nameParts.slice(1).join(" ") || "";
+
+  const handleSave = () => {
+    // TODO: Implement save logic
+    setIsEditing(false);
+    console.log("Saving team member data...");
+  };
 
   const content = (
     <>
@@ -50,8 +58,8 @@ export const TeamMemberDetailDrawer = ({
               </p>
             </div>
           </div>
-          <Button size="default" className="shrink-0">
-            Modifier
+          <Button size="default" className="shrink-0" onClick={() => setIsEditing(!isEditing)}>
+            {isEditing ? "Annuler" : "Modifier"}
           </Button>
         </div>
       </div>
@@ -60,7 +68,7 @@ export const TeamMemberDetailDrawer = ({
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* Prénom */}
           <div className="space-y-3">
-            <Label htmlFor="first-name" className="text-sm md:text-base font-medium">
+            <Label htmlFor="first-name" className="text-base md:text-lg font-semibold text-foreground">
               Prénom
             </Label>
             <Input
@@ -68,12 +76,13 @@ export const TeamMemberDetailDrawer = ({
               placeholder="Prénom"
               defaultValue={firstName}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
 
           {/* Nom */}
           <div className="space-y-3">
-            <Label htmlFor="last-name" className="text-sm md:text-base font-medium">
+            <Label htmlFor="last-name" className="text-base md:text-lg font-semibold text-foreground">
               Nom
             </Label>
             <Input
@@ -81,6 +90,7 @@ export const TeamMemberDetailDrawer = ({
               placeholder="Nom"
               defaultValue={lastName}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
         </div>
@@ -88,7 +98,7 @@ export const TeamMemberDetailDrawer = ({
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* E-mail */}
           <div className="space-y-3">
-            <Label htmlFor="email" className="text-sm md:text-base font-medium">
+            <Label htmlFor="email" className="text-base md:text-lg font-semibold text-foreground">
               E-mail de contact
             </Label>
             <Input
@@ -97,12 +107,13 @@ export const TeamMemberDetailDrawer = ({
               placeholder="prenom.nom@finvisor.com"
               defaultValue={member?.name ? `${member.name.toLowerCase().replace(/\s+/g, '.')}@finvisor.com` : ""}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
 
           {/* Téléphone */}
           <div className="space-y-3">
-            <Label htmlFor="phone" className="text-sm md:text-base font-medium">
+            <Label htmlFor="phone" className="text-base md:text-lg font-semibold text-foreground">
               Téléphone (optionnel)
             </Label>
             <Input
@@ -110,6 +121,7 @@ export const TeamMemberDetailDrawer = ({
               type="tel"
               placeholder="+33 6 12 34 56 78"
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
         </div>
@@ -117,10 +129,10 @@ export const TeamMemberDetailDrawer = ({
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* Rôle */}
           <div className="space-y-3">
-            <Label htmlFor="role" className="text-sm md:text-base font-medium">
+            <Label htmlFor="role" className="text-base md:text-lg font-semibold text-foreground">
               Rôle
             </Label>
-            <Select defaultValue={member?.role ? member.role.toLowerCase() : "viewer"}>
+            <Select defaultValue={member?.role ? member.role.toLowerCase() : "viewer"} disabled={!isEditing}>
               <SelectTrigger id="role" className="bg-background/50 h-11 md:h-12">
                 <SelectValue placeholder="Sélectionner un rôle" />
               </SelectTrigger>
@@ -134,7 +146,7 @@ export const TeamMemberDetailDrawer = ({
 
           {/* Client assigné */}
           <div className="space-y-3">
-            <Label htmlFor="client" className="text-sm md:text-base font-medium">
+            <Label htmlFor="client" className="text-base md:text-lg font-semibold text-foreground">
               Client assigné
             </Label>
             <Input
@@ -142,13 +154,14 @@ export const TeamMemberDetailDrawer = ({
               placeholder="Nom du client"
               defaultValue={member?.client}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
         </div>
 
         {/* Commentaire */}
         <div className="space-y-3">
-          <Label htmlFor="comment" className="text-sm md:text-base font-medium">
+          <Label htmlFor="comment" className="text-base md:text-lg font-semibold text-foreground">
             Commentaire / Note interne
           </Label>
           <Textarea
@@ -156,18 +169,21 @@ export const TeamMemberDetailDrawer = ({
             placeholder="Notes internes sur ce membre..."
             rows={4}
             className="bg-background/50 resize-none min-h-[100px]"
+            disabled={!isEditing}
           />
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
-          <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-            Annuler
-          </Button>
-          <Button className="flex-1">
-            Enregistrer
-          </Button>
-        </div>
+        {isEditing && (
+          <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
+            <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>
+              Annuler
+            </Button>
+            <Button className="flex-1" onClick={handleSave}>
+              Enregistrer
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -175,8 +191,8 @@ export const TeamMemberDetailDrawer = ({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50">
-          <div className="overflow-y-auto h-full">
+        <DrawerContent className="mx-4 mb-6 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-x-hidden">
+          <div className="overflow-y-auto overflow-x-hidden h-full">
             {content}
           </div>
         </DrawerContent>
@@ -188,7 +204,7 @@ export const TeamMemberDetailDrawer = ({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[900px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
+        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[1200px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
       >
         {content}
       </SheetContent>

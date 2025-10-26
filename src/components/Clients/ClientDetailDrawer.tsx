@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useState } from "react";
 
 interface ClientDetailDrawerProps {
   open: boolean;
@@ -25,6 +26,7 @@ export const ClientDetailDrawer = ({
   client,
 }: ClientDetailDrawerProps) => {
   const isMobile = useIsMobile();
+  const [isEditing, setIsEditing] = useState(false);
 
   const initials = client?.name
     ? client.name
@@ -34,6 +36,12 @@ export const ClientDetailDrawer = ({
         .toUpperCase()
         .slice(0, 2)
     : "NC";
+
+  const handleSave = () => {
+    // TODO: Implement save logic
+    setIsEditing(false);
+    console.log("Saving client data...");
+  };
 
   const content = (
     <>
@@ -54,8 +62,8 @@ export const ClientDetailDrawer = ({
               </p>
             </div>
           </div>
-          <Button size="default" className="shrink-0">
-            Modifier
+          <Button size="default" className="shrink-0" onClick={() => setIsEditing(!isEditing)}>
+            {isEditing ? "Annuler" : "Modifier"}
           </Button>
         </div>
       </div>
@@ -63,7 +71,7 @@ export const ClientDetailDrawer = ({
       <div className="p-6 md:p-8 space-y-6 md:space-y-8">
         {/* Raison sociale */}
         <div className="space-y-3">
-          <Label htmlFor="company-name" className="text-sm md:text-base font-medium">
+          <Label htmlFor="company-name" className="text-base md:text-lg font-semibold text-foreground">
             Raison sociale / Nom légal de l'entreprise
           </Label>
           <Input
@@ -71,13 +79,14 @@ export const ClientDetailDrawer = ({
             placeholder="Nom de l'entreprise"
             defaultValue={client?.name}
             className="bg-background/50 h-11 md:h-12"
+            disabled={!isEditing}
           />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* SIRET/SIREN */}
           <div className="space-y-3">
-            <Label htmlFor="vat-number" className="text-sm md:text-base font-medium">
+            <Label htmlFor="vat-number" className="text-base md:text-lg font-semibold text-foreground">
               SIRET / SIREN (optionnel)
             </Label>
             <Input
@@ -85,25 +94,27 @@ export const ClientDetailDrawer = ({
               placeholder="123 456 789 00010"
               defaultValue={client?.vat_number}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
 
           {/* Nom dirigeant */}
           <div className="space-y-3">
-            <Label htmlFor="representative" className="text-sm md:text-base font-medium">
+            <Label htmlFor="representative" className="text-base md:text-lg font-semibold text-foreground">
               Nom complet du dirigeant / représentant légal
             </Label>
             <Input
               id="representative"
               placeholder="Prénom Nom"
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
         </div>
 
         {/* Adresse */}
         <div className="space-y-3">
-          <Label htmlFor="address" className="text-sm md:text-base font-medium">
+          <Label htmlFor="address" className="text-base md:text-lg font-semibold text-foreground">
             Adresse complète du siège social (optionnel)
           </Label>
           <Input
@@ -111,13 +122,14 @@ export const ClientDetailDrawer = ({
             placeholder="Numéro, rue, ville, code postal"
             defaultValue={client?.address}
             className="bg-background/50 h-11 md:h-12"
+            disabled={!isEditing}
           />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* E-mail */}
           <div className="space-y-3">
-            <Label htmlFor="email" className="text-sm md:text-base font-medium">
+            <Label htmlFor="email" className="text-base md:text-lg font-semibold text-foreground">
               E-mail de contact de l'entreprise
             </Label>
             <Input
@@ -126,12 +138,13 @@ export const ClientDetailDrawer = ({
               placeholder="contact@entreprise.fr"
               defaultValue={client?.email}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
 
           {/* Téléphone */}
           <div className="space-y-3">
-            <Label htmlFor="phone" className="text-sm md:text-base font-medium">
+            <Label htmlFor="phone" className="text-base md:text-lg font-semibold text-foreground">
               Téléphone de contact de l'entreprise (optionnel)
             </Label>
             <Input
@@ -140,13 +153,14 @@ export const ClientDetailDrawer = ({
               placeholder="+33 1 23 45 67 89"
               defaultValue={client?.phone}
               className="bg-background/50 h-11 md:h-12"
+              disabled={!isEditing}
             />
           </div>
         </div>
 
         {/* Commentaire */}
         <div className="space-y-3">
-          <Label htmlFor="comment" className="text-sm md:text-base font-medium">
+          <Label htmlFor="comment" className="text-base md:text-lg font-semibold text-foreground">
             Commentaire
           </Label>
           <Textarea
@@ -154,18 +168,21 @@ export const ClientDetailDrawer = ({
             placeholder="Notes internes sur ce client..."
             rows={4}
             className="bg-background/50 resize-none min-h-[100px]"
+            disabled={!isEditing}
           />
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
-          <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-            Annuler
-          </Button>
-          <Button className="flex-1">
-            Enregistrer
-          </Button>
-        </div>
+        {isEditing && (
+          <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
+            <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>
+              Annuler
+            </Button>
+            <Button className="flex-1" onClick={handleSave}>
+              Enregistrer
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -186,7 +203,7 @@ export const ClientDetailDrawer = ({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[900px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
+        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[1200px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
       >
         {content}
       </SheetContent>
