@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 type Receipt = {
   id: number;
@@ -260,7 +261,28 @@ const Recus = () => {
   useEffect(() => {
     const recusChannel = supabase
       .channel("recus-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
+        const newRecu = payload.new as Receipt;
+        
+        // Refetch pour mettre à jour la liste
+        refetch();
+        
+        // Ouvrir automatiquement le drawer avec le nouveau reçu
+        setSelectedId(newRecu.id);
+        setDetail(null);
+        setDetailError(null);
+        setIsDrawerOpen(true);
+        
+        // Afficher une notification
+        toast({
+          title: "Nouveau reçu analysé !",
+          description: `${newRecu.enseigne || 'Reçu'} - ${newRecu.montant_ttc ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(newRecu.montant_ttc) : '—'}`,
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, () => {
+        refetch();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
         refetch();
       })
       .subscribe();
@@ -284,7 +306,7 @@ const Recus = () => {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(membersChannel);
     };
-  }, []);
+  }, [refetch]);
 
   return (
     <MainLayout>
