@@ -41,7 +41,13 @@ const Clients = () => {
               Gérez vos clients, leurs informations légales et leur suivi en un seul endroit.
             </p>
           </div>
-          <Button className="gap-2 w-full md:w-auto transition-all duration-200">
+          <Button 
+            className="gap-2 w-full md:w-auto transition-all duration-200"
+            onClick={() => {
+              setSelectedClient(null);
+              setDrawerOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" />
             Ajouter un client
           </Button>

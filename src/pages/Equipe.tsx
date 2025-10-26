@@ -42,7 +42,13 @@ const Equipe = () => {
               Gérez les membres de votre équipe et leurs autorisations.
             </p>
           </div>
-          <Button className="gap-2 w-full md:w-auto transition-all duration-200">
+          <Button 
+            className="gap-2 w-full md:w-auto transition-all duration-200"
+            onClick={() => {
+              setSelectedMember(null);
+              setDrawerOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" />
             Ajouter un membre
           </Button>
