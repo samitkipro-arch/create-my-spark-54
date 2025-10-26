@@ -18,26 +18,19 @@ export const UploadInstructionsDialog = ({
   open,
   onOpenChange,
 }: UploadInstructionsDialogProps) => {
-  const [selectedClient, setSelectedClient] = useState<string>("");
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleClientSelect = () => {
-    // TODO: Ouvrir le sélecteur de clients
-    setSelectedClient("Client exemple");
-  };
-
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !selectedClient) return;
+    if (!file) return;
 
     setIsUploading(true);
-    console.log("Uploading file:", file.name, "for client:", selectedClient);
+    console.log("Uploading file:", file.name);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("client", selectedClient);
       formData.append("timestamp", new Date().toISOString());
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
@@ -52,7 +45,6 @@ export const UploadInstructionsDialog = ({
         });
         
         onOpenChange(false);
-        setSelectedClient("");
         setFileInputKey(prev => prev + 1);
       } else {
         throw new Error("Erreur lors de l'envoi");
@@ -130,37 +122,24 @@ export const UploadInstructionsDialog = ({
 
         <div className="space-y-3 md:space-y-6 pt-2 md:pt-4 border-t border-border">
           <p className="text-center text-[10px] md:text-sm text-muted-foreground">
-            Veuillez sélectionner un client avant de déposer un reçu.
+            Choisissez un fichier (image ou PDF) de votre reçu à analyser.
           </p>
 
           <div className="space-y-2 md:space-y-4">
-            <div className="text-center">
-              <label className="text-[10px] md:text-sm font-medium text-foreground">
-                Assigner à :
-              </label>
-            </div>
-
-            <Button
-              onClick={handleClientSelect}
-              className="w-full bg-white text-black hover:bg-white/90 font-medium text-xs md:text-base h-8 md:h-11"
-            >
-              {selectedClient || "Sélectionner un client"}
-            </Button>
-
             <div className="relative">
               <input
                 key={fileInputKey}
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf"
                 onChange={handleFileSelect}
-                disabled={!selectedClient || isUploading}
+                disabled={isUploading}
                 className="hidden"
                 id="receipt-upload"
               />
               <Button
                 asChild
-                disabled={!selectedClient || isUploading}
-                className="w-full bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-8 md:h-11"
+                disabled={isUploading}
+                className="w-full bg-white text-black hover:bg-white/90 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-8 md:h-11"
               >
                 <label htmlFor="receipt-upload" className="cursor-pointer">
                   {isUploading ? "Envoi en cours..." : "Choisir un fichier"}
