@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -19,20 +20,52 @@ export const UploadInstructionsDialog = ({
 }: UploadInstructionsDialogProps) => {
   const [selectedClient, setSelectedClient] = useState<string>("");
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleClientSelect = () => {
     // TODO: Ouvrir le sélecteur de clients
     setSelectedClient("Client exemple");
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && selectedClient) {
-      // TODO: Déclencher l'upload du fichier
-      console.log("Upload file:", file, "for client:", selectedClient);
-      onOpenChange(false);
-      setSelectedClient("");
-      setFileInputKey(prev => prev + 1);
+    if (!file || !selectedClient) return;
+
+    setIsUploading(true);
+    console.log("Uploading file:", file.name, "for client:", selectedClient);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("client", selectedClient);
+      formData.append("timestamp", new Date().toISOString());
+
+      const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Reçu envoyé pour analyse",
+          description: "Le reçu est en cours d'analyse. Vous serez notifié une fois le traitement terminé.",
+        });
+        
+        onOpenChange(false);
+        setSelectedClient("");
+        setFileInputKey(prev => prev + 1);
+      } else {
+        throw new Error("Erreur lors de l'envoi");
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'upload:", error);
+      toast({
+        title: "Erreur d'envoi",
+        description: "Impossible d'envoyer le reçu. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -120,17 +153,17 @@ export const UploadInstructionsDialog = ({
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf"
                 onChange={handleFileSelect}
-                disabled={!selectedClient}
+                disabled={!selectedClient || isUploading}
                 className="hidden"
                 id="receipt-upload"
               />
               <Button
                 asChild
-                disabled={!selectedClient}
+                disabled={!selectedClient || isUploading}
                 className="w-full bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-8 md:h-11"
               >
                 <label htmlFor="receipt-upload" className="cursor-pointer">
-                  Choisir un fichier
+                  {isUploading ? "Envoi en cours..." : "Choisir un fichier"}
                 </label>
               </Button>
             </div>
