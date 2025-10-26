@@ -33,19 +33,19 @@ export const TeamMemberDetailDrawer = ({
 
   const content = (
     <>
-      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-lg border-b border-border p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4 flex-1">
-            <Avatar className="h-16 w-16 md:h-20 md:w-20">
-              <AvatarFallback className="bg-primary/20 text-primary text-xl font-semibold">
+      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-lg border-b border-border p-6 md:p-8">
+        <div className="flex items-start justify-between gap-4 md:gap-6">
+          <div className="flex items-center gap-4 md:gap-6 flex-1">
+            <Avatar className="h-16 w-16 md:h-24 md:w-24">
+              <AvatarFallback className="bg-primary/20 text-primary text-xl md:text-2xl font-semibold">
                 {member?.initials || "NM"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <SheetTitle className="text-xl md:text-2xl font-bold">
+              <SheetTitle className="text-xl md:text-3xl font-bold">
                 {member?.name || "Nouveau membre"}
               </SheetTitle>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">
                 {member?.name ? `${member.name.toLowerCase().replace(/\s+/g, '.')}@finvisor.com` : ""}
               </p>
             </div>
@@ -56,39 +56,39 @@ export const TeamMemberDetailDrawer = ({
         </div>
       </div>
 
-      <div className="p-6 space-y-6">
-        <div className="grid md:grid-cols-2 gap-6">
+      <div className="p-6 md:p-8 space-y-6 md:space-y-8">
+        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* Prénom */}
-          <div className="space-y-2">
-            <Label htmlFor="first-name" className="text-sm font-medium">
+          <div className="space-y-3">
+            <Label htmlFor="first-name" className="text-sm md:text-base font-medium">
               Prénom
             </Label>
             <Input
               id="first-name"
               placeholder="Prénom"
               defaultValue={firstName}
-              className="bg-background/50"
+              className="bg-background/50 h-11 md:h-12"
             />
           </div>
 
           {/* Nom */}
-          <div className="space-y-2">
-            <Label htmlFor="last-name" className="text-sm font-medium">
+          <div className="space-y-3">
+            <Label htmlFor="last-name" className="text-sm md:text-base font-medium">
               Nom
             </Label>
             <Input
               id="last-name"
               placeholder="Nom"
               defaultValue={lastName}
-              className="bg-background/50"
+              className="bg-background/50 h-11 md:h-12"
             />
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* E-mail */}
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">
+          <div className="space-y-3">
+            <Label htmlFor="email" className="text-sm md:text-base font-medium">
               E-mail de contact
             </Label>
             <Input
@@ -96,32 +96,32 @@ export const TeamMemberDetailDrawer = ({
               type="email"
               placeholder="prenom.nom@finvisor.com"
               defaultValue={member?.name ? `${member.name.toLowerCase().replace(/\s+/g, '.')}@finvisor.com` : ""}
-              className="bg-background/50"
+              className="bg-background/50 h-11 md:h-12"
             />
           </div>
 
           {/* Téléphone */}
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-medium">
+          <div className="space-y-3">
+            <Label htmlFor="phone" className="text-sm md:text-base font-medium">
               Téléphone (optionnel)
             </Label>
             <Input
               id="phone"
               type="tel"
               placeholder="+33 6 12 34 56 78"
-              className="bg-background/50"
+              className="bg-background/50 h-11 md:h-12"
             />
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* Rôle */}
-          <div className="space-y-2">
-            <Label htmlFor="role" className="text-sm font-medium">
+          <div className="space-y-3">
+            <Label htmlFor="role" className="text-sm md:text-base font-medium">
               Rôle
             </Label>
             <Select defaultValue={member?.role ? member.role.toLowerCase() : "viewer"}>
-              <SelectTrigger id="role" className="bg-background/50">
+              <SelectTrigger id="role" className="bg-background/50 h-11 md:h-12">
                 <SelectValue placeholder="Sélectionner un rôle" />
               </SelectTrigger>
               <SelectContent>
@@ -133,34 +133,34 @@ export const TeamMemberDetailDrawer = ({
           </div>
 
           {/* Client assigné */}
-          <div className="space-y-2">
-            <Label htmlFor="client" className="text-sm font-medium">
+          <div className="space-y-3">
+            <Label htmlFor="client" className="text-sm md:text-base font-medium">
               Client assigné
             </Label>
             <Input
               id="client"
               placeholder="Nom du client"
               defaultValue={member?.client}
-              className="bg-background/50"
+              className="bg-background/50 h-11 md:h-12"
             />
           </div>
         </div>
 
         {/* Commentaire */}
-        <div className="space-y-2">
-          <Label htmlFor="comment" className="text-sm font-medium">
+        <div className="space-y-3">
+          <Label htmlFor="comment" className="text-sm md:text-base font-medium">
             Commentaire / Note interne
           </Label>
           <Textarea
             id="comment"
             placeholder="Notes internes sur ce membre..."
             rows={4}
-            className="bg-background/50 resize-none"
+            className="bg-background/50 resize-none min-h-[100px]"
           />
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
             Annuler
           </Button>
@@ -188,7 +188,7 @@ export const TeamMemberDetailDrawer = ({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[680px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
+        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[900px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
       >
         {content}
       </SheetContent>

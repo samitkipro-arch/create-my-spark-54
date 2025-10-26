@@ -159,7 +159,7 @@ export const ReceiptDetailDrawer = ({
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent 
           className="
-            mx-4 mb-4 h-[85vh] rounded-2xl 
+            mx-4 mb-6 h-[85vh] rounded-2xl 
             bg-card/95 backdrop-blur-lg 
             shadow-[0_10px_40px_rgba(0,0,0,0.4)]
             border border-border/50
