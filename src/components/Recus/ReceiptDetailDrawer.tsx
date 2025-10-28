@@ -234,10 +234,12 @@ export const ReceiptDetailDrawer = ({
                   onBlur={() => setActiveField(null)}
                   disabled={!isEditing}
                   className={cn(
-                    "text-2xl md:text-4xl font-bold text-center bg-transparent border-none w-auto focus:outline-none",
+                    "text-2xl md:text-4xl font-bold text-center bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
+                    "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                     isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
                   )}
-                /><span className="text-2xl md:text-4xl font-bold">€</span>
+                  style={{ letterSpacing: '-0.02em' }}
+                /><span className="text-2xl md:text-4xl font-bold leading-none -ml-[1px]">€</span>
               </div>
             </div>
 
@@ -264,10 +266,12 @@ export const ReceiptDetailDrawer = ({
                       onBlur={() => setActiveField(null)}
                       disabled={!isEditing}
                       className={cn(
-                        "text-lg md:text-2xl font-semibold bg-transparent border-none w-auto focus:outline-none",
+                        "text-lg md:text-2xl font-semibold bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
+                        "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                         isEditing ? "cursor-text border-b border-primary" : "cursor-default"
                       )}
-                    /><span className="text-lg md:text-2xl font-semibold">€</span>
+                      style={{ letterSpacing: '-0.02em' }}
+                    /><span className="text-lg md:text-2xl font-semibold leading-none -ml-[1px]">€</span>
                   </div>
                 </CardContent>
               </Card>
@@ -529,10 +533,12 @@ export const ReceiptDetailDrawer = ({
                  onBlur={() => setActiveField(null)}
                  disabled={!isEditing}
                  className={cn(
-                   "text-2xl font-bold text-center bg-transparent border-none w-auto focus:outline-none",
+                   "text-2xl font-bold text-center bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
+                   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                    isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
                  )}
-               /><span className="text-2xl font-bold">€</span>
+                 style={{ letterSpacing: '-0.02em' }}
+               /><span className="text-2xl font-bold leading-none -ml-[1px]">€</span>
              </div>
            </div>
 
@@ -559,10 +565,12 @@ export const ReceiptDetailDrawer = ({
                      onBlur={() => setActiveField(null)}
                      disabled={!isEditing}
                      className={cn(
-                       "text-lg font-semibold bg-transparent border-none w-auto focus:outline-none",
+                       "text-lg font-semibold bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
+                       "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                        isEditing ? "cursor-text border-b border-primary" : "cursor-default"
                      )}
-                   /><span className="text-lg font-semibold">€</span>
+                     style={{ letterSpacing: '-0.02em' }}
+                   /><span className="text-lg font-semibold leading-none -ml-[1px]">€</span>
                  </div>
                </CardContent>
              </Card>
