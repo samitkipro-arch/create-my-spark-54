@@ -224,7 +224,7 @@ export const ReceiptDetailDrawer = ({
             {/* Montant TTC */}
             <div className="text-center">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
-              <div className="inline-flex items-baseline gap-0">
+              <div className="inline-flex items-baseline gap-0 justify-center">
                 <input
                   type="number"
                   step="0.01"
@@ -234,12 +234,12 @@ export const ReceiptDetailDrawer = ({
                   onBlur={() => setActiveField(null)}
                   disabled={!isEditing}
                   className={cn(
-                    "text-2xl md:text-4xl font-bold text-center bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
-                    "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                    "text-2xl md:text-4xl font-bold text-right bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                    "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                     isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
                   )}
-                  style={{ letterSpacing: '-0.02em' }}
-                /><span className="text-2xl md:text-4xl font-bold leading-none -ml-[1px]">€</span>
+                  style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                /><span className="text-2xl md:text-4xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
               </div>
             </div>
 
@@ -266,12 +266,12 @@ export const ReceiptDetailDrawer = ({
                       onBlur={() => setActiveField(null)}
                       disabled={!isEditing}
                       className={cn(
-                        "text-lg md:text-2xl font-semibold bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
-                        "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                        "text-lg md:text-2xl font-semibold text-right bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                        "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                         isEditing ? "cursor-text border-b border-primary" : "cursor-default"
                       )}
-                      style={{ letterSpacing: '-0.02em' }}
-                    /><span className="text-lg md:text-2xl font-semibold leading-none -ml-[1px]">€</span>
+                      style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                    /><span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
                   </div>
                 </CardContent>
               </Card>
@@ -523,7 +523,7 @@ export const ReceiptDetailDrawer = ({
            {/* Montant TTC */}
            <div className="text-center">
              <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
-             <div className="inline-flex items-baseline gap-0">
+             <div className="inline-flex items-baseline gap-0 justify-center">
                <input
                  type="number"
                  step="0.01"
@@ -533,12 +533,12 @@ export const ReceiptDetailDrawer = ({
                  onBlur={() => setActiveField(null)}
                  disabled={!isEditing}
                  className={cn(
-                   "text-2xl font-bold text-center bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
-                   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                   "text-2xl font-bold text-right bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                   "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                    isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
                  )}
-                 style={{ letterSpacing: '-0.02em' }}
-               /><span className="text-2xl font-bold leading-none -ml-[1px]">€</span>
+                 style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+               /><span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
              </div>
            </div>
 
@@ -565,12 +565,12 @@ export const ReceiptDetailDrawer = ({
                      onBlur={() => setActiveField(null)}
                      disabled={!isEditing}
                      className={cn(
-                       "text-lg font-semibold bg-transparent border-none w-auto max-w-fit p-0 pr-0 m-0 focus:outline-none leading-none tracking-tight",
-                       "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                       "text-lg font-semibold text-right bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                        isEditing ? "cursor-text border-b border-primary" : "cursor-default"
                      )}
-                     style={{ letterSpacing: '-0.02em' }}
-                   /><span className="text-lg font-semibold leading-none -ml-[1px]">€</span>
+                     style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                   /><span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
                  </div>
                </CardContent>
              </Card>
