@@ -2,6 +2,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { X } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -14,6 +15,8 @@ interface ReceiptDetailDrawerProps {
   detail: any;
   loading: boolean;
   error: string | null;
+  clients?: Array<{ id: string; name: string }>;
+  members?: Array<{ id: string; name: string }>;
 }
 
 export const ReceiptDetailDrawer = ({
@@ -22,6 +25,8 @@ export const ReceiptDetailDrawer = ({
   detail,
   loading,
   error,
+  clients = [],
+  members = [],
 }: ReceiptDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
@@ -36,6 +41,8 @@ export const ReceiptDetailDrawer = ({
     ville: "",
     adresse: "",
     moyen_paiement: "",
+    client_id: "",
+    processed_by: "",
   });
 
   // Synchroniser editedData avec detail
@@ -49,6 +56,8 @@ export const ReceiptDetailDrawer = ({
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
+        client_id: detail?.client_id ?? "",
+        processed_by: detail?.processed_by ?? "",
       });
     }
   }, [detail]);
@@ -69,6 +78,8 @@ export const ReceiptDetailDrawer = ({
             ville: editedData.ville,
             adresse: editedData.adresse,
             moyen_paiement: editedData.moyen_paiement,
+            client_id: editedData.client_id || null,
+            processed_by: editedData.processed_by || null,
           })
           .eq("id", detail.id);
       } catch (err) {
@@ -127,12 +138,15 @@ export const ReceiptDetailDrawer = ({
           ville: editedData.ville,
           adresse: editedData.adresse,
           moyen_paiement: editedData.moyen_paiement,
+          client_id: editedData.client_id || null,
+          processed_by: editedData.processed_by || null,
         })
         .eq("id", detail.id);
       
       if (error) throw error;
       
       setIsEditing(false);
+      setActiveField(null);
     } catch (err) {
       console.error("Erreur lors de la sauvegarde:", err);
     }
@@ -140,6 +154,7 @@ export const ReceiptDetailDrawer = ({
 
   const handleCancel = () => {
     setIsEditing(false);
+    setActiveField(null);
     // Réinitialiser avec les valeurs actuelles du detail
     if (detail) {
       setEditedData({
@@ -150,6 +165,8 @@ export const ReceiptDetailDrawer = ({
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
+        client_id: detail?.client_id ?? "",
+        processed_by: detail?.processed_by ?? "",
       });
     }
   };
@@ -173,7 +190,7 @@ export const ReceiptDetailDrawer = ({
                 <div className="flex items-baseline gap-2">
                 <input
                   type="text"
-                  value={isEditing ? editedData.enseigne : detail?.enseigne ?? "—"}
+                  value={editedData.enseigne || "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
                   onFocus={() => setActiveField('enseigne')}
                   onBlur={() => setActiveField(null)}
@@ -188,7 +205,7 @@ export const ReceiptDetailDrawer = ({
                   Reçu n°{" "}
                   <input
                     type="text"
-                    value={isEditing ? editedData.numero_recu : detail?.numero_recu ?? "—"}
+                    value={editedData.numero_recu || "—"}
                     onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
                     onFocus={() => setActiveField('numero_recu')}
                     onBlur={() => setActiveField(null)}
@@ -207,11 +224,11 @@ export const ReceiptDetailDrawer = ({
             {/* Montant TTC */}
             <div className="text-center">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
-              <div className="inline-flex items-baseline">
+              <div className="inline-flex items-baseline gap-0">
                 <input
                   type="number"
                   step="0.01"
-                  value={isEditing ? editedData.montant_ttc : (detail?.montant_ttc ?? detail?.montant ?? 0)}
+                  value={editedData.montant_ttc}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
                   onFocus={() => setActiveField('montant_ttc')}
                   onBlur={() => setActiveField(null)}
@@ -230,18 +247,18 @@ export const ReceiptDetailDrawer = ({
                 <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
                   <p className="text-lg md:text-2xl font-semibold">
-                    {fmtMoney(isEditing ? editedData.montant_ttc - editedData.tva : ht)}
+                    {fmtMoney(editedData.montant_ttc - editedData.tva)}
                   </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">TVA :</p>
-                  <div className="inline-flex items-baseline">
+                  <div className="inline-flex items-baseline gap-0">
                     <input
                       type="number"
                       step="0.01"
-                      value={isEditing ? editedData.tva : (detail?.tva ?? 0)}
+                      value={editedData.tva}
                       onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
                       onFocus={() => setActiveField('tva')}
                       onBlur={() => setActiveField(null)}
@@ -269,7 +286,7 @@ export const ReceiptDetailDrawer = ({
                 <span className="text-xs md:text-sm text-muted-foreground">Moyen de paiement :</span>
                 <input
                   type="text"
-                  value={isEditing ? editedData.moyen_paiement : detail?.moyen_paiement ?? "—"}
+                  value={editedData.moyen_paiement || "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
                   onFocus={() => setActiveField('moyen_paiement')}
                   onBlur={() => setActiveField(null)}
@@ -285,7 +302,7 @@ export const ReceiptDetailDrawer = ({
                 <span className="text-xs md:text-sm text-muted-foreground">Ville :</span>
                 <input
                   type="text"
-                  value={isEditing ? editedData.ville : detail?.ville ?? "—"}
+                  value={editedData.ville || "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
                   onFocus={() => setActiveField('ville')}
                   onBlur={() => setActiveField(null)}
@@ -301,7 +318,7 @@ export const ReceiptDetailDrawer = ({
                 <span className="text-xs md:text-sm text-muted-foreground">Adresse :</span>
                 <input
                   type="text"
-                  value={isEditing ? editedData.adresse : detail?.adresse ?? "—"}
+                  value={editedData.adresse || "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
                   onFocus={() => setActiveField('adresse')}
                   onBlur={() => setActiveField(null)}
@@ -315,12 +332,50 @@ export const ReceiptDetailDrawer = ({
 
               <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                 <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
-                <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
+                {isEditing ? (
+                  <Select
+                    value={editedData.processed_by || "none"}
+                    onValueChange={(value) => setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })}
+                  >
+                    <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Aucun</SelectItem>
+                      {members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
+                )}
               </div>
 
               <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                 <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
-                <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
+                {isEditing ? (
+                  <Select
+                    value={editedData.client_id || "none"}
+                    onValueChange={(value) => setEditedData({ ...editedData, client_id: value === "none" ? "" : value })}
+                  >
+                    <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Aucun</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
+                )}
               </div>
             </div>
 
@@ -383,12 +438,12 @@ export const ReceiptDetailDrawer = ({
       
       {/* Indicateur visuel d'édition active */}
       {isEditing && activeField && (
-        <div className="w-16 md:w-20 bg-primary/90 flex items-center justify-center border-l border-primary">
-          <div className="text-center">
-            <div className="text-xs md:text-sm font-semibold text-primary-foreground mb-1">
-              Édition
+        <div className="w-20 md:w-24 bg-[hsl(222,47%,30%)] flex items-center justify-center border-l-4 border-[hsl(222,47%,20%)] shadow-lg">
+          <div className="text-center px-2">
+            <div className="text-sm md:text-base font-bold text-white mb-1">
+              ✏️
             </div>
-            <div className="text-[10px] md:text-xs text-primary-foreground/80 px-2">
+            <div className="text-[10px] md:text-xs font-semibold text-white/90 leading-tight">
               {activeField === 'montant_ttc' && 'Montant TTC'}
               {activeField === 'tva' && 'TVA'}
               {activeField === 'moyen_paiement' && 'Paiement'}
@@ -420,7 +475,7 @@ export const ReceiptDetailDrawer = ({
             <div className="flex items-baseline gap-2">
                <input
                  type="text"
-                 value={isEditing ? editedData.enseigne : detail?.enseigne ?? "—"}
+                 value={editedData.enseigne || "—"}
                  onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
                  onFocus={() => setActiveField('enseigne')}
                  onBlur={() => setActiveField(null)}
@@ -435,7 +490,7 @@ export const ReceiptDetailDrawer = ({
               Reçu n°{" "}
                <input
                  type="text"
-                 value={isEditing ? editedData.numero_recu : detail?.numero_recu ?? "—"}
+                 value={editedData.numero_recu || "—"}
                  onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
                  onFocus={() => setActiveField('numero_recu')}
                  onBlur={() => setActiveField(null)}
@@ -464,11 +519,11 @@ export const ReceiptDetailDrawer = ({
            {/* Montant TTC */}
            <div className="text-center">
              <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
-             <div className="inline-flex items-baseline">
+             <div className="inline-flex items-baseline gap-0">
                <input
                  type="number"
                  step="0.01"
-                 value={isEditing ? editedData.montant_ttc : (detail?.montant_ttc ?? detail?.montant ?? 0)}
+                 value={editedData.montant_ttc}
                  onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
                  onFocus={() => setActiveField('montant_ttc')}
                  onBlur={() => setActiveField(null)}
@@ -487,18 +542,18 @@ export const ReceiptDetailDrawer = ({
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground mb-1">Montant HT :</p>
                 <p className="text-lg font-semibold">
-                  {fmtMoney(isEditing ? editedData.montant_ttc - editedData.tva : ht)}
+                  {fmtMoney(editedData.montant_ttc - editedData.tva)}
                 </p>
               </CardContent>
             </Card>
              <Card>
                <CardContent className="pt-4 pb-3">
                  <p className="text-xs text-muted-foreground mb-1">TVA :</p>
-                 <div className="inline-flex items-baseline">
+                 <div className="inline-flex items-baseline gap-0">
                    <input
                      type="number"
                      step="0.01"
-                     value={isEditing ? editedData.tva : (detail?.tva ?? 0)}
+                     value={editedData.tva}
                      onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
                      onFocus={() => setActiveField('tva')}
                      onBlur={() => setActiveField(null)}
@@ -526,7 +581,7 @@ export const ReceiptDetailDrawer = ({
                <span className="text-xs text-muted-foreground">Moyen de paiement :</span>
                <input
                  type="text"
-                 value={isEditing ? editedData.moyen_paiement : detail?.moyen_paiement ?? "—"}
+                 value={editedData.moyen_paiement || "—"}
                  onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
                  onFocus={() => setActiveField('moyen_paiement')}
                  onBlur={() => setActiveField(null)}
@@ -542,7 +597,7 @@ export const ReceiptDetailDrawer = ({
                <span className="text-xs text-muted-foreground">Ville :</span>
                <input
                  type="text"
-                 value={isEditing ? editedData.ville : detail?.ville ?? "—"}
+                 value={editedData.ville || "—"}
                  onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
                  onFocus={() => setActiveField('ville')}
                  onBlur={() => setActiveField(null)}
@@ -558,7 +613,7 @@ export const ReceiptDetailDrawer = ({
                <span className="text-xs text-muted-foreground">Adresse :</span>
                <input
                  type="text"
-                 value={isEditing ? editedData.adresse : detail?.adresse ?? "—"}
+                 value={editedData.adresse || "—"}
                  onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
                  onFocus={() => setActiveField('adresse')}
                  onBlur={() => setActiveField(null)}
@@ -572,12 +627,50 @@ export const ReceiptDetailDrawer = ({
 
             <div className="flex justify-between items-center py-1.5 border-b border-border">
               <span className="text-xs text-muted-foreground">Traité par :</span>
-              <span className="text-xs font-medium">{detail?._processedByName ?? "—"}</span>
+              {isEditing ? (
+                <Select
+                  value={editedData.processed_by || "none"}
+                  onValueChange={(value) => setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })}
+                >
+                  <SelectTrigger className="w-[140px] h-7 text-xs">
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun</SelectItem>
+                    {members.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs font-medium">{detail?._processedByName ?? "—"}</span>
+              )}
             </div>
 
             <div className="flex justify-between items-center py-1.5 border-b border-border">
               <span className="text-xs text-muted-foreground">Client assigné :</span>
-              <span className="text-xs font-medium">{detail?._clientName ?? "—"}</span>
+              {isEditing ? (
+                <Select
+                  value={editedData.client_id || "none"}
+                  onValueChange={(value) => setEditedData({ ...editedData, client_id: value === "none" ? "" : value })}
+                >
+                  <SelectTrigger className="w-[140px] h-7 text-xs">
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs font-medium">{detail?._clientName ?? "—"}</span>
+              )}
             </div>
           </div>
         </div>

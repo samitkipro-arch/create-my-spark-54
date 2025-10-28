@@ -575,6 +575,8 @@ const Recus = () => {
           detail={detail}
           loading={detailLoading}
           error={detailError}
+          clients={clients}
+          members={members}
         />
       </div>
     </MainLayout>
