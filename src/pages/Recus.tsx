@@ -349,7 +349,7 @@ const Recus = () => {
             </SelectContent>
           </Select>
           
-          <Select value={storedMemberId} onValueChange={setMemberId}>
+          <Select value={storedMemberId || "all"} onValueChange={setMemberId}>
             <SelectTrigger className="w-full md:w-[220px]">
               <SelectValue placeholder="Tous les membres" />
             </SelectTrigger>

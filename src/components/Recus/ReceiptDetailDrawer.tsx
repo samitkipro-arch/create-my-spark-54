@@ -51,9 +51,37 @@ export const ReceiptDetailDrawer = ({
       });
     }
   }, [detail]);
+
+  // Sauvegarde automatique en temps réel pendant l'édition
+  useEffect(() => {
+    if (!isEditing || !detail?.id) return;
+
+    const saveChanges = async () => {
+      try {
+        await supabase
+          .from("recus")
+          .update({
+            enseigne: editedData.enseigne,
+            numero_recu: editedData.numero_recu,
+            montant_ttc: editedData.montant_ttc,
+            tva: editedData.tva,
+            ville: editedData.ville,
+            adresse: editedData.adresse,
+            moyen_paiement: editedData.moyen_paiement,
+          })
+          .eq("id", detail.id);
+      } catch (err) {
+        console.error("Erreur lors de la sauvegarde automatique:", err);
+      }
+    };
+
+    // Debounce de 500ms pour éviter trop de requêtes
+    const timer = setTimeout(saveChanges, 500);
+    return () => clearTimeout(timer);
+  }, [editedData, isEditing, detail?.id]);
   
   const fmtMoney = (v: number | null | undefined) =>
-    typeof v === "number" ? `${v.toFixed(2)} €` : "—";
+    typeof v === "number" ? `${v.toFixed(2)}€` : "—";
 
   const fmtDate = (s: string | null | undefined) =>
     s ? new Date(s).toLocaleString("fr-FR") : "—";
@@ -184,7 +212,7 @@ export const ReceiptDetailDrawer = ({
                   isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
                 )}
               />
-              <span className="text-2xl md:text-4xl font-bold ml-2">€</span>
+              <span className="text-2xl md:text-4xl font-bold">€</span>
             </div>
 
             {/* Cartes Montant HT / TVA */}
@@ -211,7 +239,7 @@ export const ReceiptDetailDrawer = ({
                       isEditing ? "cursor-text border-b border-primary" : "cursor-default"
                     )}
                   />
-                  <span className="text-lg md:text-2xl font-semibold ml-1">€</span>
+                  <span className="text-lg md:text-2xl font-semibold">€</span>
                 </CardContent>
               </Card>
             </div>
@@ -405,7 +433,7 @@ export const ReceiptDetailDrawer = ({
                   isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
                 )}
               />
-              <span className="text-2xl font-bold ml-2">€</span>
+              <span className="text-2xl font-bold">€</span>
             </div>
           </div>
 
@@ -434,7 +462,7 @@ export const ReceiptDetailDrawer = ({
                       isEditing ? "cursor-text border-b border-primary" : "cursor-default"
                     )}
                   />
-                  <span className="text-lg font-semibold ml-1">€</span>
+                  <span className="text-lg font-semibold">€</span>
                 </div>
               </CardContent>
             </Card>

@@ -47,9 +47,21 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         </aside>
       )}
 
-      {/* Mobile Page Title and Subtitle */}
+      {/* Desktop Page Title and Subtitle (Fixed) */}
+      {!isMobile && (
+        <div className="fixed top-0 left-[292px] right-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border px-8 py-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">{currentTitle}</h1>
+          {currentSubtitle && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {currentSubtitle}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Mobile Page Title and Subtitle (Fixed) */}
       {isMobile && (
-        <div className="fixed top-0 left-0 right-0 z-30 flex flex-col items-center justify-center pt-4 pb-3 pointer-events-none">
+        <div className="fixed top-0 left-0 right-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border flex flex-col items-center justify-center pt-4 pb-3">
           <h1 className="text-lg font-bold text-foreground">{currentTitle}</h1>
           {currentSubtitle && (
             <p className="text-xs text-muted-foreground/70 mt-1 px-4 text-center">
@@ -84,7 +96,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         </Sheet>
       )}
 
-      <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMobile ? 'pt-20' : ''}`}>
+      <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMobile ? 'pt-20' : 'pt-24'}`}>
         {children}
       </main>
     </div>
