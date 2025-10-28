@@ -247,7 +247,7 @@ export const ReceiptDetailDrawer = ({
                 <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
                   <p className="text-lg md:text-2xl font-semibold">
-                    {fmtMoney(editedData.montant_ttc - editedData.tva)}
+                    {(editedData.montant_ttc - editedData.tva).toFixed(2)}€
                   </p>
                 </CardContent>
               </Card>
@@ -542,7 +542,7 @@ export const ReceiptDetailDrawer = ({
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground mb-1">Montant HT :</p>
                 <p className="text-lg font-semibold">
-                  {fmtMoney(editedData.montant_ttc - editedData.tva)}
+                  {(editedData.montant_ttc - editedData.tva).toFixed(2)}€
                 </p>
               </CardContent>
             </Card>
