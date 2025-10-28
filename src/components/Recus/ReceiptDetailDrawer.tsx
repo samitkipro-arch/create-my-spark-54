@@ -25,6 +25,7 @@ export const ReceiptDetailDrawer = ({
 }: ReceiptDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
+  const [activeField, setActiveField] = useState<string | null>(null);
   
   // States pour les champs éditables
   const [editedData, setEditedData] = useState({
@@ -154,7 +155,8 @@ export const ReceiptDetailDrawer = ({
   };
 
   const desktopContent = (
-    <div className="overflow-y-auto h-full p-4 md:p-6">
+    <div className="relative flex h-full">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
       {loading ? (
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Chargement…</p>
@@ -169,16 +171,18 @@ export const ReceiptDetailDrawer = ({
             <div className="flex items-start justify-between">
               <div className="flex-1 text-left">
                 <div className="flex items-baseline gap-2">
-                  <input
-                    type="text"
-                    value={isEditing ? editedData.enseigne : detail?.enseigne ?? "—"}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-lg md:text-2xl font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                    )}
-                  />
+                <input
+                  type="text"
+                  value={isEditing ? editedData.enseigne : detail?.enseigne ?? "—"}
+                  onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
+                  onFocus={() => setActiveField('enseigne')}
+                  onBlur={() => setActiveField(null)}
+                  disabled={!isEditing}
+                  className={cn(
+                    "text-lg md:text-2xl font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
+                    isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  )}
+                />
                 </div>
                 <p className="text-xs md:text-sm text-muted-foreground mt-1">
                   Reçu n°{" "}
@@ -186,6 +190,8 @@ export const ReceiptDetailDrawer = ({
                     type="text"
                     value={isEditing ? editedData.numero_recu : detail?.numero_recu ?? "—"}
                     onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
+                    onFocus={() => setActiveField('numero_recu')}
+                    onBlur={() => setActiveField(null)}
                     disabled={!isEditing}
                     className={cn(
                       "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs md:text-sm",
@@ -201,18 +207,21 @@ export const ReceiptDetailDrawer = ({
             {/* Montant TTC */}
             <div className="text-center">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
-              <input
-                type="number"
-                step="0.01"
-                value={isEditing ? editedData.montant_ttc : (detail?.montant_ttc ?? detail?.montant ?? 0)}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
-                disabled={!isEditing}
-                className={cn(
-                  "text-2xl md:text-4xl font-bold text-center bg-transparent border-none w-full focus:outline-none",
-                  isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
-                )}
-              />
-              <span className="text-2xl md:text-4xl font-bold">€</span>
+              <div className="inline-flex items-baseline">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={isEditing ? editedData.montant_ttc : (detail?.montant_ttc ?? detail?.montant ?? 0)}
+                  onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                  onFocus={() => setActiveField('montant_ttc')}
+                  onBlur={() => setActiveField(null)}
+                  disabled={!isEditing}
+                  className={cn(
+                    "text-2xl md:text-4xl font-bold text-center bg-transparent border-none w-auto focus:outline-none",
+                    isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
+                  )}
+                /><span className="text-2xl md:text-4xl font-bold">€</span>
+              </div>
             </div>
 
             {/* Cartes Montant HT / TVA */}
@@ -228,18 +237,21 @@ export const ReceiptDetailDrawer = ({
               <Card>
                 <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">TVA :</p>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={isEditing ? editedData.tva : (detail?.tva ?? 0)}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-lg md:text-2xl font-semibold bg-transparent border-none w-full focus:outline-none",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                    )}
-                  />
-                  <span className="text-lg md:text-2xl font-semibold">€</span>
+                  <div className="inline-flex items-baseline">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={isEditing ? editedData.tva : (detail?.tva ?? 0)}
+                      onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                      onFocus={() => setActiveField('tva')}
+                      onBlur={() => setActiveField(null)}
+                      disabled={!isEditing}
+                      className={cn(
+                        "text-lg md:text-2xl font-semibold bg-transparent border-none w-auto focus:outline-none",
+                        isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                      )}
+                    /><span className="text-lg md:text-2xl font-semibold">€</span>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -259,6 +271,8 @@ export const ReceiptDetailDrawer = ({
                   type="text"
                   value={isEditing ? editedData.moyen_paiement : detail?.moyen_paiement ?? "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
+                  onFocus={() => setActiveField('moyen_paiement')}
+                  onBlur={() => setActiveField(null)}
                   disabled={!isEditing}
                   className={cn(
                     "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
@@ -273,6 +287,8 @@ export const ReceiptDetailDrawer = ({
                   type="text"
                   value={isEditing ? editedData.ville : detail?.ville ?? "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
+                  onFocus={() => setActiveField('ville')}
+                  onBlur={() => setActiveField(null)}
                   disabled={!isEditing}
                   className={cn(
                     "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
@@ -287,6 +303,8 @@ export const ReceiptDetailDrawer = ({
                   type="text"
                   value={isEditing ? editedData.adresse : detail?.adresse ?? "—"}
                   onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
+                  onFocus={() => setActiveField('adresse')}
+                  onBlur={() => setActiveField(null)}
                   disabled={!isEditing}
                   className={cn(
                     "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
@@ -361,6 +379,27 @@ export const ReceiptDetailDrawer = ({
           </div>
         </>
       ) : null}
+      </div>
+      
+      {/* Indicateur visuel d'édition active */}
+      {isEditing && activeField && (
+        <div className="w-16 md:w-20 bg-primary/90 flex items-center justify-center border-l border-primary">
+          <div className="text-center">
+            <div className="text-xs md:text-sm font-semibold text-primary-foreground mb-1">
+              Édition
+            </div>
+            <div className="text-[10px] md:text-xs text-primary-foreground/80 px-2">
+              {activeField === 'montant_ttc' && 'Montant TTC'}
+              {activeField === 'tva' && 'TVA'}
+              {activeField === 'moyen_paiement' && 'Paiement'}
+              {activeField === 'ville' && 'Ville'}
+              {activeField === 'adresse' && 'Adresse'}
+              {activeField === 'enseigne' && 'Enseigne'}
+              {activeField === 'numero_recu' && 'N° reçu'}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -379,29 +418,33 @@ export const ReceiptDetailDrawer = ({
         <div className="flex items-start justify-between">
           <div className="flex-1 text-left">
             <div className="flex items-baseline gap-2">
-              <input
-                type="text"
-                value={isEditing ? editedData.enseigne : detail?.enseigne ?? "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
-                disabled={!isEditing}
-                className={cn(
-                  "text-lg font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                )}
-              />
+               <input
+                 type="text"
+                 value={isEditing ? editedData.enseigne : detail?.enseigne ?? "—"}
+                 onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
+                 onFocus={() => setActiveField('enseigne')}
+                 onBlur={() => setActiveField(null)}
+                 disabled={!isEditing}
+                 className={cn(
+                   "text-lg font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
+                   isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                 )}
+               />
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Reçu n°{" "}
-              <input
-                type="text"
-                value={isEditing ? editedData.numero_recu : detail?.numero_recu ?? "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
-                disabled={!isEditing}
-                className={cn(
-                  "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                )}
-              />
+               <input
+                 type="text"
+                 value={isEditing ? editedData.numero_recu : detail?.numero_recu ?? "—"}
+                 onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
+                 onFocus={() => setActiveField('numero_recu')}
+                 onBlur={() => setActiveField(null)}
+                 disabled={!isEditing}
+                 className={cn(
+                   "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
+                   isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                 )}
+               />
             </p>
           </div>
           <Button
@@ -418,24 +461,25 @@ export const ReceiptDetailDrawer = ({
       {/* Contenu scrollable */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {/* Montant TTC */}
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
-            <div className="flex items-center justify-center">
-              <input
-                type="number"
-                step="0.01"
-                value={isEditing ? editedData.montant_ttc : (detail?.montant_ttc ?? detail?.montant ?? 0)}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
-                disabled={!isEditing}
-                className={cn(
-                  "text-2xl font-bold text-center bg-transparent border-none w-auto focus:outline-none",
-                  isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
-                )}
-              />
-              <span className="text-2xl font-bold">€</span>
-            </div>
-          </div>
+           {/* Montant TTC */}
+           <div className="text-center">
+             <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
+             <div className="inline-flex items-baseline">
+               <input
+                 type="number"
+                 step="0.01"
+                 value={isEditing ? editedData.montant_ttc : (detail?.montant_ttc ?? detail?.montant ?? 0)}
+                 onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                 onFocus={() => setActiveField('montant_ttc')}
+                 onBlur={() => setActiveField(null)}
+                 disabled={!isEditing}
+                 className={cn(
+                   "text-2xl font-bold text-center bg-transparent border-none w-auto focus:outline-none",
+                   isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
+                 )}
+               /><span className="text-2xl font-bold">€</span>
+             </div>
+           </div>
 
           {/* Cartes Montant HT / TVA */}
           <div className="grid grid-cols-2 gap-3">
@@ -447,25 +491,26 @@ export const ReceiptDetailDrawer = ({
                 </p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground mb-1">TVA :</p>
-                <div className="flex items-baseline">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={isEditing ? editedData.tva : (detail?.tva ?? 0)}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-lg font-semibold bg-transparent border-none w-full focus:outline-none",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                    )}
-                  />
-                  <span className="text-lg font-semibold">€</span>
-                </div>
-              </CardContent>
-            </Card>
+             <Card>
+               <CardContent className="pt-4 pb-3">
+                 <p className="text-xs text-muted-foreground mb-1">TVA :</p>
+                 <div className="inline-flex items-baseline">
+                   <input
+                     type="number"
+                     step="0.01"
+                     value={isEditing ? editedData.tva : (detail?.tva ?? 0)}
+                     onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                     onFocus={() => setActiveField('tva')}
+                     onBlur={() => setActiveField(null)}
+                     disabled={!isEditing}
+                     className={cn(
+                       "text-lg font-semibold bg-transparent border-none w-auto focus:outline-none",
+                       isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                     )}
+                   /><span className="text-lg font-semibold">€</span>
+                 </div>
+               </CardContent>
+             </Card>
           </div>
 
           {/* Informations détaillées */}
@@ -477,47 +522,53 @@ export const ReceiptDetailDrawer = ({
               </span>
             </div>
 
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Moyen de paiement :</span>
-              <input
-                type="text"
-                value={isEditing ? editedData.moyen_paiement : detail?.moyen_paiement ?? "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                )}
-              />
-            </div>
+             <div className="flex justify-between items-center py-1.5 border-b border-border">
+               <span className="text-xs text-muted-foreground">Moyen de paiement :</span>
+               <input
+                 type="text"
+                 value={isEditing ? editedData.moyen_paiement : detail?.moyen_paiement ?? "—"}
+                 onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
+                 onFocus={() => setActiveField('moyen_paiement')}
+                 onBlur={() => setActiveField(null)}
+                 disabled={!isEditing}
+                 className={cn(
+                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+                   isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                 )}
+               />
+             </div>
 
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Ville :</span>
-              <input
-                type="text"
-                value={isEditing ? editedData.ville : detail?.ville ?? "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                )}
-              />
-            </div>
+             <div className="flex justify-between items-center py-1.5 border-b border-border">
+               <span className="text-xs text-muted-foreground">Ville :</span>
+               <input
+                 type="text"
+                 value={isEditing ? editedData.ville : detail?.ville ?? "—"}
+                 onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
+                 onFocus={() => setActiveField('ville')}
+                 onBlur={() => setActiveField(null)}
+                 disabled={!isEditing}
+                 className={cn(
+                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+                   isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                 )}
+               />
+             </div>
 
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Adresse :</span>
-              <input
-                type="text"
-                value={isEditing ? editedData.adresse : detail?.adresse ?? "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                )}
-              />
-            </div>
+             <div className="flex justify-between items-center py-1.5 border-b border-border">
+               <span className="text-xs text-muted-foreground">Adresse :</span>
+               <input
+                 type="text"
+                 value={isEditing ? editedData.adresse : detail?.adresse ?? "—"}
+                 onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
+                 onFocus={() => setActiveField('adresse')}
+                 onBlur={() => setActiveField(null)}
+                 disabled={!isEditing}
+                 className={cn(
+                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+                   isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                 )}
+               />
+             </div>
 
             <div className="flex justify-between items-center py-1.5 border-b border-border">
               <span className="text-xs text-muted-foreground">Traité par :</span>
