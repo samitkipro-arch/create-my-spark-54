@@ -222,26 +222,31 @@ export const ReceiptDetailDrawer = ({
 
           <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
             {/* Montant TTC */}
-            <div className="text-center w-full flex justify-center">
-              <div className="inline-block">
-                <p className="text-xs md:text-sm text-muted-foreground mb-1 text-center">Montant TTC :</p>
-                <div className="inline-flex items-baseline gap-0">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editedData.montant_ttc}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
-                    onFocus={() => setActiveField('montant_ttc')}
-                    onBlur={() => setActiveField(null)}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
-                      "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                      isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
-                    )}
-                    style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
-                  /><span className="text-2xl md:text-4xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
-                </div>
+            <div className="w-full flex items-center justify-center">
+              <div className="inline-block text-center">
+                <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
+                {isEditing ? (
+                  <div className="inline-flex items-baseline gap-0">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editedData.montant_ttc}
+                      onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                      onFocus={() => setActiveField('montant_ttc')}
+                      onBlur={() => setActiveField(null)}
+                      className={cn(
+                        "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                        "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                        "cursor-text border-b-2 border-primary"
+                      )}
+                      style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                    /><span className="text-2xl md:text-4xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
+                  </div>
+                ) : (
+                  <p className="text-2xl md:text-4xl font-bold">
+                    {editedData.montant_ttc.toFixed(2)}€
+                  </p>
+                )}
               </div>
             </div>
 
@@ -258,23 +263,28 @@ export const ReceiptDetailDrawer = ({
               <Card>
                 <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">TVA :</p>
-                  <div className="inline-flex items-baseline gap-0">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={editedData.tva}
-                      onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
-                      onFocus={() => setActiveField('tva')}
-                      onBlur={() => setActiveField(null)}
-                      disabled={!isEditing}
-                      className={cn(
-                        "text-lg md:text-2xl font-semibold text-right bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
-                        "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                        isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                      )}
-                      style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
-                    /><span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
-                  </div>
+                  {isEditing ? (
+                    <div className="inline-flex items-baseline gap-0">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editedData.tva}
+                        onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                        onFocus={() => setActiveField('tva')}
+                        onBlur={() => setActiveField(null)}
+                        className={cn(
+                          "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                          "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                          "cursor-text border-b border-primary"
+                        )}
+                        style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                      /><span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
+                    </div>
+                  ) : (
+                    <p className="text-lg md:text-2xl font-semibold">
+                      {editedData.tva.toFixed(2)}€
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -523,26 +533,31 @@ export const ReceiptDetailDrawer = ({
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
            {/* Montant TTC */}
-           <div className="text-center w-full flex justify-center">
-             <div className="inline-block">
-               <p className="text-xs text-muted-foreground mb-1 text-center">Montant TTC :</p>
-               <div className="inline-flex items-baseline gap-0">
-                 <input
-                   type="number"
-                   step="0.01"
-                   value={editedData.montant_ttc}
-                   onChange={(e) => isEditing && setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
-                   onFocus={() => setActiveField('montant_ttc')}
-                   onBlur={() => setActiveField(null)}
-                   disabled={!isEditing}
-                   className={cn(
-                     "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
-                     "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                     isEditing ? "cursor-text border-b-2 border-primary" : "cursor-default"
-                   )}
-                   style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
-                 /><span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
-               </div>
+           <div className="w-full flex items-center justify-center">
+             <div className="inline-block text-center">
+               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
+               {isEditing ? (
+                 <div className="inline-flex items-baseline gap-0">
+                   <input
+                     type="number"
+                     step="0.01"
+                     value={editedData.montant_ttc}
+                     onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                     onFocus={() => setActiveField('montant_ttc')}
+                     onBlur={() => setActiveField(null)}
+                     className={cn(
+                       "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                       "cursor-text border-b-2 border-primary"
+                     )}
+                     style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                   /><span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
+                 </div>
+               ) : (
+                 <p className="text-2xl font-bold">
+                   {editedData.montant_ttc.toFixed(2)}€
+                 </p>
+               )}
              </div>
            </div>
 
@@ -559,23 +574,28 @@ export const ReceiptDetailDrawer = ({
              <Card>
                <CardContent className="pt-4 pb-3">
                  <p className="text-xs text-muted-foreground mb-1">TVA :</p>
-                 <div className="inline-flex items-baseline gap-0">
-                   <input
-                     type="number"
-                     step="0.01"
-                     value={editedData.tva}
-                     onChange={(e) => isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
-                     onFocus={() => setActiveField('tva')}
-                     onBlur={() => setActiveField(null)}
-                     disabled={!isEditing}
-                     className={cn(
-                       "text-lg font-semibold text-right bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
-                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                       isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                     )}
-                     style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
-                   /><span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
-                 </div>
+                 {isEditing ? (
+                   <div className="inline-flex items-baseline gap-0">
+                     <input
+                       type="number"
+                       step="0.01"
+                       value={editedData.tva}
+                       onChange={(e) => setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                       onFocus={() => setActiveField('tva')}
+                       onBlur={() => setActiveField(null)}
+                       className={cn(
+                         "text-lg font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                         "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                         "cursor-text border-b border-primary"
+                       )}
+                       style={{ letterSpacing: '-0.03em', minWidth: '0', width: 'auto' }}
+                     /><span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
+                   </div>
+                 ) : (
+                   <p className="text-lg font-semibold">
+                     {editedData.tva.toFixed(2)}€
+                   </p>
+                 )}
                </CardContent>
              </Card>
           </div>
