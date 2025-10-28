@@ -35,13 +35,7 @@ const Clients = () => {
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
-          <div className="hidden md:block">
-            <h1 className="text-2xl md:text-3xl font-bold transition-all duration-150">Clients</h1>
-            <p className="text-muted-foreground mt-1 text-sm md:text-base transition-all duration-150">
-              Gérez vos clients, leurs informations légales et leur suivi en un seul endroit.
-            </p>
-          </div>
-          <Button 
+          <Button
             className="gap-2 w-full md:w-auto transition-all duration-200"
             onClick={() => {
               setSelectedClient(null);

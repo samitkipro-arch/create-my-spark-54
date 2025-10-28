@@ -312,7 +312,6 @@ const Recus = () => {
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
-          <h1 className="hidden md:block text-2xl md:text-3xl font-bold transition-all duration-150">Reçus</h1>
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
             <Button variant="outline" className="flex-1 md:flex-initial">Exporter</Button>
             <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsDialogOpen(true)}>
