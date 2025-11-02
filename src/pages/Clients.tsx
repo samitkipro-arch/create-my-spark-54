@@ -13,20 +13,37 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ClientDetailDrawer } from "@/components/Clients/ClientDetailDrawer";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
-const mockClients = [
-  { name: "Société Verne", email: "contact@societe-verne.fr", date: "22/10/2025" },
-  { name: "Hôtel Riverside", email: "reservation@riverside-hotel.fr", date: "22/10/2025" },
-  { name: "Boulangerie du Coin", email: "bonjour@boulangerie-ducoin.fr", date: "22/10/2025" },
-  { name: "Garage Auto Plus", email: "service@autoplus-garage.fr", date: "22/10/2025" },
-  { name: "Cabinet Médical Centre", email: "accueil@cabinet-centre.fr", date: "22/10/2025" },
-];
+type Client = {
+  id: string;
+  name: string;
+  email: string | null;
+  created_at: string;
+  vat_number?: string | null;
+  address?: string | null;
+  phone?: string | null;
+};
 
 const Clients = () => {
-  const [selectedClient, setSelectedClient] = useState<typeof mockClients[0] | null>(null);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const handleClientClick = (client: typeof mockClients[0]) => {
+  const { data: clients = [], isLoading } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("clients")
+        .select("id, name, email, created_at, vat_number, address, phone")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return (data || []) as Client[];
+    },
+  });
+
+  const handleClientClick = (client: Client) => {
     setSelectedClient(client);
     setDrawerOpen(true);
   };
@@ -57,57 +74,83 @@ const Clients = () => {
 
         {/* Mobile: Cards */}
         <div className="md:hidden space-y-2.5 transition-all duration-200">
-          {mockClients.map((client) => (
-            <Card 
-              key={client.email} 
-              className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg cursor-pointer"
-              onClick={() => handleClientClick(client)}
-            >
-              <CardContent className="p-3.5 space-y-2 transition-all duration-150">
-                <div className="font-semibold text-sm">{client.name}</div>
-                <div className="text-xs text-primary">
-                  {client.email}
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  Créé le {client.date}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              Chargement…
+            </div>
+          ) : clients.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              Aucun client n'a encore été ajouté
+            </div>
+          ) : (
+            clients.map((client) => (
+              <Card 
+                key={client.id} 
+                className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg cursor-pointer"
+                onClick={() => handleClientClick(client)}
+              >
+                <CardContent className="p-3.5 space-y-2 transition-all duration-150">
+                  <div className="font-semibold text-sm">{client.name}</div>
+                  <div className="text-xs text-primary">
+                    {client.email || "—"}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    Créé le {new Date(client.created_at).toLocaleDateString("fr-FR")}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
         {/* Desktop: Table */}
         <Card className="hidden md:block bg-card border-border transition-all duration-200">
           <CardContent className="p-0 transition-all duration-150">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom du client</TableHead>
-                  <TableHead>Email de contact</TableHead>
-                  <TableHead>Date de création</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockClients.map((client) => (
-                  <TableRow 
-                    key={client.email}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleClientClick(client)}
-                  >
-                    <TableCell className="font-medium">{client.name}</TableCell>
-                    <TableCell className="text-primary">{client.email}</TableCell>
-                    <TableCell>{client.date}</TableCell>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+                Chargement…
+              </div>
+            ) : clients.length === 0 ? (
+              <div className="flex items-center justify-center py-16 text-muted-foreground">
+                Aucun client n'a encore été ajouté
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nom du client</TableHead>
+                    <TableHead>Email de contact</TableHead>
+                    <TableHead>Date de création</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow 
+                      key={client.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleClientClick(client)}
+                    >
+                      <TableCell className="font-medium">{client.name}</TableCell>
+                      <TableCell className="text-primary">{client.email || "—"}</TableCell>
+                      <TableCell>{new Date(client.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
 
         <ClientDetailDrawer
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
-          client={selectedClient}
+          client={selectedClient ? {
+            name: selectedClient.name,
+            email: selectedClient.email || '',
+            vat_number: selectedClient.vat_number || undefined,
+            address: selectedClient.address || undefined,
+            phone: selectedClient.phone || undefined
+          } : null}
         />
       </div>
     </MainLayout>

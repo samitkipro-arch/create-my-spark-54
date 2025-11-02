@@ -405,7 +405,7 @@ const Recus = () => {
               </div>
             ) : receipts.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
-                Aucun reçu trouvé
+                Aucun reçu n'a encore été traité
               </div>
             ) : (
               <>
