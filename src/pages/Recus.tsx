@@ -30,7 +30,6 @@ type Receipt = {
   processed_by?: string | null;
   category_id?: string | null;
   org_id?: string | null;
-  notes?: string | null;
 };
 
 type Client = {
@@ -41,7 +40,6 @@ type Client = {
 type Member = {
   id: string;
   name: string;
-  role?: string;
 };
 
 // Hook debounce
@@ -102,8 +100,7 @@ const Recus = () => {
     queryFn: async () => {
       const { data: orgMembers, error: omError } = await (supabase as any)
         .from("org_members")
-        .select("user_id, role")
-        .eq("is_active", true);
+        .select("user_id")
       
       if (omError) throw omError;
       if (!orgMembers || orgMembers.length === 0) return [];
@@ -117,14 +114,10 @@ const Recus = () => {
       
       if (pError) throw pError;
       
-      return (profiles || []).map((p: any) => {
-        const orgMember = orgMembers.find((om: any) => om.user_id === p.user_id);
-        return {
-          id: p.user_id,
-          name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
-          role: orgMember?.role || 'viewer',
-        };
-      }) as Member[];
+      return (profiles || []).map((p: any) => ({
+        id: p.user_id,
+        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
+      })) as Member[];
     },
   });
 
@@ -134,7 +127,7 @@ const Recus = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("recus")
-        .select("id, created_at, date_traitement, date_recu, numero_recu, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id, notes");
+        .select("id, created_at, date_traitement, date_recu, numero_recu, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
 
       // Apply date range filter from global store (if set)
       if (storedDateRange.from && storedDateRange.to) {
@@ -193,7 +186,6 @@ const Recus = () => {
         processed_by: r.processed_by ?? null,
         category_id: r.category_id ?? null,
         org_id: r.org_id ?? null,
-        notes: r.notes ?? null,
       })) as Receipt[];
     },
   });
@@ -357,9 +349,6 @@ const Recus = () => {
               {members.map((member) => (
                 <SelectItem key={member.id} value={member.id}>
                   {member.name}
-                  {member.role && member.role !== 'viewer' && (
-                    <span className="ml-2 text-xs text-muted-foreground">({member.role})</span>
-                  )}
                 </SelectItem>
               ))}
             </SelectContent>

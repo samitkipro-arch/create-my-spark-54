@@ -43,7 +43,6 @@ export const UploadInstructionsDialog = ({
         .from('org_members')
         .select('org_id')
         .eq('user_id', user.id)
-        .eq('is_active', true)
         .single();
 
       if (!orgMember || !orgMember.org_id) {
