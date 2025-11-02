@@ -51,13 +51,14 @@ export const UploadInstructionsDialog = ({
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("timestamp", new Date().toISOString());
       formData.append("org_id", orgMember.org_id);
-      formData.append("user_id", user.id);
-      formData.append("access_token", session.access_token);
+      // client_id est optionnel et peut être ajouté plus tard
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: formData,
       });
 
