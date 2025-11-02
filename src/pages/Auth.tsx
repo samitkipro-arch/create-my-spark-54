@@ -58,8 +58,7 @@ const Auth = () => {
             toast.error(error.message);
           }
         } else {
-          toast.success('Compte créé ! Redirection...');
-          setTimeout(() => navigate('/dashboard'), 1500);
+          toast.success('Compte créé avec succès !');
         }
       }
     } catch (error: any) {
