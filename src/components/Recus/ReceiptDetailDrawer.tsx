@@ -68,7 +68,7 @@ export const ReceiptDetailDrawer = ({
 
     const saveChanges = async () => {
       try {
-        await supabase
+        await (supabase as any)
           .from("recus")
           .update({
             enseigne: editedData.enseigne,
@@ -106,7 +106,7 @@ export const ReceiptDetailDrawer = ({
     if (!detail?.id) return;
     
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("recus")
         .update({ status: "traite" })
         .eq("id", detail.id);
@@ -128,7 +128,7 @@ export const ReceiptDetailDrawer = ({
     if (!detail?.id) return;
     
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("recus")
         .update({
           enseigne: editedData.enseigne,

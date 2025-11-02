@@ -39,14 +39,14 @@ export const UploadInstructionsDialog = ({
       }
 
       // Récupérer l'org_id de l'utilisateur
-      const { data: orgMember } = await supabase
+      const { data: orgMember } = await (supabase as any)
         .from('org_members')
         .select('org_id')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .single();
 
-      if (!orgMember?.org_id) {
+      if (!orgMember || !orgMember.org_id) {
         throw new Error("Organisation non trouvée");
       }
 

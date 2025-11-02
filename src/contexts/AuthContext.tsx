@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string, organisationId?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -48,8 +48,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+  const signUp = async (email: string, password: string, firstName: string, lastName: string, organisationId?: string) => {
+    const redirectUrl = `${window.location.origin}/dashboard`;
     
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -64,27 +64,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (!error && data.user) {
-      // Create profile
+      // Utiliser setTimeout pour éviter le deadlock avec onAuthStateChange
       setTimeout(async () => {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            user_id: data.user!.id,
-            first_name: firstName,
-            last_name: lastName,
-          });
+        try {
+          let orgId = organisationId;
 
-        if (!profileError) {
-          // Add to organization (using the org_id provided)
-          const ORG_ID = '7ee5091a-938f-47c4-bbd2-5a8f1449c49e';
-          await supabase
+          // Si pas d'organisation fournie, en créer une nouvelle
+          if (!orgId) {
+            const { data: newOrg, error: orgError } = await (supabase as any)
+              .from('orgs')
+              .insert({ name: `Organisation de ${firstName} ${lastName}` })
+              .select('id')
+              .single();
+
+            if (orgError || !newOrg) {
+              console.error('Erreur création organisation:', orgError);
+              return;
+            }
+            orgId = newOrg.id;
+          }
+
+          // Créer le profil
+          const { error: profileError } = await (supabase as any)
+            .from('profiles')
+            .insert({
+              user_id: data.user!.id,
+              first_name: firstName,
+              last_name: lastName,
+            });
+
+          if (profileError) {
+            console.error('Erreur création profil:', profileError);
+          }
+
+          // Ajouter l'utilisateur à l'organisation
+          const { error: memberError } = await (supabase as any)
             .from('org_members')
             .insert({
               user_id: data.user!.id,
-              org_id: ORG_ID,
+              org_id: orgId,
               role: 'viewer',
               is_active: true,
             });
+
+          if (memberError) {
+            console.error('Erreur ajout membre organisation:', memberError);
+          }
+        } catch (err) {
+          console.error('Erreur lors du signup:', err);
         }
       }, 0);
     }

@@ -14,6 +14,7 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [organisationId, setOrganisationId] = useState('');
   const [loading, setLoading] = useState(false);
   
   const { signIn, signUp, user } = useAuth();
@@ -21,7 +22,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, navigate]);
 
@@ -40,7 +41,7 @@ const Auth = () => {
           }
         } else {
           toast.success('Connexion réussie !');
-          navigate('/');
+          navigate('/dashboard');
         }
       } else {
         if (!firstName || !lastName) {
@@ -49,7 +50,7 @@ const Auth = () => {
           return;
         }
         
-        const { error } = await signUp(email, password, firstName, lastName);
+        const { error } = await signUp(email, password, firstName, lastName, organisationId || undefined);
         if (error) {
           if (error.message.includes('User already registered')) {
             toast.error('Cet email est déjà utilisé');
@@ -57,7 +58,8 @@ const Auth = () => {
             toast.error(error.message);
           }
         } else {
-          toast.success('Compte créé avec succès ! Vérifiez votre email.');
+          toast.success('Compte créé ! Redirection...');
+          setTimeout(() => navigate('/dashboard'), 1500);
         }
       }
     } catch (error: any) {
@@ -165,6 +167,19 @@ const Auth = () => {
                   />
                   <p className="text-xs text-muted-foreground">
                     Minimum 6 caractères
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="organisationId">ID Organisation (optionnel)</Label>
+                  <Input
+                    id="organisationId"
+                    type="text"
+                    placeholder="Laissez vide pour créer une nouvelle organisation"
+                    value={organisationId}
+                    onChange={(e) => setOrganisationId(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Si vide, une nouvelle organisation sera créée
                   </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
