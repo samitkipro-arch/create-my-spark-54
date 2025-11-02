@@ -21,9 +21,11 @@ type Client = {
   name: string;
   email: string | null;
   created_at: string;
-  vat_number?: string | null;
+  siret_siren?: string | null;
+  legal_representative?: string | null;
   address?: string | null;
   phone?: string | null;
+  notes?: string | null;
 };
 
 const Clients = () => {
@@ -35,7 +37,7 @@ const Clients = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("clients")
-        .select("id, name, email, created_at, vat_number, address, phone")
+        .select("id, name, email, created_at, siret_siren, legal_representative, address, phone, notes")
         .order("created_at", { ascending: false });
       
       if (error) throw error;
@@ -145,11 +147,14 @@ const Clients = () => {
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           client={selectedClient ? {
+            id: selectedClient.id,
             name: selectedClient.name,
             email: selectedClient.email || '',
-            vat_number: selectedClient.vat_number || undefined,
+            siret_siren: selectedClient.siret_siren || undefined,
+            legal_representative: selectedClient.legal_representative || undefined,
             address: selectedClient.address || undefined,
-            phone: selectedClient.phone || undefined
+            phone: selectedClient.phone || undefined,
+            notes: selectedClient.notes || undefined
           } : null}
         />
       </div>

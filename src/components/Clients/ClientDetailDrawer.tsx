@@ -6,18 +6,35 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface ClientDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   client: {
+    id?: string;
     name: string;
     email: string;
-    vat_number?: string;
+    siret_siren?: string;
+    legal_representative?: string;
     address?: string;
     phone?: string;
+    notes?: string;
   } | null;
+}
+
+type ClientFormData = {
+  name: string;
+  siret_siren: string;
+  legal_representative: string;
+  address: string;
+  email: string;
+  phone: string;
+  notes: string;
 }
 
 export const ClientDetailDrawer = ({
@@ -27,6 +44,44 @@ export const ClientDetailDrawer = ({
 }: ClientDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
+  const queryClient = useQueryClient();
+  
+  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<ClientFormData>({
+    defaultValues: {
+      name: client?.name || "",
+      siret_siren: client?.siret_siren || "",
+      legal_representative: client?.legal_representative || "",
+      address: client?.address || "",
+      email: client?.email || "",
+      phone: client?.phone || "",
+      notes: client?.notes || "",
+    }
+  });
+
+  useEffect(() => {
+    if (client) {
+      reset({
+        name: client.name || "",
+        siret_siren: client.siret_siren || "",
+        legal_representative: client.legal_representative || "",
+        address: client.address || "",
+        email: client.email || "",
+        phone: client.phone || "",
+        notes: client.notes || "",
+      });
+    } else {
+      reset({
+        name: "",
+        siret_siren: "",
+        legal_representative: "",
+        address: "",
+        email: "",
+        phone: "",
+        notes: "",
+      });
+    }
+    setIsEditing(!client);
+  }, [client, reset]);
 
   const initials = client?.name
     ? client.name
@@ -37,14 +92,63 @@ export const ClientDetailDrawer = ({
         .slice(0, 2)
     : "NC";
 
-  const handleSave = () => {
-    // TODO: Implement save logic
-    setIsEditing(false);
-    console.log("Saving client data...");
+  const onSubmit = async (data: ClientFormData) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
+
+      const { data: profile } = await (supabase as any)
+        .from("profiles")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!profile?.org_id) throw new Error("Organisation introuvable");
+
+      if (client?.id) {
+        const { error } = await (supabase as any)
+          .from("clients")
+          .update({
+            name: data.name,
+            siret_siren: data.siret_siren,
+            legal_representative: data.legal_representative,
+            address: data.address,
+            email: data.email,
+            phone: data.phone,
+            notes: data.notes,
+          })
+          .eq("id", client.id);
+
+        if (error) throw error;
+        toast.success("Client modifié avec succès");
+      } else {
+        const { error } = await (supabase as any)
+          .from("clients")
+          .insert({
+            org_id: profile.org_id,
+            name: data.name,
+            siret_siren: data.siret_siren,
+            legal_representative: data.legal_representative,
+            address: data.address,
+            email: data.email,
+            phone: data.phone,
+            notes: data.notes,
+          });
+
+        if (error) throw error;
+        toast.success("Client ajouté avec succès");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setIsEditing(false);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.message || "Une erreur est survenue");
+    }
   };
 
   const content = (
-    <>
+    <form onSubmit={handleSubmit(onSubmit)}>
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-lg border-b border-border p-6 md:p-8">
         <div className="flex items-start justify-between gap-4 md:gap-6">
           <div className="flex items-center gap-4 md:gap-6 flex-1">
@@ -62,9 +166,11 @@ export const ClientDetailDrawer = ({
               </p>
             </div>
           </div>
-          <Button size="default" className="shrink-0" onClick={() => setIsEditing(!isEditing)}>
-            {isEditing ? "Annuler" : "Modifier"}
-          </Button>
+          {client && (
+            <Button size="default" className="shrink-0" type="button" onClick={() => setIsEditing(!isEditing)}>
+              {isEditing ? "Annuler" : "Modifier"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -77,24 +183,24 @@ export const ClientDetailDrawer = ({
           <Input
             id="company-name"
             placeholder="Nom de l'entreprise"
-            defaultValue={client?.name}
             className="bg-background/50 h-11 md:h-12"
             disabled={!isEditing}
+            {...register("name")}
           />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* SIRET/SIREN */}
           <div className="space-y-3">
-            <Label htmlFor="vat-number" className="text-base md:text-lg font-semibold text-foreground">
+            <Label htmlFor="siret-siren" className="text-base md:text-lg font-semibold text-foreground">
               SIRET / SIREN (optionnel)
             </Label>
             <Input
-              id="vat-number"
+              id="siret-siren"
               placeholder="123 456 789 00010"
-              defaultValue={client?.vat_number}
               className="bg-background/50 h-11 md:h-12"
               disabled={!isEditing}
+              {...register("siret_siren")}
             />
           </div>
 
@@ -108,6 +214,7 @@ export const ClientDetailDrawer = ({
               placeholder="Prénom Nom"
               className="bg-background/50 h-11 md:h-12"
               disabled={!isEditing}
+              {...register("legal_representative")}
             />
           </div>
         </div>
@@ -120,9 +227,9 @@ export const ClientDetailDrawer = ({
           <Input
             id="address"
             placeholder="Numéro, rue, ville, code postal"
-            defaultValue={client?.address}
             className="bg-background/50 h-11 md:h-12"
             disabled={!isEditing}
+            {...register("address")}
           />
         </div>
 
@@ -136,9 +243,9 @@ export const ClientDetailDrawer = ({
               id="email"
               type="email"
               placeholder="contact@entreprise.fr"
-              defaultValue={client?.email}
               className="bg-background/50 h-11 md:h-12"
               disabled={!isEditing}
+              {...register("email")}
             />
           </div>
 
@@ -151,40 +258,53 @@ export const ClientDetailDrawer = ({
               id="phone"
               type="tel"
               placeholder="+33 1 23 45 67 89"
-              defaultValue={client?.phone}
               className="bg-background/50 h-11 md:h-12"
               disabled={!isEditing}
+              {...register("phone")}
             />
           </div>
         </div>
 
         {/* Commentaire */}
         <div className="space-y-3">
-          <Label htmlFor="comment" className="text-base md:text-lg font-semibold text-foreground">
+          <Label htmlFor="notes" className="text-base md:text-lg font-semibold text-foreground">
             Commentaire
           </Label>
           <Textarea
-            id="comment"
+            id="notes"
             placeholder="Notes internes sur ce client..."
             rows={4}
             className="bg-background/50 resize-none min-h-[100px]"
             disabled={!isEditing}
+            {...register("notes")}
           />
         </div>
 
         {/* Actions */}
         {isEditing && (
           <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
-            <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              type="button"
+              onClick={() => {
+                if (client) {
+                  setIsEditing(false);
+                  reset();
+                } else {
+                  onOpenChange(false);
+                }
+              }}
+            >
               Annuler
             </Button>
-            <Button className="flex-1" onClick={handleSave}>
-              Enregistrer
+            <Button className="flex-1" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </div>
         )}
       </div>
-    </>
+    </form>
   );
 
   if (isMobile) {

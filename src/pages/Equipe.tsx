@@ -23,8 +23,8 @@ type Member = {
   first_name: string;
   last_name: string;
   email: string | null;
-  role: string;
-  is_active: boolean;
+  phone: string | null;
+  notes: string | null;
   added_at: string;
 };
 
@@ -35,35 +35,12 @@ const Equipe = () => {
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("org_members")
-        .select("user_id, org_id, added_at")
-        .eq("is_active", true);
+        .select("user_id, first_name, last_name, email, phone, notes, added_at");
       
-      if (omError) throw omError;
-      if (!orgMembers || orgMembers.length === 0) return [];
-      
-      const userIds = orgMembers.map((om: any) => om.user_id);
-      
-      const { data: profiles, error: pError } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name, email")
-        .in("user_id", userIds);
-      
-      if (pError) throw pError;
-      
-      return (profiles || []).map((p: any) => {
-        const orgMember = orgMembers.find((om: any) => om.user_id === p.user_id);
-        return {
-          user_id: p.user_id,
-          first_name: p.first_name || '',
-          last_name: p.last_name || '',
-          email: p.email,
-          role: orgMember?.role || 'viewer',
-          is_active: true,
-          added_at: orgMember?.added_at || new Date().toISOString(),
-        };
-      }) as Member[];
+      if (error) throw error;
+      return (data || []) as Member[];
     },
   });
 
@@ -110,11 +87,6 @@ const Equipe = () => {
             members.map((member) => {
               const initials = `${member.first_name.charAt(0)}${member.last_name.charAt(0)}`.toUpperCase();
               const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Membre sans nom';
-              const roleLabels: Record<string, string> = {
-                owner: "Owner",
-                admin: "Admin",
-                viewer: "Viewer"
-              };
               
               return (
                 <Card 
@@ -130,18 +102,12 @@ const Equipe = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <div className="font-semibold text-sm">{fullName}</div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                            <span className="text-xs">Actif</span>
-                          </div>
+                        <div className="font-semibold text-sm">{fullName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {member.email || "—"}
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                          <Badge variant="secondary" className="text-xs h-5 w-fit">{roleLabels[member.role] || member.role}</Badge>
-                          <div className="text-xs text-muted-foreground">
-                            Ajouté le {new Date(member.added_at).toLocaleDateString("fr-FR")}
-                          </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          Ajouté le {new Date(member.added_at).toLocaleDateString("fr-FR")}
                         </div>
                       </div>
                     </div>
@@ -169,8 +135,7 @@ const Equipe = () => {
                   <TableRow>
                     <TableHead>Prénom & Nom</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Rôle</TableHead>
-                    <TableHead>Statut</TableHead>
+                    <TableHead>Téléphone</TableHead>
                     <TableHead>Ajouté le</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -178,11 +143,6 @@ const Equipe = () => {
                   {members.map((member) => {
                     const initials = `${member.first_name.charAt(0)}${member.last_name.charAt(0)}`.toUpperCase();
                     const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Membre sans nom';
-                    const roleLabels: Record<string, string> = {
-                      owner: "Owner",
-                      admin: "Admin",
-                      viewer: "Viewer"
-                    };
                     
                     return (
                       <TableRow 
@@ -201,15 +161,7 @@ const Equipe = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">{member.email || "—"}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{roleLabels[member.role] || member.role}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-500" />
-                            Actif
-                          </div>
-                        </TableCell>
+                        <TableCell className="text-muted-foreground">{member.phone || "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(member.added_at).toLocaleDateString("fr-FR")}</TableCell>
                       </TableRow>
                     );
@@ -224,9 +176,12 @@ const Equipe = () => {
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           member={selectedMember ? {
-            name: `${selectedMember.first_name} ${selectedMember.last_name}`.trim() || 'Membre sans nom',
-            role: selectedMember.role,
-            client: '',
+            user_id: selectedMember.user_id,
+            first_name: selectedMember.first_name,
+            last_name: selectedMember.last_name,
+            email: selectedMember.email || undefined,
+            phone: selectedMember.phone || undefined,
+            notes: selectedMember.notes || undefined,
             initials: `${selectedMember.first_name.charAt(0)}${selectedMember.last_name.charAt(0)}`.toUpperCase()
           } : null}
         />
