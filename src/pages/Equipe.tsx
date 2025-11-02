@@ -20,8 +20,8 @@ import { useQuery } from "@tanstack/react-query";
 
 type Member = {
   user_id: string;
-  first_name: string;
-  last_name: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
   notes: string | null;
@@ -85,8 +85,8 @@ const Equipe = () => {
             </div>
           ) : (
             members.map((member) => {
-              const initials = `${member.first_name.charAt(0)}${member.last_name.charAt(0)}`.toUpperCase();
-              const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Membre sans nom';
+              const initials = `${member.first_name?.charAt(0) || '?'}${member.last_name?.charAt(0) || '?'}`.toUpperCase();
+              const fullName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Membre sans nom';
               
               return (
                 <Card 
@@ -141,8 +141,8 @@ const Equipe = () => {
                 </TableHeader>
                 <TableBody>
                   {members.map((member) => {
-                    const initials = `${member.first_name.charAt(0)}${member.last_name.charAt(0)}`.toUpperCase();
-                    const fullName = `${member.first_name} ${member.last_name}`.trim() || 'Membre sans nom';
+                    const initials = `${member.first_name?.charAt(0) || '?'}${member.last_name?.charAt(0) || '?'}`.toUpperCase();
+                    const fullName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Membre sans nom';
                     
                     return (
                       <TableRow 
@@ -182,7 +182,7 @@ const Equipe = () => {
             email: selectedMember.email || undefined,
             phone: selectedMember.phone || undefined,
             notes: selectedMember.notes || undefined,
-            initials: `${selectedMember.first_name.charAt(0)}${selectedMember.last_name.charAt(0)}`.toUpperCase()
+            initials: `${selectedMember.first_name?.charAt(0) || '?'}${selectedMember.last_name?.charAt(0) || '?'}`.toUpperCase()
           } : null}
         />
       </div>
