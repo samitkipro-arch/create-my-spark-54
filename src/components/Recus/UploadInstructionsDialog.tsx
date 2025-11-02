@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -29,9 +30,32 @@ export const UploadInstructionsDialog = ({
     console.log("Uploading file:", file.name);
 
     try {
+      // Récupérer les informations de l'utilisateur et de l'organisation
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!user || !session?.access_token) {
+        throw new Error("Utilisateur non authentifié");
+      }
+
+      // Récupérer l'org_id de l'utilisateur
+      const { data: orgMember } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (!orgMember?.org_id) {
+        throw new Error("Organisation non trouvée");
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("timestamp", new Date().toISOString());
+      formData.append("org_id", orgMember.org_id);
+      formData.append("user_id", user.id);
+      formData.append("access_token", session.access_token);
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
