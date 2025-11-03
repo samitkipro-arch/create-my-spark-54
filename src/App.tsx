@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { supabase } from "@/integrations/supabase/client";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Recus from "./pages/Recus";
@@ -16,16 +15,6 @@ import Parametres from "./pages/Parametres";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
-
-// Handle OAuth redirect
-(async () => {
-  await supabase.auth.exchangeCodeForSession(window.location.href).catch(() => {});
-  
-  const { data } = await supabase.auth.getSession();
-  if (data.session) {
-    window.location.replace('/dashboard');
-  }
-})();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
