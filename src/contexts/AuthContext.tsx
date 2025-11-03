@@ -148,19 +148,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
-      // Clear local storage
+    } catch (e) {
+      console.error('Erreur lors de la déconnexion:', e);
+    } finally {
       localStorage.clear();
       sessionStorage.clear();
-      
-      // Navigate to auth page
-      navigate('/auth');
-    } catch (error: any) {
-      console.error('Erreur lors de la déconnexion:', error);
-      // Force navigation even if signOut fails
-      localStorage.clear();
-      sessionStorage.clear();
-      navigate('/auth');
+      window.location.href = '/auth';
     }
   };
 

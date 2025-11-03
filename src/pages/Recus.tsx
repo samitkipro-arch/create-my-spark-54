@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { reportError, withTimeout } from "@/lib/errorHandler";
+import { AlertCircle } from "lucide-react";
 
 type Receipt = {
   id: number;
@@ -84,13 +86,19 @@ const Recus = () => {
   const { data: clients = [], refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("clients")
-        .select("id, name")
-        .order("name", { ascending: true });
-      
-      if (error) throw error;
-      return (data || []) as Client[];
+      return withTimeout(
+        async () => {
+          const { data, error } = await (supabase as any)
+            .from("clients")
+            .select("id, name")
+            .order("name", { ascending: true })
+            .throwOnError();
+          
+          return (data || []) as Client[];
+        },
+        10000,
+        { context: "Recus", operation: "Chargement clients" }
+      );
     },
   });
 
@@ -98,26 +106,31 @@ const Recus = () => {
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any)
-        .from("org_members")
-        .select("user_id")
-      
-      if (omError) throw omError;
-      if (!orgMembers || orgMembers.length === 0) return [];
-      
-      const userIds = orgMembers.map((om: any) => om.user_id);
-      
-      const { data: profiles, error: pError } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      
-      if (pError) throw pError;
-      
-      return (profiles || []).map((p: any) => ({
-        id: p.user_id,
-        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
-      })) as Member[];
+      return withTimeout(
+        async () => {
+          const { data: orgMembers } = await (supabase as any)
+            .from("org_members")
+            .select("user_id")
+            .throwOnError();
+          
+          if (!orgMembers || orgMembers.length === 0) return [];
+          
+          const userIds = orgMembers.map((om: any) => om.user_id);
+          
+          const { data: profiles } = await (supabase as any)
+            .from("profiles")
+            .select("user_id, first_name, last_name")
+            .in("user_id", userIds)
+            .throwOnError();
+          
+          return (profiles || []).map((p: any) => ({
+            id: p.user_id,
+            name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
+          })) as Member[];
+        },
+        10000,
+        { context: "Recus", operation: "Chargement membres" }
+      );
     },
   });
 
@@ -125,68 +138,73 @@ const Recus = () => {
   const { data: receipts = [], isLoading: loading, error: queryError, refetch } = useQuery({
     queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from("recus")
-        .select("id, created_at, date_traitement, date_recu, numero_recu, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
+      return withTimeout(
+        async () => {
+          let query = (supabase as any)
+            .from("recus")
+            .select("id, created_at, date_traitement, date_recu, numero_recu, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
 
-      // Apply date range filter from global store (if set)
-      if (storedDateRange.from && storedDateRange.to) {
-        query = query.gte("date_traitement", storedDateRange.from);
-        query = query.lte("date_traitement", storedDateRange.to);
-      }
+          // Apply date range filter from global store (if set)
+          if (storedDateRange.from && storedDateRange.to) {
+            query = query.gte("date_traitement", storedDateRange.from);
+            query = query.lte("date_traitement", storedDateRange.to);
+          }
 
-      // Apply client filter from global store
-      if (storedClientId && storedClientId !== "all") {
-        query = query.eq("client_id", storedClientId);
-      }
+          // Apply client filter from global store
+          if (storedClientId && storedClientId !== "all") {
+            query = query.eq("client_id", storedClientId);
+          }
 
-      // Apply member filter from global store
-      if (storedMemberId && storedMemberId !== "all") {
-        query = query.eq("processed_by", storedMemberId);
-      }
+          // Apply member filter from global store
+          if (storedMemberId && storedMemberId !== "all") {
+            query = query.eq("processed_by", storedMemberId);
+          }
 
-      // Apply status filter (local)
-      if (selectedStatus && selectedStatus !== "all") {
-        query = query.eq("status", selectedStatus);
-      }
+          // Apply status filter (local)
+          if (selectedStatus && selectedStatus !== "all") {
+            query = query.eq("status", selectedStatus);
+          }
 
-      // Apply search filter (local) with escaped characters
-      if (debouncedQuery) {
-        const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
-        query = query.or(
-          `numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`
-        );
-      }
+          // Apply search filter (local) with escaped characters
+          if (debouncedQuery) {
+            const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
+            query = query.or(
+              `numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`
+            );
+          }
 
-      // Apply sorting
-      query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
-      query = query.order("created_at", { ascending: sortOrder === "asc" });
+          // Apply sorting
+          query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
+          query = query.order("created_at", { ascending: sortOrder === "asc" });
 
-      // Limit to 100 for performance
-      query = query.limit(100);
+          // Limit to 100 for performance
+          query = query.limit(100);
 
-      const { data, error } = await query;
-      if (error) throw error;
+          const { data } = await query.throwOnError();
 
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        created_at: r.created_at ?? null,
-        date_traitement: r.date_traitement ?? null,
-        date_recu: r.date_recu ?? null,
-        numero_recu: r.numero_recu ?? null,
-        enseigne: r.enseigne ?? null,
-        adresse: r.adresse ?? null,
-        ville: r.ville ?? null,
-        montant_ht: r.montant_ht ?? null,
-        montant_ttc: r.montant_ttc ?? null,
-        tva: r.tva ?? null,
-        moyen_paiement: r.moyen_paiement ?? null,
-        status: r.status ?? null,
-        client_id: r.client_id ?? null,
-        processed_by: r.processed_by ?? null,
-        category_id: r.category_id ?? null,
-        org_id: r.org_id ?? null,
-      })) as Receipt[];
+          return (data || []).map((r: any) => ({
+            id: r.id,
+            created_at: r.created_at ?? null,
+            date_traitement: r.date_traitement ?? null,
+            date_recu: r.date_recu ?? null,
+            numero_recu: r.numero_recu ?? null,
+            enseigne: r.enseigne ?? null,
+            adresse: r.adresse ?? null,
+            ville: r.ville ?? null,
+            montant_ht: r.montant_ht ?? null,
+            montant_ttc: r.montant_ttc ?? null,
+            tva: r.tva ?? null,
+            moyen_paiement: r.moyen_paiement ?? null,
+            status: r.status ?? null,
+            client_id: r.client_id ?? null,
+            processed_by: r.processed_by ?? null,
+            category_id: r.category_id ?? null,
+            org_id: r.org_id ?? null,
+          })) as Receipt[];
+        },
+        10000,
+        { context: "Recus", operation: "Chargement reçus" }
+      );
     },
   });
 
@@ -201,46 +219,53 @@ const Recus = () => {
       setDetailError(null);
 
       try {
-        // 1) lecture principale
-        const { data: r, error: e1 } = await (supabase as any)
-          .from("recus")
-          .select("*")
-          .eq("id", selectedId)
-          .single();
-        if (e1) throw e1;
+        await withTimeout(
+          async () => {
+            // 1) lecture principale
+            const { data: r } = await (supabase as any)
+              .from("recus")
+              .select("*")
+              .eq("id", selectedId)
+              .single()
+              .throwOnError();
 
-        const receiptData = r as any;
-        let processedByName: string | null = null;
-        let clientName: string | null = null;
+            const receiptData = r as any;
+            let processedByName: string | null = null;
+            let clientName: string | null = null;
 
-        // 2) profil (traité par)
-        if (receiptData?.processed_by) {
-          const { data: p } = await (supabase as any)
-            .from("profiles")
-            .select("first_name, last_name")
-            .eq("user_id", receiptData.processed_by)
-            .maybeSingle();
-          const profileData = p as any;
-          processedByName = profileData ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim() : null;
-        }
+            // 2) profil (traité par)
+            if (receiptData?.processed_by) {
+              const { data: p } = await (supabase as any)
+                .from("profiles")
+                .select("first_name, last_name")
+                .eq("user_id", receiptData.processed_by)
+                .maybeSingle();
+              const profileData = p as any;
+              processedByName = profileData ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim() : null;
+            }
 
-        // 3) client assigné
-        if (receiptData?.client_id) {
-          const { data: c } = await (supabase as any)
-            .from("clients")
-            .select("name")
-            .eq("id", receiptData.client_id)
-            .maybeSingle();
-          const clientData = c as any;
-          clientName = clientData?.name ?? null;
-        }
+            // 3) client assigné
+            if (receiptData?.client_id) {
+              const { data: c } = await (supabase as any)
+                .from("clients")
+                .select("name")
+                .eq("id", receiptData.client_id)
+                .maybeSingle();
+              const clientData = c as any;
+              clientName = clientData?.name ?? null;
+            }
 
-        setDetail({
-          ...receiptData,
-          _processedByName: processedByName,
-          _clientName: clientName,
-        });
+            setDetail({
+              ...receiptData,
+              _processedByName: processedByName,
+              _clientName: clientName,
+            });
+          },
+          10000,
+          { context: "Recus", operation: "Chargement détail reçu" }
+        );
       } catch (err: any) {
+        reportError(err, { context: "Recus", operation: "Chargement détail reçu" });
         setDetailError(err?.message || "Erreur lors du chargement du reçu");
         setDetail(null);
       } finally {
@@ -389,8 +414,14 @@ const Recus = () => {
                 Chargement…
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center py-16 text-sm text-destructive">
-                {error}
+              <div className="flex flex-col items-center justify-center py-16 gap-4">
+                <AlertCircle className="w-12 h-12 text-destructive" />
+                <p className="text-sm text-destructive text-center max-w-md">
+                  {error}
+                </p>
+                <Button onClick={() => refetch()} variant="outline">
+                  Réessayer
+                </Button>
               </div>
             ) : receipts.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">

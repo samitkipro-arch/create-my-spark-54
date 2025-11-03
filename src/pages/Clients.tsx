@@ -15,6 +15,8 @@ import {
 import { ClientDetailDrawer } from "@/components/Clients/ClientDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { withTimeout } from "@/lib/errorHandler";
+import { AlertCircle } from "lucide-react";
 
 type Client = {
   id: string;
@@ -32,19 +34,22 @@ const Clients = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: clients = [], isLoading, error } = useQuery({
+  const { data: clients = [], isLoading, error, refetch } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("clients")
-        .select("id, name, email, created_at, siret_siren, legal_representative, address, phone, notes")
-        .order("created_at", { ascending: false });
-      
-      if (error) {
-        console.error("[Clients] Erreur chargement:", error);
-        throw error;
-      }
-      return (data || []) as Client[];
+      return withTimeout(
+        async () => {
+          const { data } = await (supabase as any)
+            .from("clients")
+            .select("id, name, email, created_at, siret_siren, legal_representative, address, phone, notes")
+            .order("created_at", { ascending: false })
+            .throwOnError();
+          
+          return (data || []) as Client[];
+        },
+        10000,
+        { context: "Clients", operation: "Chargement clients" }
+      );
     },
   });
 
@@ -84,11 +89,12 @@ const Clients = () => {
               Chargement…
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center py-16 space-y-4">
-              <div className="text-sm text-destructive">
-                Erreur: {(error as any)?.message || "Impossible de charger les clients"}
-              </div>
-              <Button variant="outline" onClick={() => window.location.reload()}>
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <AlertCircle className="w-12 h-12 text-destructive" />
+              <p className="text-sm text-destructive text-center max-w-md">
+                {(error as any)?.message || "Impossible de charger les clients"}
+              </p>
+              <Button variant="outline" onClick={() => refetch()}>
                 Réessayer
               </Button>
             </div>
@@ -125,11 +131,12 @@ const Clients = () => {
                 Chargement…
               </div>
             ) : error ? (
-              <div className="flex flex-col items-center justify-center py-16 space-y-4">
-                <div className="text-sm text-destructive">
-                  Erreur: {(error as any)?.message || "Impossible de charger les clients"}
-                </div>
-                <Button variant="outline" onClick={() => window.location.reload()}>
+              <div className="flex flex-col items-center justify-center py-16 gap-4">
+                <AlertCircle className="w-12 h-12 text-destructive" />
+                <p className="text-sm text-destructive text-center max-w-md">
+                  {(error as any)?.message || "Impossible de charger les clients"}
+                </p>
+                <Button variant="outline" onClick={() => refetch()}>
                   Réessayer
                 </Button>
               </div>
