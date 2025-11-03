@@ -22,7 +22,7 @@ serve(async (req) => {
       throw new Error("No stripe-signature header found");
     }
 
-    const endpointSecret = "A_REMPLACER";
+    const endpointSecret = "whsec_0dpax3wYvY29KlgpTmoZSTNlXxJfBIxC";
     
     const event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
     logStep("Event verified with webhook secret", { type: event.type });
