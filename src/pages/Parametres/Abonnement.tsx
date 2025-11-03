@@ -19,16 +19,23 @@ const ParametresAbonnement = () => {
     try {
       setLoadingPlan(planName);
       
-      // Map plan name to Stripe lookup_key (test phase)
+      // Map plan name + interval to Stripe lookup_key
       let lookup_key: string | null = null;
       
       if (planName === "Essentiel") {
-        // For now, only monthly Essentiel is configured (test lookup_key)
         if (interval === "monthly") {
           lookup_key = "essentiel_monthly_test";
+        } else if (interval === "annual") {
+          lookup_key = "essentiel_yearly";
+        }
+      } else if (planName === "Avancé") {
+        if (interval === "monthly") {
+          lookup_key = "avance_monthly";
+        } else if (interval === "annual") {
+          lookup_key = "avance_yearly";
         }
       }
-      // Avancé and Expert plans are TODO
+      // Expert plan reste "Sur Devis" (géré plus bas)
       
       if (!lookup_key) {
         toast({
