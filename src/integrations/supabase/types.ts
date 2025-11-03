@@ -14,16 +14,309 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clients: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          id: string
+          legal_representative: string | null
+          name: string
+          notes: string | null
+          org_id: string
+          phone: string | null
+          siret_siren: string | null
+          updated_at: string | null
+          vat_number: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          legal_representative?: string | null
+          name: string
+          notes?: string | null
+          org_id: string
+          phone?: string | null
+          siret_siren?: string | null
+          updated_at?: string | null
+          vat_number?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          legal_representative?: string | null
+          name?: string
+          notes?: string | null
+          org_id?: string
+          phone?: string | null
+          siret_siren?: string | null
+          updated_at?: string | null
+          vat_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_members: {
+        Row: {
+          added_at: string | null
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+          notes: string | null
+          org_id: string
+          phone: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          notes?: string | null
+          org_id: string
+          phone?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          added_at?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          notes?: string | null
+          org_id?: string
+          phone?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orgs: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+          org_id: string | null
+          receipts_credits: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          org_id?: string | null
+          receipts_credits?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          org_id?: string | null
+          receipts_credits?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recus: {
+        Row: {
+          adresse: string | null
+          analysis_report_url: string | null
+          categorie: string | null
+          category_id: string | null
+          client_id: string | null
+          created_at: string
+          date: string | null
+          date_recu: string | null
+          date_traitement: string
+          enseigne: string | null
+          id: number
+          montant_ht: number | null
+          montant_ttc: number | null
+          moyen_paiement: string | null
+          numero_recu: string | null
+          org_id: string
+          processed_by: string
+          source: string | null
+          status: Database["public"]["Enums"]["receipt_status"]
+          tva: number | null
+          updated_at: string
+          user_id: string | null
+          ville: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          analysis_report_url?: string | null
+          categorie?: string | null
+          category_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          date?: string | null
+          date_recu?: string | null
+          date_traitement?: string
+          enseigne?: string | null
+          id?: number
+          montant_ht?: number | null
+          montant_ttc?: number | null
+          moyen_paiement?: string | null
+          numero_recu?: string | null
+          org_id: string
+          processed_by: string
+          source?: string | null
+          status?: Database["public"]["Enums"]["receipt_status"]
+          tva?: number | null
+          updated_at?: string
+          user_id?: string | null
+          ville?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          analysis_report_url?: string | null
+          categorie?: string | null
+          category_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          date?: string | null
+          date_recu?: string | null
+          date_traitement?: string
+          enseigne?: string | null
+          id?: number
+          montant_ht?: number | null
+          montant_ttc?: number | null
+          moyen_paiement?: string | null
+          numero_recu?: string | null
+          org_id?: string
+          processed_by?: string
+          source?: string | null
+          status?: Database["public"]["Enums"]["receipt_status"]
+          tva?: number | null
+          updated_at?: string
+          user_id?: string | null
+          ville?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recus_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          interval: string
+          org_id: string
+          plan: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          interval: string
+          org_id: string
+          plan: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          interval?: string
+          org_id?: string
+          plan?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      decrement_receipt_credits: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_receipt_credits: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
-      [_ in never]: never
+      receipt_status: "en_cours" | "traite" | "erreur"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +443,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      receipt_status: ["en_cours", "traite", "erreur"],
+    },
   },
 } as const
