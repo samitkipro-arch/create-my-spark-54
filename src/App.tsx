@@ -15,6 +15,7 @@ import Parametres from "./pages/Parametres";
 import ParametresCompte from "./pages/Parametres/Compte";
 import ParametresAbonnement from "./pages/Parametres/Abonnement";
 import ParametresAide from "./pages/Parametres/Aide";
+import Success from "./pages/Success";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/parametres/compte" element={<ProtectedRoute><ParametresCompte /></ProtectedRoute>} />
             <Route path="/parametres/abonnement" element={<ProtectedRoute><ParametresAbonnement /></ProtectedRoute>} />
             <Route path="/parametres/aide" element={<ProtectedRoute><ParametresAide /></ProtectedRoute>} />
+            <Route path="/success" element={<ProtectedRoute><Success /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

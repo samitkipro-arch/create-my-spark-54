@@ -88,7 +88,7 @@ serve(async (req) => {
       ],
       mode: "subscription",
       payment_method_types: ["card"],
-      success_url: `${origin}/parametres/abonnement?success=true`,
+      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/parametres/abonnement?canceled=true`,
       automatic_tax: { enabled: true },
       billing_address_collection: "required",
