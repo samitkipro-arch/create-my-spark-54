@@ -1,11 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { AuthContext } from '@/contexts/AuthContext';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const authContext = useContext(AuthContext);
   const navigate = useNavigate();
   const [isReady, setIsReady] = useState(false);
+
+  // Handle case where context is not available (hot reload edge case)
+  if (!authContext) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Initialisation...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { user, loading } = authContext;
 
   useEffect(() => {
     // Wait max 5 seconds for auth to be ready
