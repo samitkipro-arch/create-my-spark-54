@@ -4,10 +4,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const ParametresAbonnement = () => {
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("annual");
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleChoosePlan = async (planName: string, interval: "monthly" | "annual") => {
+    try {
+      setLoadingPlan(planName);
+      
+      // Map plan name and interval to lookup_key
+      const planPrefix = planName === "Essentiel" ? "essentiel" : "avance";
+      const intervalSuffix = interval === "monthly" ? "monthly" : "yearly";
+      const lookup_key = `${planPrefix}_${intervalSuffix}`;
+
+      const { data, error } = await supabase.functions.invoke("create-checkout-session", {
+        body: { lookup_key },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer la session de paiement. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   // Mock data - à remplacer par les vraies données Stripe plus tard
   const currentPlan = "Avancé" as "Essentiel" | "Avancé" | "Expert";
@@ -219,8 +254,24 @@ const ParametresAbonnement = () => {
                   <Button
                     className="w-full"
                     variant={plan.highlighted ? "default" : "outline"}
+                    onClick={() => {
+                      if (plan.name === "Expert") {
+                        // For Expert plan, open email or contact form
+                        window.location.href = "mailto:contact@finvisor.fr?subject=Demande plan Expert";
+                      } else {
+                        handleChoosePlan(plan.name, billingPeriod === "monthly" ? "monthly" : "annual");
+                      }
+                    }}
+                    disabled={loadingPlan === plan.name}
                   >
-                    {plan.cta}
+                    {loadingPlan === plan.name ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      plan.cta
+                    )}
                   </Button>
                 </CardContent>
               </Card>
