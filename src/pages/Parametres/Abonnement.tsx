@@ -230,7 +230,7 @@ const ParametresAbonnement = () => {
                         {billingPeriod === "annual" && (
                           <p className="text-sm text-green-500 font-medium mt-1">
                             (Économiser{" "}
-                            {((plan.priceMonthly - plan.priceAnnual) * 12).toFixed(0)}€ / 2 mois
+                            {((plan.priceMonthly - plan.priceAnnual!) * 12).toFixed(0)}€ / 2 mois
                             offert)
                           </p>
                         )}

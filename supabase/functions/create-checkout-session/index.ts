@@ -17,17 +17,22 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-  );
-
   try {
     logStep("Function started");
 
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
+    logStep("Stripe key verified");
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+    );
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header provided");
-    
+    logStep("Authorization header found");
+
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError) throw new Error(`Authentication error: ${userError.message}`);
@@ -40,21 +45,22 @@ serve(async (req) => {
     if (!lookup_key) throw new Error("lookup_key is required");
     logStep("Received lookup_key", { lookup_key });
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
-    });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Check if customer exists
+    // Get or create Stripe customer
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    let customerId;
+    let customerId: string;
+    
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
-      logStep("Found existing customer", { customerId });
+      logStep("Existing customer found", { customerId });
     } else {
-      logStep("No existing customer found, will create one in checkout");
+      const newCustomer = await stripe.customers.create({ email: user.email });
+      customerId = newCustomer.id;
+      logStep("New customer created", { customerId });
     }
 
-    // Get price by lookup key
+    // Get price by lookup_key
     const prices = await stripe.prices.list({
       lookup_keys: [lookup_key],
       limit: 1,
@@ -65,12 +71,11 @@ serve(async (req) => {
     }
 
     const priceId = prices.data[0].id;
-    logStep("Found price", { priceId, lookup_key });
+    logStep("Price found", { priceId, lookup_key });
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      customer_email: customerId ? undefined : user.email,
       line_items: [
         {
           price: priceId,
@@ -80,14 +85,13 @@ serve(async (req) => {
       mode: "subscription",
       success_url: `https://app.finvisor.fr/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://app.finvisor.fr/parametres/abonnement`,
-      metadata: {
-        user_id: user.id,
-      },
+      automatic_tax: { enabled: true },
+      billing_address_collection: "auto",
     });
 
     logStep("Checkout session created", { sessionId: session.id, url: session.url });
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    return new Response(JSON.stringify({ url: session.url, sessionId: session.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
