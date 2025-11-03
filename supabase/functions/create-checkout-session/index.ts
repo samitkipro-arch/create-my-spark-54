@@ -87,6 +87,7 @@ serve(async (req) => {
       cancel_url: `https://app.finvisor.fr/parametres/abonnement`,
       automatic_tax: { enabled: true },
       billing_address_collection: "auto",
+      customer_update: { address: "auto" },
     });
 
     logStep("Checkout session created", { sessionId: session.id, url: session.url });
