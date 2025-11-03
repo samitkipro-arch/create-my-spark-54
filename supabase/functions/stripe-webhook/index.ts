@@ -22,16 +22,10 @@ serve(async (req) => {
       throw new Error("No stripe-signature header found");
     }
 
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-    let event: Stripe.Event;
-
-    if (webhookSecret) {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-      logStep("Event verified with webhook secret", { type: event.type });
-    } else {
-      event = JSON.parse(body);
-      logStep("Event parsed without verification (no webhook secret)", { type: event.type });
-    }
+    const endpointSecret = "A_REMPLACER";
+    
+    const event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
+    logStep("Event verified with webhook secret", { type: event.type });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
