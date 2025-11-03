@@ -22,7 +22,8 @@ serve(async (req) => {
       throw new Error("No stripe-signature header found");
     }
 
-    const endpointSecret = "whsec_0dpax3wYvY29KlgpTmoZSTNlXxJfBIxC";
+    const endpointSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    if (!endpointSecret) throw new Error("STRIPE_WEBHOOK_SECRET is not set");
     
     const event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
     logStep("Event verified with webhook secret", { type: event.type });
