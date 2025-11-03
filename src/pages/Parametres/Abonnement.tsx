@@ -19,18 +19,18 @@ const ParametresAbonnement = () => {
     try {
       setLoadingPlan(planName);
       
-      // Map plan name to Stripe price_id
-      let price_id: string | null = null;
+      // Map plan name to Stripe lookup_key (test phase)
+      let lookup_key: string | null = null;
       
       if (planName === "Essentiel") {
-        // For now, only monthly Essentiel is configured (test price at 0.01€)
+        // For now, only monthly Essentiel is configured (test lookup_key)
         if (interval === "monthly") {
-          price_id = "price_1SPfFGD3myr3drgrxZBsTL2L";
+          lookup_key = "essentiel_monthly_test";
         }
       }
       // Avancé and Expert plans are TODO
       
-      if (!price_id) {
+      if (!lookup_key) {
         toast({
           title: "Plan non disponible",
           description: "Ce plan n'est pas encore configuré. Veuillez réessayer plus tard.",
@@ -40,7 +40,7 @@ const ParametresAbonnement = () => {
       }
 
       const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { price_id },
+        body: { lookup_key },
       });
 
       if (error) throw error;
