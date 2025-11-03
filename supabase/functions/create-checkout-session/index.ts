@@ -87,11 +87,13 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
-      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/parametres/abonnement`,
+      payment_method_types: ["card"],
+      success_url: `${origin}/parametres/abonnement?success=true`,
+      cancel_url: `${origin}/parametres/abonnement?canceled=true`,
       automatic_tax: { enabled: true },
-      billing_address_collection: "auto",
+      billing_address_collection: "required",
       customer_update: { address: "auto" },
+      allow_promotion_codes: true,
     });
 
     logStep("Checkout session created", { sessionId: session.id, url: session.url });

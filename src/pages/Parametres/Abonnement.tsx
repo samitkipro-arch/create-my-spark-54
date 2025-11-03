@@ -16,26 +16,17 @@ const ParametresAbonnement = () => {
   const { receiptsCredits } = useAuth();
 
   const handleChoosePlan = async (planName: string, interval: "monthly" | "annual") => {
+    setLoadingPlan(planName);
+    
     try {
-      setLoadingPlan(planName);
-      
       // Map plan name + interval to Stripe lookup_key
       let lookup_key: string | null = null;
       
       if (planName === "Essentiel") {
-        if (interval === "monthly") {
-          lookup_key = "essentiel_monthly_test";
-        } else if (interval === "annual") {
-          lookup_key = "essentiel_yearly";
-        }
+        lookup_key = interval === "monthly" ? "essentiel_monthly_test" : "essentiel_yearly";
       } else if (planName === "Avancé") {
-        if (interval === "monthly") {
-          lookup_key = "avance_monthly";
-        } else if (interval === "annual") {
-          lookup_key = "avance_yearly";
-        }
+        lookup_key = interval === "monthly" ? "avance_monthly" : "avance_yearly";
       }
-      // Expert plan reste "Sur Devis" (géré plus bas)
       
       if (!lookup_key) {
         toast({
@@ -46,46 +37,36 @@ const ParametresAbonnement = () => {
         return;
       }
 
-      console.log(`[Abonnement] Création checkout session pour ${planName} (${interval}), lookup_key: ${lookup_key}`);
+      console.log(`[Abonnement] Création checkout pour ${planName} (${interval}), lookup_key: ${lookup_key}`);
 
-      // Create timeout controller
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Temps de réponse dépassé (15s)")), 15000)
+      );
 
-      try {
-        const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-          body: { lookup_key },
-        });
+      const invokePromise = supabase.functions.invoke("create-checkout-session", {
+        body: { lookup_key },
+      });
 
-        clearTimeout(timeoutId);
+      const { data, error } = await Promise.race([invokePromise, timeoutPromise]) as any;
 
-        if (error) {
-          console.error("[Abonnement] Erreur de l'edge function:", error);
-          throw error;
-        }
-
-        if (!data?.url) {
-          console.error("[Abonnement] Pas d'URL de checkout dans la réponse:", data);
-          throw new Error("L'URL de paiement n'a pas été générée");
-        }
-
-        console.log("[Abonnement] Redirection vers Stripe:", data.url);
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
-      } catch (abortError: any) {
-        clearTimeout(timeoutId);
-        if (abortError.name === 'AbortError') {
-          throw new Error("Temps de réponse dépassé (15s). Vérifiez votre connexion.");
-        }
-        throw abortError;
+      if (error) {
+        console.error("[Abonnement] Erreur edge function:", error);
+        throw new Error(error.message || "Erreur lors de la création de la session");
       }
-    } catch (error: any) {
-      const errorMessage = error?.message || String(error);
-      console.error("[Abonnement] Erreur complète:", { error, message: errorMessage });
+
+      if (!data?.url) {
+        console.error("[Abonnement] Pas d'URL dans la réponse:", data);
+        throw new Error("URL de paiement non reçue");
+      }
+
+      console.log("[Abonnement] Redirection vers:", data.url);
+      window.location.href = data.url;
       
+    } catch (error: any) {
+      console.error("[Abonnement] Erreur:", error);
       toast({
-        title: "Erreur de paiement",
-        description: errorMessage || "Impossible de créer la session de paiement. Veuillez réessayer.",
+        title: "Erreur",
+        description: error?.message || "Impossible de créer la session de paiement",
         variant: "destructive",
       });
     } finally {
