@@ -14,6 +14,11 @@ const Success = () => {
   const sessionId = searchParams.get("session_id");
 
   useEffect(() => {
+    // Clean URL from session_id parameter
+    if (sessionId) {
+      window.history.replaceState(null, '', '/success');
+    }
+
     // Refresh credits after successful payment
     const refresh = async () => {
       try {
@@ -27,7 +32,7 @@ const Success = () => {
 
     // Wait a bit for webhook to process
     setTimeout(refresh, 2000);
-  }, [refreshCredits]);
+  }, [refreshCredits, sessionId]);
 
   return (
     <MainLayout>

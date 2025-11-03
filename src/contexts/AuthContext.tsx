@@ -146,14 +146,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      await supabase.auth.signOut({ scope: 'local' });
     } catch (e) {
       console.error('Erreur lors de la déconnexion:', e);
     } finally {
       localStorage.clear();
       sessionStorage.clear();
-      window.location.href = '/auth';
+      window.location.replace('/auth');
     }
   };
 

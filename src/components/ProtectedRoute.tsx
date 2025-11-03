@@ -1,18 +1,36 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth');
-    }
-  }, [user, loading, navigate]);
+    // Wait max 5 seconds for auth to be ready
+    const timeout = setTimeout(() => {
+      if (!loading) {
+        setIsReady(true);
+      }
+    }, 100);
 
-  if (loading) {
+    if (!loading) {
+      setIsReady(true);
+      clearTimeout(timeout);
+    }
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
+
+  useEffect(() => {
+    if (isReady && !user) {
+      const next = encodeURIComponent(window.location.pathname);
+      navigate(`/auth?next=${next}`);
+    }
+  }, [user, isReady, navigate]);
+
+  if (loading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
