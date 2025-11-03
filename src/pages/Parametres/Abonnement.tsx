@@ -7,11 +7,13 @@ import { Progress } from "@/components/ui/progress";
 import { Check, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ParametresAbonnement = () => {
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("annual");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const { toast } = useToast();
+  const { receiptsCredits } = useAuth();
 
   const handleChoosePlan = async (planName: string, interval: "monthly" | "annual") => {
     try {
@@ -45,10 +47,8 @@ const ParametresAbonnement = () => {
   };
 
   // Mock data - à remplacer par les vraies données Stripe plus tard
-  const currentPlan = "Avancé" as "Essentiel" | "Avancé" | "Expert";
-  const renewalDate = "15 décembre 2025";
-  const receiptsUsed = 342;
-  const receiptsLimit = currentPlan === "Essentiel" ? 750 : null;
+  const currentPlan = "Gratuit";
+  const renewalDate = null;
 
   const plans = [
     {
@@ -112,11 +112,11 @@ const ParametresAbonnement = () => {
               <div>
                 <h3 className="text-2xl font-bold text-foreground">{currentPlan}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Se renouvelle le : {renewalDate}
+                  {renewalDate ? `Se renouvelle le : ${renewalDate}` : "Plan gratuit"}
                 </p>
               </div>
-              <Button variant="outline" className="w-full">
-                Gérer mon abonnement
+              <Button variant="outline" className="w-full" disabled>
+                Aucun abonnement actif
               </Button>
             </CardContent>
           </Card>
@@ -124,36 +124,20 @@ const ParametresAbonnement = () => {
           {/* Usage Card */}
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-xl">Suivi d'utilisation</CardTitle>
+              <CardTitle className="text-xl">Crédits de reçus gratuits</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {currentPlan === "Essentiel" && receiptsLimit ? (
-                <>
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Reçus analysés ce mois-ci</span>
-                      <span className="font-semibold text-foreground">
-                        {receiptsUsed} / {receiptsLimit}
-                      </span>
-                    </div>
-                    <Progress value={(receiptsUsed / receiptsLimit) * 100} className="h-2" />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {receiptsLimit - receiptsUsed} reçus restants ce mois-ci
-                  </p>
-                </>
-              ) : currentPlan === "Avancé" ? (
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{receiptsUsed}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    reçus analysés ce mois-ci (illimité)
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-lg font-semibold text-foreground">Personnalisé</p>
-                  <p className="text-sm text-muted-foreground mt-1">Volume variable selon votre contrat</p>
-                </div>
+              <div>
+                <p className="text-4xl font-bold text-primary">{receiptsCredits} / 5</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Crédits restants pour analyser des reçus gratuitement
+                </p>
+              </div>
+              <Progress value={(receiptsCredits / 5) * 100} className="h-2" />
+              {receiptsCredits === 0 && (
+                <p className="text-sm text-destructive">
+                  Vous avez utilisé tous vos crédits gratuits. Souscrivez à un abonnement pour continuer.
+                </p>
               )}
             </CardContent>
           </Card>

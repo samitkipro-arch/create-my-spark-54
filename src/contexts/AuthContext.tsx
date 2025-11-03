@@ -10,6 +10,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, firstName: string, lastName: string, organisationId?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   loading: boolean;
+  receiptsCredits: number;
+  refreshCredits: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,23 +20,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [receiptsCredits, setReceiptsCredits] = useState(0);
   const navigate = useNavigate();
+
+  const refreshCredits = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('check-receipt-credits');
+      if (error) throw error;
+      if (data?.credits !== undefined) {
+        setReceiptsCredits(data.credits);
+      }
+    } catch (error) {
+      console.error('Error refreshing credits:', error);
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Refresh credits when user logs in
+        if (session?.user) {
+          await refreshCredits();
+        } else {
+          setReceiptsCredits(0);
+        }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // Refresh credits on initial load
+      if (session?.user) {
+        await refreshCredits();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -125,7 +152,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, signIn, signUp, signOut, loading }}>
+    <AuthContext.Provider value={{ user, session, signIn, signUp, signOut, loading, receiptsCredits, refreshCredits }}>
       {children}
     </AuthContext.Provider>
   );

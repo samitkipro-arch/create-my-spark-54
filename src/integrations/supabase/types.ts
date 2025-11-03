@@ -139,6 +139,7 @@ export type Database = {
           first_name: string | null
           last_name: string | null
           org_id: string | null
+          receipts_credits: number
           user_id: string
         }
         Insert: {
@@ -147,6 +148,7 @@ export type Database = {
           first_name?: string | null
           last_name?: string | null
           org_id?: string | null
+          receipts_credits?: number
           user_id: string
         }
         Update: {
@@ -155,6 +157,7 @@ export type Database = {
           first_name?: string | null
           last_name?: string | null
           org_id?: string | null
+          receipts_credits?: number
           user_id?: string
         }
         Relationships: [
@@ -306,7 +309,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      decrement_receipt_credits: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_receipt_credits: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
       receipt_status: "en_cours" | "traite" | "erreur"
