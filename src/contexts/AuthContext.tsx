@@ -124,14 +124,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.error('Erreur création profil:', profileError);
           }
 
-          // Ajouter l'utilisateur à l'organisation
+          // Ajouter l'utilisateur à l'organisation (sans is_active car la colonne n'existe pas)
           const { error: memberError } = await (supabase as any)
             .from('org_members')
             .insert({
               user_id: data.user!.id,
               org_id: orgId,
-              role: 'viewer',
-              is_active: true,
             });
 
           if (memberError) {
@@ -147,8 +145,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/auth');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      // Clear local storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Navigate to auth page
+      navigate('/auth');
+    } catch (error: any) {
+      console.error('Erreur lors de la déconnexion:', error);
+      // Force navigation even if signOut fails
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate('/auth');
+    }
   };
 
   return (

@@ -46,21 +46,46 @@ const ParametresAbonnement = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { lookup_key },
-      });
+      console.log(`[Abonnement] Création checkout session pour ${planName} (${interval}), lookup_key: ${lookup_key}`);
 
-      if (error) throw error;
+      // Create timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      if (data?.url) {
+      try {
+        const { data, error } = await supabase.functions.invoke("create-checkout-session", {
+          body: { lookup_key },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (error) {
+          console.error("[Abonnement] Erreur de l'edge function:", error);
+          throw error;
+        }
+
+        if (!data?.url) {
+          console.error("[Abonnement] Pas d'URL de checkout dans la réponse:", data);
+          throw new Error("L'URL de paiement n'a pas été générée");
+        }
+
+        console.log("[Abonnement] Redirection vers Stripe:", data.url);
         // Redirect to Stripe Checkout
         window.location.href = data.url;
+      } catch (abortError: any) {
+        clearTimeout(timeoutId);
+        if (abortError.name === 'AbortError') {
+          throw new Error("Temps de réponse dépassé (15s). Vérifiez votre connexion.");
+        }
+        throw abortError;
       }
-    } catch (error) {
-      console.error("Error creating checkout session:", error);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      console.error("[Abonnement] Erreur complète:", { error, message: errorMessage });
+      
       toast({
-        title: "Erreur",
-        description: "Impossible de créer la session de paiement. Veuillez réessayer.",
+        title: "Erreur de paiement",
+        description: errorMessage || "Impossible de créer la session de paiement. Veuillez réessayer.",
         variant: "destructive",
       });
     } finally {

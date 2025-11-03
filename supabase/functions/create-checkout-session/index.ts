@@ -73,6 +73,10 @@ serve(async (req) => {
     const priceId = prices.data[0].id;
     logStep("Price found", { priceId, lookup_key });
 
+    // Get origin from request for dynamic URLs
+    const origin = req.headers.get("origin") || "https://app.finvisor.fr";
+    logStep("Using origin", { origin });
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -83,8 +87,8 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
-      success_url: `https://app.finvisor.fr/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://app.finvisor.fr/parametres/abonnement`,
+      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/parametres/abonnement`,
       automatic_tax: { enabled: true },
       billing_address_collection: "auto",
       customer_update: { address: "auto" },

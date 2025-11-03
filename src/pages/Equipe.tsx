@@ -32,14 +32,17 @@ const Equipe = () => {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: members = [], isLoading } = useQuery({
+  const { data: members = [], isLoading, error } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("org_members")
         .select("user_id, first_name, last_name, email, phone, notes, added_at");
       
-      if (error) throw error;
+      if (error) {
+        console.error("[Équipe] Erreur chargement:", error);
+        throw error;
+      }
       return (data || []) as Member[];
     },
   });
@@ -78,6 +81,15 @@ const Equipe = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               Chargement…
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-16 space-y-4">
+              <div className="text-sm text-destructive">
+                Erreur: {(error as any)?.message || "Impossible de charger l'équipe"}
+              </div>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Réessayer
+              </Button>
             </div>
           ) : members.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -124,6 +136,15 @@ const Equipe = () => {
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 Chargement…
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                <div className="text-sm text-destructive">
+                  Erreur: {(error as any)?.message || "Impossible de charger l'équipe"}
+                </div>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Réessayer
+                </Button>
               </div>
             ) : members.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">

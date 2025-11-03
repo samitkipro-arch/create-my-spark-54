@@ -32,7 +32,7 @@ const Clients = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: clients = [], isLoading } = useQuery({
+  const { data: clients = [], isLoading, error } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -40,7 +40,10 @@ const Clients = () => {
         .select("id, name, email, created_at, siret_siren, legal_representative, address, phone, notes")
         .order("created_at", { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error("[Clients] Erreur chargement:", error);
+        throw error;
+      }
       return (data || []) as Client[];
     },
   });
@@ -80,6 +83,15 @@ const Clients = () => {
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               Chargement…
             </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-16 space-y-4">
+              <div className="text-sm text-destructive">
+                Erreur: {(error as any)?.message || "Impossible de charger les clients"}
+              </div>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Réessayer
+              </Button>
+            </div>
           ) : clients.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               Aucun client n'a encore été ajouté
@@ -111,6 +123,15 @@ const Clients = () => {
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 Chargement…
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                <div className="text-sm text-destructive">
+                  Erreur: {(error as any)?.message || "Impossible de charger les clients"}
+                </div>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Réessayer
+                </Button>
               </div>
             ) : clients.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
