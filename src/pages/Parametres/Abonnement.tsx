@@ -1,11 +1,231 @@
+import { useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Check } from "lucide-react";
 
 const ParametresAbonnement = () => {
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("annual");
+
+  // Mock data - à remplacer par les vraies données Stripe plus tard
+  const currentPlan = "Avancé" as "Essentiel" | "Avancé" | "Expert";
+  const renewalDate = "15 décembre 2025";
+  const receiptsUsed = 342;
+  const receiptsLimit = currentPlan === "Essentiel" ? 750 : null;
+
+  const plans = [
+    {
+      name: "Essentiel",
+      description: "Parfait pour les petits cabinets comptables.",
+      priceMonthly: 49,
+      priceAnnual: 40,
+      features: [
+        "Jusqu'à 750 reçus analysés/mois",
+        "Jusqu'à 10 collaborateurs",
+        "Gestion client illimitée",
+        "Exports illimités (PDF, Excel, Sheets...)",
+        "Notifications en temps réel",
+        "Support standard",
+      ],
+      cta: "Choisir ce plan",
+      highlighted: false,
+    },
+    {
+      name: "Avancé",
+      description: "Idéal pour les équipes comptables en forte croissance.",
+      priceMonthly: 99,
+      priceAnnual: 74,
+      features: [
+        "Volume de reçus illimité",
+        "Collaborateurs illimités",
+        "Support prioritaire 24/7",
+        "Portail de visualisation clients",
+      ],
+      cta: "Choisir ce plan",
+      highlighted: true,
+    },
+    {
+      name: "Expert",
+      description: "Idéal pour les grands cabinets comptables.",
+      priceMonthly: null,
+      priceAnnual: null,
+      features: [
+        "Volume de reçus flexible",
+        "Support dédié + CSM",
+        "Intégrations avancées & API dédiées",
+        "SSO (Google/Microsoft)",
+        "Formation complète des équipes",
+      ],
+      cta: "Être recontacté",
+      highlighted: false,
+    },
+  ];
+
   return (
     <MainLayout>
-      <div className="p-4 md:p-8 space-y-6 md:space-y-8">
-        <div className="flex items-center justify-center h-64 text-muted-foreground text-sm md:text-base">
-          Section à venir
+      <div className="p-4 md:p-8 space-y-8">
+        {/* Top Section: Current Plan & Usage */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          {/* Current Plan Card */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-xl">Votre plan actuel</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="text-2xl font-bold text-foreground">{currentPlan}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Se renouvelle le : {renewalDate}
+                </p>
+              </div>
+              <Button variant="outline" className="w-full">
+                Gérer mon abonnement
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Usage Card */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-xl">Suivi d'utilisation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {currentPlan === "Essentiel" && receiptsLimit ? (
+                <>
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">Reçus analysés ce mois-ci</span>
+                      <span className="font-semibold text-foreground">
+                        {receiptsUsed} / {receiptsLimit}
+                      </span>
+                    </div>
+                    <Progress value={(receiptsUsed / receiptsLimit) * 100} className="h-2" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {receiptsLimit - receiptsUsed} reçus restants ce mois-ci
+                  </p>
+                </>
+              ) : currentPlan === "Avancé" ? (
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{receiptsUsed}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    reçus analysés ce mois-ci (illimité)
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-lg font-semibold text-foreground">Personnalisé</p>
+                  <p className="text-sm text-muted-foreground mt-1">Volume variable selon votre contrat</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Plans Section */}
+        <div className="space-y-6">
+          <div className="text-center space-y-4">
+            <h2 className="text-3xl font-bold text-foreground">
+              Choisissez Le Plan Qui Vous Correspond Le Mieux
+            </h2>
+
+            {/* Billing Period Toggle */}
+            <div className="inline-flex items-center gap-3 bg-muted/50 p-1 rounded-lg">
+              <Button
+                variant={billingPeriod === "monthly" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setBillingPeriod("monthly")}
+                className="rounded-md"
+              >
+                Mensuel
+              </Button>
+              <Button
+                variant={billingPeriod === "annual" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setBillingPeriod("annual")}
+                className="rounded-md"
+              >
+                Annuel
+              </Button>
+            </div>
+          </div>
+
+          {/* Plans Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {plans.map((plan) => (
+              <Card
+                key={plan.name}
+                className={`relative ${
+                  plan.highlighted
+                    ? "border-primary border-2 shadow-lg"
+                    : "border-border"
+                }`}
+              >
+                {plan.highlighted && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-primary text-primary-foreground px-4 py-1">
+                      Offre la plus avantageuse
+                    </Badge>
+                  </div>
+                )}
+
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                  <CardDescription className="text-muted-foreground">
+                    {plan.description}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  {/* Price */}
+                  <div>
+                    {plan.priceMonthly ? (
+                      <>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-bold text-foreground">
+                            {billingPeriod === "monthly"
+                              ? plan.priceMonthly
+                              : plan.priceAnnual}
+                            €
+                          </span>
+                          <span className="text-muted-foreground">/mois</span>
+                        </div>
+                        {billingPeriod === "annual" && (
+                          <p className="text-sm text-green-500 font-medium mt-1">
+                            (Économiser{" "}
+                            {((plan.priceMonthly - plan.priceAnnual) * 12).toFixed(0)}€ / 2 mois
+                            offert)
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-4xl font-bold text-foreground">Sur Devis</div>
+                    )}
+                  </div>
+
+                  {/* Features */}
+                  <ul className="space-y-3">
+                    {plan.features.map((feature, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <Check className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* CTA Button */}
+                  <Button
+                    className="w-full"
+                    variant={plan.highlighted ? "default" : "outline"}
+                  >
+                    {plan.cta}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     </MainLayout>
