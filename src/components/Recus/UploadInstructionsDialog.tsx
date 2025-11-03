@@ -38,20 +38,40 @@ export const UploadInstructionsDialog = ({
         throw new Error("Utilisateur non authentifié");
       }
 
-      // Récupérer l'org_id de l'utilisateur
-      const { data: orgMember } = await (supabase as any)
+      // Récupérer l'org_id de l'utilisateur depuis org_members ou profiles
+      let orgId = null;
+      
+      // Essayer d'abord org_members
+      const { data: orgMember, error: orgMemberError } = await (supabase as any)
         .from('org_members')
         .select('org_id')
         .eq('user_id', user.id)
         .single();
 
-      if (!orgMember || !orgMember.org_id) {
-        throw new Error("Organisation non trouvée");
+      if (orgMember?.org_id) {
+        orgId = orgMember.org_id;
+      } else {
+        // Fallback sur profiles si org_members n'a rien
+        const { data: profile, error: profileError } = await (supabase as any)
+          .from('profiles')
+          .select('org_id')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (profile?.org_id) {
+          orgId = profile.org_id;
+        }
+      }
+
+      if (!orgId) {
+        console.error('Erreur org_members:', orgMemberError);
+        throw new Error("Organisation non trouvée. Veuillez contacter le support.");
       }
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("org_id", orgMember.org_id);
+      formData.append("org_id", orgId);
+      formData.append("user_id", user.id);
       // client_id est optionnel et peut être ajouté plus tard
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
@@ -63,6 +83,7 @@ export const UploadInstructionsDialog = ({
       });
 
       if (response.ok) {
+        console.log("✅ Fichier envoyé avec succès au webhook n8n");
         toast({
           title: "Reçu envoyé pour analyse",
           description: "Le reçu est en cours d'analyse. Vous serez notifié une fois le traitement terminé.",
@@ -71,7 +92,9 @@ export const UploadInstructionsDialog = ({
         onOpenChange(false);
         setFileInputKey(prev => prev + 1);
       } else {
-        throw new Error("Erreur lors de l'envoi");
+        const errorText = await response.text();
+        console.error("❌ Erreur webhook n8n:", response.status, errorText);
+        throw new Error(`Erreur ${response.status}: ${errorText || "Erreur lors de l'envoi"}`);
       }
     } catch (error) {
       console.error("Erreur lors de l'upload:", error);
