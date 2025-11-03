@@ -1,13 +1,1 @@
 project_id = "grvktogwmdirpcjhbqyc"
-
-[functions.create-checkout-session]
-verify_jwt = true
-
-[functions.stripe-webhook]
-verify_jwt = false
-
-[functions.check-receipt-credits]
-verify_jwt = true
-
-[functions.decrement-receipt-credits]
-verify_jwt = true

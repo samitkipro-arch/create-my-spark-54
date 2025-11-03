@@ -17,8 +17,6 @@ import {
 import { TeamMemberDetailDrawer } from "@/components/Equipe/TeamMemberDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { withTimeout } from "@/lib/errorHandler";
-import { AlertCircle } from "lucide-react";
 
 type Member = {
   user_id: string;
@@ -34,21 +32,15 @@ const Equipe = () => {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: members = [], isLoading, error, refetch } = useQuery({
+  const { data: members = [], isLoading } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
-      return withTimeout(
-        async () => {
-          const { data } = await (supabase as any)
-            .from("org_members")
-            .select("user_id, first_name, last_name, email, phone, notes, added_at")
-            .throwOnError();
-          
-          return (data || []) as Member[];
-        },
-        10000,
-        { context: "Équipe", operation: "Chargement membres" }
-      );
+      const { data, error } = await (supabase as any)
+        .from("org_members")
+        .select("user_id, first_name, last_name, email, phone, notes, added_at");
+      
+      if (error) throw error;
+      return (data || []) as Member[];
     },
   });
 
@@ -86,16 +78,6 @@ const Equipe = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               Chargement…
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <AlertCircle className="w-12 h-12 text-destructive" />
-              <p className="text-sm text-destructive text-center max-w-md">
-                {(error as any)?.message || "Impossible de charger l'équipe"}
-              </p>
-              <Button variant="outline" onClick={() => refetch()}>
-                Réessayer
-              </Button>
             </div>
           ) : members.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -142,16 +124,6 @@ const Equipe = () => {
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 Chargement…
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-4">
-                <AlertCircle className="w-12 h-12 text-destructive" />
-                <p className="text-sm text-destructive text-center max-w-md">
-                  {(error as any)?.message || "Impossible de charger l'équipe"}
-                </p>
-                <Button variant="outline" onClick={() => refetch()}>
-                  Réessayer
-                </Button>
               </div>
             ) : members.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">

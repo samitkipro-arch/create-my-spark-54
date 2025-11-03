@@ -10,60 +10,31 @@ interface AuthContextType {
   signUp: (email: string, password: string, firstName: string, lastName: string, organisationId?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   loading: boolean;
-  receiptsCredits: number;
-  refreshCredits: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export { AuthContext };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [receiptsCredits, setReceiptsCredits] = useState(0);
   const navigate = useNavigate();
-
-  const refreshCredits = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-receipt-credits');
-      if (error) throw error;
-      if (data?.credits !== undefined) {
-        setReceiptsCredits(data.credits);
-      }
-    } catch (error) {
-      console.error('Error refreshing credits:', error);
-    }
-  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
-        
-        // Refresh credits when user logs in
-        if (session?.user) {
-          await refreshCredits();
-        } else {
-          setReceiptsCredits(0);
-        }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      
-      // Refresh credits on initial load
-      if (session?.user) {
-        await refreshCredits();
-      }
     });
 
     return () => subscription.unsubscribe();
@@ -126,12 +97,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.error('Erreur création profil:', profileError);
           }
 
-          // Ajouter l'utilisateur à l'organisation (sans is_active car la colonne n'existe pas)
+          // Ajouter l'utilisateur à l'organisation
           const { error: memberError } = await (supabase as any)
             .from('org_members')
             .insert({
               user_id: data.user!.id,
               org_id: orgId,
+              role: 'viewer',
+              is_active: true,
             });
 
           if (memberError) {
@@ -147,19 +120,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut({ scope: 'local' });
-    } catch (e) {
-      console.error('Erreur lors de la déconnexion:', e);
-    } finally {
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.replace('/auth');
-    }
+    await supabase.auth.signOut();
+    navigate('/auth');
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, signIn, signUp, signOut, loading, receiptsCredits, refreshCredits }}>
+    <AuthContext.Provider value={{ user, session, signIn, signUp, signOut, loading }}>
       {children}
     </AuthContext.Provider>
   );

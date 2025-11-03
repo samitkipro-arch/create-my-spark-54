@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -22,7 +21,6 @@ export const UploadInstructionsDialog = ({
 }: UploadInstructionsDialogProps) => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const { receiptsCredits, refreshCredits } = useAuth();
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -38,13 +36,6 @@ export const UploadInstructionsDialog = ({
       
       if (!user || !session?.access_token) {
         throw new Error("Utilisateur non authentifié");
-      }
-
-      // Vérifier et décrémenter les crédits
-      const { data: creditData, error: creditError } = await supabase.functions.invoke('decrement-receipt-credits');
-      
-      if (creditError || !creditData?.success) {
-        throw new Error(creditData?.error || "Vous n'avez plus de crédits de reçus disponibles");
       }
 
       // Récupérer l'org_id de l'utilisateur
@@ -72,12 +63,9 @@ export const UploadInstructionsDialog = ({
       });
 
       if (response.ok) {
-        // Rafraîchir les crédits après succès
-        await refreshCredits();
-        
         toast({
           title: "Reçu envoyé pour analyse",
-          description: `Le reçu est en cours d'analyse. Crédits restants : ${creditData.credits}`,
+          description: "Le reçu est en cours d'analyse. Vous serez notifié une fois le traitement terminé.",
         });
         
         onOpenChange(false);
@@ -85,11 +73,11 @@ export const UploadInstructionsDialog = ({
       } else {
         throw new Error("Erreur lors de l'envoi");
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erreur lors de l'upload:", error);
       toast({
         title: "Erreur d'envoi",
-        description: error?.message || "Impossible d'envoyer le reçu. Veuillez réessayer.",
+        description: "Impossible d'envoyer le reçu. Veuillez réessayer.",
         variant: "destructive",
       });
     } finally {
@@ -157,14 +145,9 @@ export const UploadInstructionsDialog = ({
         </div>
 
         <div className="space-y-3 md:space-y-6 pt-2 md:pt-4 border-t border-border">
-          <div className="text-center space-y-2">
-            <p className="text-[10px] md:text-sm text-muted-foreground">
-              Choisissez un fichier (image ou PDF) de votre reçu à analyser.
-            </p>
-            <p className="text-sm md:text-base font-semibold text-primary">
-              Crédits restants : {receiptsCredits} / 5
-            </p>
-          </div>
+          <p className="text-center text-[10px] md:text-sm text-muted-foreground">
+            Choisissez un fichier (image ou PDF) de votre reçu à analyser.
+          </p>
 
           <div className="space-y-2 md:space-y-4">
             <div className="relative">
@@ -173,29 +156,20 @@ export const UploadInstructionsDialog = ({
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf"
                 onChange={handleFileSelect}
-                disabled={isUploading || receiptsCredits <= 0}
+                disabled={isUploading}
                 className="hidden"
                 id="receipt-upload"
               />
               <Button
                 asChild
-                disabled={isUploading || receiptsCredits <= 0}
+                disabled={isUploading}
                 className="w-full bg-white text-black hover:bg-white/90 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-8 md:h-11"
               >
                 <label htmlFor="receipt-upload" className="cursor-pointer">
-                  {receiptsCredits <= 0 
-                    ? "Aucun crédit disponible" 
-                    : isUploading 
-                    ? "Envoi en cours..." 
-                    : "Choisir un fichier"}
+                  {isUploading ? "Envoi en cours..." : "Choisir un fichier"}
                 </label>
               </Button>
             </div>
-            {receiptsCredits <= 0 && (
-              <p className="text-xs md:text-sm text-destructive text-center">
-                Vous n'avez plus de crédits. Veuillez souscrire à un abonnement pour continuer.
-              </p>
-            )}
           </div>
         </div>
       </DialogContent>

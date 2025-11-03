@@ -14,7 +14,6 @@ import { fr } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
-import { withTimeout } from "@/lib/errorHandler";
 const Dashboard = () => {
   // Global filters store
   const {
@@ -61,19 +60,12 @@ const Dashboard = () => {
   } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      return withTimeout(
-        async () => {
-          const { data } = await (supabase as any)
-            .from("clients")
-            .select("id, name")
-            .order("name")
-            .throwOnError();
-          
-          return (data || []) as any[];
-        },
-        10000,
-        { context: "Dashboard", operation: "Chargement clients" }
-      );
+      const {
+        data,
+        error
+      } = await (supabase as any).from("clients").select("id, name").order("name");
+      if (error) throw error;
+      return (data || []) as any[];
     }
   });
 
@@ -83,32 +75,22 @@ const Dashboard = () => {
   } = useQuery({
     queryKey: ["org-members-with-profiles"],
     queryFn: async () => {
-      return withTimeout(
-        async () => {
-          const { data: orgMembers } = await (supabase as any)
-            .from("org_members")
-            .select("user_id")
-            .throwOnError();
-          
-          if (!orgMembers || orgMembers.length === 0) return [];
-          
-          const userIds = orgMembers.map((om: any) => om.user_id);
-          
-          const { data: profiles } = await (supabase as any)
-            .from("profiles")
-            .select("user_id, first_name, last_name")
-            .in("user_id", userIds)
-            .order("first_name")
-            .throwOnError();
-          
-          return (profiles || []).map((p: any) => ({
-            id: p.user_id,
-            name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom'
-          })) as any[];
-        },
-        10000,
-        { context: "Dashboard", operation: "Chargement membres" }
-      );
+      const {
+        data: orgMembers,
+        error: omError
+      } = await (supabase as any).from("org_members").select("user_id").eq("is_active", true);
+      if (omError) throw omError;
+      if (!orgMembers || orgMembers.length === 0) return [];
+      const userIds = orgMembers.map((om: any) => om.user_id);
+      const {
+        data: profiles,
+        error: pError
+      } = await (supabase as any).from("profiles").select("user_id, first_name, last_name").in("user_id", userIds).order("first_name");
+      if (pError) throw pError;
+      return (profiles || []).map((p: any) => ({
+        id: p.user_id,
+        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom'
+      })) as any[];
     }
   });
 
@@ -120,34 +102,37 @@ const Dashboard = () => {
     queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
-      
-      return withTimeout(
-        async () => {
-          let query = (supabase as any)
-            .from("recus")
-            .select("*")
-            .gte("date_traitement", dateRange.from.toISOString())
-            .lte("date_traitement", dateRange.to.toISOString());
-          
-          if (storedClientId && storedClientId !== "all") {
-            query = query.eq("client_id", storedClientId);
-          }
-          if (storedMemberId && storedMemberId !== "all") {
-            query = query.eq("processed_by", storedMemberId);
-          }
-          
-          const { data } = await query.throwOnError();
-          return (data || []) as any[];
-        },
-        10000,
-        { context: "Dashboard", operation: "Chargement reçus" }
-      );
+      let query = (supabase as any).from("recus").select("*").gte("date_traitement", dateRange.from.toISOString()).lte("date_traitement", dateRange.to.toISOString());
+      if (storedClientId && storedClientId !== "all") {
+        query = query.eq("client_id", storedClientId);
+      }
+      if (storedMemberId && storedMemberId !== "all") {
+        query = query.eq("processed_by", storedMemberId);
+      }
+      const {
+        data,
+        error
+      } = await query;
+      if (error) throw error;
+      return (data || []) as any[];
     },
     enabled: !!dateRange?.from && !!dateRange?.to
   });
 
-  // Categories table doesn't exist - we'll use categorie field from receipts directly
-  const categories: any[] = [];
+  // Load categories for Top categories section
+  const {
+    data: categories = []
+  } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const {
+        data,
+        error
+      } = await (supabase as any).from("categories").select("id, label").order("label");
+      if (error) throw error;
+      return (data || []) as any[];
+    }
+  });
 
   // Calculate KPIs
   const kpis = {
@@ -226,7 +211,7 @@ const Dashboard = () => {
     }
   };
 
-  // Prepare Top categories data from categorie field (text)
+  // Prepare Top categories data
   const topCategories = () => {
     const categoryMap = new Map<string, {
       label: string;
@@ -236,8 +221,10 @@ const Dashboard = () => {
       tva: number;
     }>();
     receipts.forEach(r => {
-      const categoryLabel = r.categorie || "Sans catégorie";
-      const existing = categoryMap.get(categoryLabel) || {
+      if (!r.category_id) return;
+      const category = categories.find(c => c.id === r.category_id);
+      const categoryLabel = category?.label || r.category_label || "Sans catégorie";
+      const existing = categoryMap.get(r.category_id) || {
         label: categoryLabel,
         count: 0,
         ttc: 0,
@@ -248,7 +235,7 @@ const Dashboard = () => {
       existing.ttc += Number(r.montant_ttc) || 0;
       existing.ht += Number(r.montant_ht) || (Number(r.montant_ttc) || 0) - (Number(r.tva) || 0);
       existing.tva += Number(r.tva) || 0;
-      categoryMap.set(categoryLabel, existing);
+      categoryMap.set(r.category_id, existing);
     });
     return Array.from(categoryMap.values()).sort((a, b) => b.ttc - a.ttc).slice(0, 10);
   };
