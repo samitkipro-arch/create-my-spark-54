@@ -41,9 +41,9 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    const { lookup_key } = await req.json();
-    if (!lookup_key) throw new Error("lookup_key is required");
-    logStep("Received lookup_key", { lookup_key });
+    const { price_id } = await req.json();
+    if (!price_id) throw new Error("price_id is required");
+    logStep("Received price_id", { price_id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -60,25 +60,14 @@ serve(async (req) => {
       logStep("New customer created", { customerId });
     }
 
-    // Get price by lookup_key
-    const prices = await stripe.prices.list({
-      lookup_keys: [lookup_key],
-      limit: 1,
-    });
-
-    if (prices.data.length === 0) {
-      throw new Error(`No price found for lookup_key: ${lookup_key}`);
-    }
-
-    const priceId = prices.data[0].id;
-    logStep("Price found", { priceId, lookup_key });
+    logStep("Using price_id directly", { price_id });
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [
         {
-          price: priceId,
+          price: price_id,
           quantity: 1,
         },
       ],
