@@ -97,7 +97,8 @@ const Dashboard = () => {
   // Load receipts data with filters
   const {
     data: receipts = [],
-    isLoading: isLoadingReceipts
+    isLoading: isLoadingReceipts,
+    refetch: refetchReceipts
   } = useQuery({
     queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId],
     queryFn: async () => {
@@ -119,20 +120,27 @@ const Dashboard = () => {
     enabled: !!dateRange?.from && !!dateRange?.to
   });
 
-  // Load categories for Top categories section
-  const {
-    data: categories = []
-  } = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const {
-        data,
-        error
-      } = await (supabase as any).from("categories").select("id, label").order("label");
-      if (error) throw error;
-      return (data || []) as any[];
-    }
-  });
+  // Setup realtime listener for receipts
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-receipts-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recus'
+        },
+        () => {
+          refetchReceipts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetchReceipts]);
 
   // Calculate KPIs
   const kpis = {
@@ -221,10 +229,8 @@ const Dashboard = () => {
       tva: number;
     }>();
     receipts.forEach(r => {
-      if (!r.category_id) return;
-      const category = categories.find(c => c.id === r.category_id);
-      const categoryLabel = category?.label || r.category_label || "Sans catégorie";
-      const existing = categoryMap.get(r.category_id) || {
+      const categoryLabel = r.categorie || "Sans catégorie";
+      const existing = categoryMap.get(categoryLabel) || {
         label: categoryLabel,
         count: 0,
         ttc: 0,
@@ -235,7 +241,7 @@ const Dashboard = () => {
       existing.ttc += Number(r.montant_ttc) || 0;
       existing.ht += Number(r.montant_ht) || (Number(r.montant_ttc) || 0) - (Number(r.tva) || 0);
       existing.tva += Number(r.tva) || 0;
-      categoryMap.set(r.category_id, existing);
+      categoryMap.set(categoryLabel, existing);
     });
     return Array.from(categoryMap.values()).sort((a, b) => b.ttc - a.ttc).slice(0, 10);
   };

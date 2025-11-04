@@ -46,6 +46,7 @@ export const ReceiptDetailDrawer = ({
     ville: "",
     adresse: "",
     moyen_paiement: "",
+    categorie: "",
     client_id: "",
     processed_by: ""
   });
@@ -61,6 +62,7 @@ export const ReceiptDetailDrawer = ({
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
+        categorie: detail?.categorie ?? "",
         client_id: detail?.client_id ?? "",
         processed_by: detail?.processed_by ?? ""
       });
@@ -80,6 +82,7 @@ export const ReceiptDetailDrawer = ({
           ville: editedData.ville,
           adresse: editedData.adresse,
           moyen_paiement: editedData.moyen_paiement,
+          categorie: editedData.categorie,
           client_id: editedData.client_id || null,
           processed_by: editedData.processed_by || null
         }).eq("id", detail.id);
@@ -127,6 +130,7 @@ export const ReceiptDetailDrawer = ({
         ville: editedData.ville,
         adresse: editedData.adresse,
         moyen_paiement: editedData.moyen_paiement,
+        categorie: editedData.categorie,
         client_id: editedData.client_id || null,
         processed_by: editedData.processed_by || null
       }).eq("id", detail.id);
@@ -150,6 +154,7 @@ export const ReceiptDetailDrawer = ({
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
+        categorie: detail?.categorie ?? "",
         client_id: detail?.client_id ?? "",
         processed_by: detail?.processed_by ?? ""
       });
@@ -259,6 +264,14 @@ export const ReceiptDetailDrawer = ({
               </div>
 
               <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+                <span className="text-xs md:text-sm text-muted-foreground">Catégorie :</span>
+                <input type="text" value={editedData.categorie || "—"} onChange={e => isEditing && setEditedData({
+                ...editedData,
+                categorie: e.target.value
+              })} onFocus={() => setActiveField('categorie')} onBlur={() => setActiveField(null)} disabled={!isEditing} className={cn("text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right", isEditing ? "cursor-text border-b border-primary" : "cursor-default")} />
+              </div>
+
+              <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                 <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
                 {isEditing ? <Select value={editedData.processed_by || "none"} onValueChange={value => setEditedData({
                 ...editedData,
@@ -338,6 +351,7 @@ export const ReceiptDetailDrawer = ({
               {activeField === 'moyen_paiement' && 'Paiement'}
               {activeField === 'ville' && 'Ville'}
               {activeField === 'adresse' && 'Adresse'}
+              {activeField === 'categorie' && 'Catégorie'}
               {activeField === 'enseigne' && 'Enseigne'}
               {activeField === 'numero_recu' && 'N° reçu'}
             </div>
@@ -455,6 +469,14 @@ export const ReceiptDetailDrawer = ({
               ...editedData,
               adresse: e.target.value
             })} onFocus={() => setActiveField('adresse')} onBlur={() => setActiveField(null)} disabled={!isEditing} className={cn("text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right", isEditing ? "cursor-text border-b border-primary" : "cursor-default")} />
+             </div>
+
+             <div className="flex justify-between items-center py-1.5 border-b border-border">
+               <span className="text-xs text-muted-foreground">Catégorie :</span>
+               <input type="text" value={editedData.categorie || "—"} onChange={e => isEditing && setEditedData({
+              ...editedData,
+              categorie: e.target.value
+            })} onFocus={() => setActiveField('categorie')} onBlur={() => setActiveField(null)} disabled={!isEditing} className={cn("text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right", isEditing ? "cursor-text border-b border-primary" : "cursor-default")} />
              </div>
 
             <div className="flex justify-between items-center py-1.5 border-b border-border">
