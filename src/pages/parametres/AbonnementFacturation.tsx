@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -67,7 +69,54 @@ const pricingTiers: PricingTier[] = [
 ];
 
 const AbonnementFacturation = () => {
+  const { user } = useAuth();
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("monthly");
+  const [receiptsCount, setReceiptsCount] = useState(0);
+  const [currentPlan, setCurrentPlan] = useState<string>("Avancé");
+
+  useEffect(() => {
+    if (user) {
+      loadReceiptsCount();
+      loadCurrentPlan();
+    }
+  }, [user]);
+
+  const loadReceiptsCount = async () => {
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count, error } = await supabase
+        .from("recus")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", startOfMonth.toISOString());
+
+      if (error) throw error;
+      setReceiptsCount(count || 0);
+    } catch (error) {
+      console.error("Erreur lors du chargement du nombre de reçus:", error);
+    }
+  };
+
+  const loadCurrentPlan = async () => {
+    // For now, we'll use the hardcoded "Avancé" as current plan
+    // In a real scenario, this would come from the subscriptions table
+    setCurrentPlan("Avancé");
+  };
+
+  const getUsageText = () => {
+    switch (currentPlan) {
+      case "Essentiel":
+        return `Vous avez traité ${receiptsCount} reçus ce mois-ci sur 750 inclus.`;
+      case "Avancé":
+        return "Reçus illimités — vous pouvez traiter autant de reçus que vous le souhaitez.";
+      case "Expert":
+        return "Reçus illimités — accompagnement personnalisé.";
+      default:
+        return "";
+    }
+  };
 
   const getYearlySavings = (tier: PricingTier) => {
     const monthlyCost = tier.monthlyPrice * 12;
@@ -81,12 +130,12 @@ const AbonnementFacturation = () => {
     <MainLayout>
       <div className="p-4 md:p-8 space-y-8 animate-fade-in-up">
         <div className="text-center space-y-4">
-          <Badge variant="outline" className="mb-2">
-            Tarifs
-          </Badge>
           <h1 className="text-3xl md:text-4xl font-bold">
-            Choisissez Le Plan Qui Vous Correspond Le Mieux
+            Suivi de votre utilisation ce mois-ci
           </h1>
+          <p className="text-lg text-muted-foreground">
+            {getUsageText()}
+          </p>
         </div>
 
         {/* Billing Toggle */}

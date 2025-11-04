@@ -23,6 +23,7 @@ const CompteProfile = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState<Profile>({
     first_name: "",
     last_name: "",
@@ -75,6 +76,7 @@ const CompteProfile = () => {
 
       if (error) throw error;
 
+      setIsEditing(false);
       toast({
         title: "Profil mis à jour",
         description: "Vos informations ont été mises à jour avec succès.",
@@ -151,9 +153,15 @@ const CompteProfile = () => {
               </CardTitle>
               <p className="text-sm text-muted-foreground">{profile.email}</p>
             </div>
-            <Button onClick={handleUpdateProfile} disabled={loading}>
-              Modifier
-            </Button>
+            {!isEditing ? (
+              <Button onClick={() => setIsEditing(true)}>
+                Modifier
+              </Button>
+            ) : (
+              <Button onClick={handleUpdateProfile} disabled={loading}>
+                Enregistrer
+              </Button>
+            )}
           </CardHeader>
 
           <CardContent className="space-y-6">
@@ -167,6 +175,7 @@ const CompteProfile = () => {
                   onChange={(e) =>
                     setProfile({ ...profile, first_name: e.target.value })
                   }
+                  disabled={!isEditing}
                 />
               </div>
 
@@ -179,6 +188,7 @@ const CompteProfile = () => {
                   onChange={(e) =>
                     setProfile({ ...profile, last_name: e.target.value })
                   }
+                  disabled={!isEditing}
                 />
               </div>
             </div>
@@ -206,7 +216,7 @@ const CompteProfile = () => {
                   onChange={(e) =>
                     setProfile({ ...profile, phone: e.target.value })
                   }
-                  disabled
+                  disabled={!isEditing}
                 />
               </div>
             </div>
@@ -221,6 +231,7 @@ const CompteProfile = () => {
                     placeholder="Your First Name"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={!isEditing}
                   />
                   <Button
                     type="button"
