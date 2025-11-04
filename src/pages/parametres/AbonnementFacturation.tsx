@@ -178,12 +178,6 @@ const AbonnementFacturation = () => {
                   </div>
                 )}
 
-                {tier.current && (
-                  <Badge className="absolute top-4 right-4 bg-green-600">
-                    Plan actuel
-                  </Badge>
-                )}
-
                 <CardHeader className={cn(tier.highlighted && "pt-8")}>
                   <div className="space-y-2">
                     <CardTitle className="text-2xl">{tier.name}</CardTitle>
