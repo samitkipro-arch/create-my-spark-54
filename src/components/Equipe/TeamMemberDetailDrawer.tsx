@@ -104,11 +104,14 @@ export const TeamMemberDetailDrawer = ({
 
         if (!profile?.org_id) throw new Error("Organisation introuvable");
 
+        // Générer un nouveau UUID pour le membre
+        const newMemberId = crypto.randomUUID();
+
         const { error } = await (supabase as any)
           .from("org_members")
           .insert({
             org_id: profile.org_id,
-            user_id: user.id,
+            user_id: newMemberId,
             first_name: data.first_name,
             last_name: data.last_name,
             email: data.email,
