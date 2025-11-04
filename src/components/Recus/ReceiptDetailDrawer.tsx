@@ -81,7 +81,7 @@ export const ReceiptDetailDrawer = ({
         body: JSON.stringify({ receipt_id: detail.id }),
       });
 
-      const contentType = res.headers.get("content-type") | | "";
+      const contentType = res.headers.get("content-type") || "";
       // n8n peut renvoyer directement du HTML (text/html) OU { html: "..." }
       const payload = contentType.includes("application/json") ? await res.json() : await res.text();
       const html = typeof payload === "string" ? payload : (payload?.html ?? "");
