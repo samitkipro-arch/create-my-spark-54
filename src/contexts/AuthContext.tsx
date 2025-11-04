@@ -37,8 +37,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkSubscription = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('check-subscription');
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Ne pas appeler la fonction si pas de session valide
+      if (!session?.access_token) {
+        console.log('No valid session for subscription check');
+        setSubscription({
+          subscribed: false,
+          plan: null,
+          interval: null,
+          subscription_end: null,
+        });
+        return;
+      }
+
+      console.log('Checking subscription with valid session');
+      const { data, error } = await supabase.functions.invoke('check-subscription', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        console.error('Error checking subscription:', error);
+        setSubscription({
+          subscribed: false,
+          plan: null,
+          interval: null,
+          subscription_end: null,
+        });
+        return;
+      }
+
       if (data) {
         setSubscription({
           subscribed: data.subscribed || false,
@@ -48,7 +78,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
       }
     } catch (error) {
-      console.error('Error checking subscription:', error);
+      console.error('Error in checkSubscription:', error);
+      setSubscription({
+        subscribed: false,
+        plan: null,
+        interval: null,
+        subscription_end: null,
+      });
     }
   };
 
