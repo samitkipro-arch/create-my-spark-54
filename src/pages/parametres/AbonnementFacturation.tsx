@@ -129,15 +129,6 @@ const AbonnementFacturation = () => {
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-8 animate-fade-in-up">
-        <div className="text-center space-y-4">
-          <h1 className="text-3xl md:text-4xl font-bold">
-            Suivi de votre utilisation ce mois-ci
-          </h1>
-          <p className="text-lg text-muted-foreground">
-            {getUsageText()}
-          </p>
-        </div>
-
         {/* Billing Toggle */}
         <div className="flex justify-center items-center gap-4">
           <button
