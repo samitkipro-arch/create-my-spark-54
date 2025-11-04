@@ -262,23 +262,21 @@ const AbonnementFacturation = () => {
                     ))}
                   </ul>
                   {isCurrentPlan ? (
-                    <div className="space-y-2">
-                      <Button 
-                        className="w-full" 
-                        variant="secondary"
-                        size="lg"
-                        onClick={handleManageSubscription}
-                      >
-                        Gérer mon abonnement
-                      </Button>
-                    </div>
+                    <Button 
+                      className="w-full" 
+                      variant="secondary"
+                      size="lg"
+                      disabled
+                    >
+                      Votre plan actuel
+                    </Button>
                   ) : (
                     <Button 
                       className="w-full" 
                       variant={tier.highlighted ? "default" : "outline"}
                       size="lg"
                       onClick={() => tier.isEnterprise ? null : handleCheckout(tier.name)}
-                      disabled={checkoutLoading === tier.name}
+                      disabled={checkoutLoading === tier.name || tier.isEnterprise}
                     >
                       {checkoutLoading === tier.name ? (
                         <>
