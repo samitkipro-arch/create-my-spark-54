@@ -25,7 +25,7 @@ const pricingTiers: PricingTier[] = [
   {
     name: "Essentiel",
     monthlyPrice: 49,
-    yearlyPrice: 40,
+    yearlyPrice: 40.83,
     description: "Pour les cabinets qui veulent démarrer simplement.",
     features: [
       "Jusqu'à 750 reçus analysés.",
@@ -39,7 +39,7 @@ const pricingTiers: PricingTier[] = [
   {
     name: "Avancé",
     monthlyPrice: 99,
-    yearlyPrice: 74,
+    yearlyPrice: 74.25,
     description: "Pour les cabinets qui traitent un volume élevé de reçus chaque mois.",
     highlighted: true,
     current: true,
@@ -181,9 +181,9 @@ const AbonnementFacturation = () => {
                 <CardHeader className={cn(tier.highlighted && "pt-8")}>
                   <div className="space-y-2">
                     <CardTitle className="text-2xl">{tier.name}</CardTitle>
-                    {!tier.isEnterprise ? (
+                     {!tier.isEnterprise ? (
                       <div className="flex items-baseline gap-1">
-                        <span className="text-5xl font-bold">{price}€</span>
+                        <span className="text-5xl font-bold">{Math.round(price)}€</span>
                         <span className="text-muted-foreground">{interval}</span>
                       </div>
                     ) : (
