@@ -34,43 +34,74 @@ export const ReceiptDetailDrawer = ({
   const [isEditing, setIsEditing] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
 
-  // NEW: état pour l'ouverture du rapport
+  // --- Ouverture du rapport (état)
   const [reportLoading, setReportLoading] = useState(false);
 
-  // NEW: fonction qui appelle le webhook n8n et ouvre le rapport dans un nouvel onglet
+  // https://samilzr.app.n8n.cloud/webhook-test/test-simple
+  // Idéalement via env : VITE_N8N_REPORT_URL
+  const N8N_REPORT_URL =
+  (import.meta as any).env?.VITE_N8N_REPORT_URL ??
+  "https://samilzr.app.n8n.cloud/webhook-test/test-simple";
+
+  // --- Ouvrir le rapport : ouvre l’onglet AVANT le fetch (anti pop-up block)
   const openReport = async () => {
     if (!detail?.id) return;
+
+    // 1) ouvrir synchronement
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Autorisez les pop-ups pour afficher le rapport.");
+      return;
+    }
+
+    // petit écran de chargement
+    win.document.write(`<!doctype html>
+<html lang="fr"><head><meta charset="utf-8" />
+<title>Rapport d’analyse…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif}
+  .wrap{max-width:760px;margin:56px auto;padding:0 20px;text-align:center}
+  .spinner{width:32px;height:32px;border-radius:50%;border:3px solid #ddd;border-top-color:#111;animation:spin .8s linear infinite;margin:16px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style></head>
+<body><div class="wrap">
+  <h1>Génération du rapport…</h1>
+  <div class="spinner"></div>
+  <p>Merci de patienter.</p>
+</div></body></html>`);
+
     setReportLoading(true);
+
     try {
-      const res = await fetch("https://samilzr.app.n8n.cloud/webhook-test/test-simple", {
+      // 2) appeler n8n (PROD)
+      const res = await fetch(N8N_REPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receipt_id: detail.id }),
       });
 
-      // On attend un JSON { html: "<document html prêt>" }
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      // n8n peut renvoyer directement du HTML (text/html) OU { html: "..." }
+      const payload = contentType.includes("application/json") ? await res.json() : await res.text();
+      const html = typeof payload === "string" ? payload : (payload?.html ?? "");
 
-      if (data?.html) {
-        const w = window.open("", "_blank");
-        if (w) {
-          w.document.write(data.html);
-          w.document.close();
-        } else {
-          alert("Autorisez les pop-ups pour afficher le rapport.");
-        }
-      } else {
-        alert("Rapport indisponible pour le moment.");
-      }
+      if (!html) throw new Error("Rapport vide");
+
+      // 3) injecter le HTML final dans l’onglet
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
     } catch (e) {
       console.error("Erreur ouverture rapport:", e);
+      win.close();
       alert("Erreur lors de l’ouverture du rapport.");
     } finally {
       setReportLoading(false);
     }
   };
 
-  // States pour les champs éditables
+  // --- States pour édition
   const [editedData, setEditedData] = useState({
     enseigne: "",
     numero_recu: "",
@@ -84,7 +115,7 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // Synchroniser editedData avec detail
+  // Sync editedData avec detail
   useEffect(() => {
     if (detail) {
       setEditedData({
@@ -102,7 +133,7 @@ export const ReceiptDetailDrawer = ({
     }
   }, [detail]);
 
-  // Sauvegarde auto en temps réel pendant l'édition
+  // Sauvegarde auto pendant l’édition
   useEffect(() => {
     if (!isEditing || !detail?.id) return;
     const saveChanges = async () => {
@@ -302,7 +333,7 @@ export const ReceiptDetailDrawer = ({
                 </Card>
               </div>
 
-              {/* Informations détaillées */}
+              {/* Infos détaillées */}
               <div className="space-y-2 md:space-y-4">
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Date de traitement :</span>
@@ -428,7 +459,7 @@ export const ReceiptDetailDrawer = ({
                 </div>
               </div>
 
-              {/* Boutons d'action */}
+              {/* Boutons */}
               <div className="space-y-3 pt-4 md:pt-6">
                 {isEditing ? (
                   <div className="flex gap-3">
@@ -450,7 +481,6 @@ export const ReceiptDetailDrawer = ({
                       </Button>
                     </div>
 
-                    {/* NEW: bouton rapport branché au webhook */}
                     <Button
                       variant="outline"
                       className="w-full h-10"
@@ -467,7 +497,7 @@ export const ReceiptDetailDrawer = ({
         ) : null}
       </div>
 
-      {/* Indicateur visuel d'édition active */}
+      {/* Indicateur visuel d’édition */}
       {isEditing && activeField && (
         <div className="w-20 md:w-24 bg-[hsl(222,47%,30%)] flex items-center justify-center border-l-4 border-[hsl(222,47%,20%)] shadow-lg">
           <div className="text-center px-2">
@@ -605,7 +635,7 @@ export const ReceiptDetailDrawer = ({
             </Card>
           </div>
 
-          {/* Informations détaillées */}
+          {/* Infos détaillées */}
           <div className="space-y-2">
             <div className="flex justify-between items-center py-1.5 border-b border-border">
               <span className="text-xs text-muted-foreground">Date de traitement :</span>
@@ -755,7 +785,6 @@ export const ReceiptDetailDrawer = ({
               </Button>
             </div>
 
-            {/* NEW: bouton rapport (mobile) */}
             <Button
               variant="outline"
               className="w-full h-10"
@@ -770,7 +799,7 @@ export const ReceiptDetailDrawer = ({
     </>
   ) : null;
 
-  // Mobile: Drawer flottant
+  // Mobile: Drawer
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
@@ -789,7 +818,7 @@ export const ReceiptDetailDrawer = ({
     );
   }
 
-  // Desktop: Sheet à droite
+  // Desktop: Sheet
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="h-full w-full max-w-[520px] bg-card border-l border-border overflow-y-auto p-0">
