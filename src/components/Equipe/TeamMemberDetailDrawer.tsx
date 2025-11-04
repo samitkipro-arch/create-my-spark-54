@@ -104,14 +104,10 @@ export const TeamMemberDetailDrawer = ({
 
         if (!profile?.org_id) throw new Error("Organisation introuvable");
 
-        // Générer un nouveau UUID pour le membre
-        const newMemberId = crypto.randomUUID();
-
         const { error } = await (supabase as any)
           .from("org_members")
           .insert({
             org_id: profile.org_id,
-            user_id: newMemberId,
             first_name: data.first_name,
             last_name: data.last_name,
             email: data.email,
@@ -127,7 +123,8 @@ export const TeamMemberDetailDrawer = ({
       setIsEditing(false);
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || "Une erreur est survenue");
+      console.error("Erreur lors de l'ajout du membre:", error);
+      toast.error("Impossible d'ajouter le membre");
     }
   };
 
