@@ -1,209 +1,3 @@
-import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Drawer, DrawerContent } from "@/components/ui/drawer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { X } from "lucide-react";
-import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
-import { formatCurrency, formatDateTime } from "@/lib/formatters";
-
-interface ReceiptDetailDrawerProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  detail: any;
-  loading: boolean;
-  error: string | null;
-  clients?: Array<{ id: string; name: string }>;
-  members?: Array<{ id: string; name: string }>;
-}
-
-export const ReceiptDetailDrawer = ({
-  open,
-  onOpenChange,
-  detail,
-  loading,
-  error,
-  clients = [],
-  members = [],
-}: ReceiptDetailDrawerProps) => {
-  const isMobile = useIsMobile();
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [activeField, setActiveField] = useState<string | null>(null);
-
-  // --- Ouverture du rapport (état)
-  const [reportLoading, setReportLoading] = useState(false);
-
-  // https://samilzr.app.n8n.cloud/webhook-test/test-simple
-  // Idéalement via env : VITE_N8N_REPORT_URL
-  const N8N_REPORT_URL =
-  (import.meta as any).env?.VITE_N8N_REPORT_URL ??
-  "https://samilzr.app.n8n.cloud/webhook-test/test-simple";
-
-  // --- Ouvrir le rapport : ouvre l’onglet AVANT le fetch (anti pop-up block)
-  const openReport = async () => {
-    if (!detail?.id) return;
-
-    // 1) ouvrir synchronement
-    const win = window.open("", "_blank");
-    if (!win) {
-      alert("Autorisez les pop-ups pour afficher le rapport.");
-      return;
-    }
-
-    // petit écran de chargement
-    win.document.write(`<!doctype html>
-<html lang="fr"><head><meta charset="utf-8" />
-<title>Rapport d’analyse…</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif}
-  .wrap{max-width:760px;margin:56px auto;padding:0 20px;text-align:center}
-  .spinner{width:32px;height:32px;border-radius:50%;border:3px solid #ddd;border-top-color:#111;animation:spin .8s linear infinite;margin:16px auto}
-  @keyframes spin{to{transform:rotate(360deg)}}
-</style></head>
-<body><div class="wrap">
-  <h1>Génération du rapport…</h1>
-  <div class="spinner"></div>
-  <p>Merci de patienter.</p>
-</div></body></html>`);
-
-    setReportLoading(true);
-
-    try {
-      // 2) appeler n8n (PROD)
-      const res = await fetch(N8N_REPORT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receipt_id: detail.id }),
-      });
-
-      const contentType = res.headers.get("content-type") || "";
-      // n8n peut renvoyer directement du HTML (text/html) OU { html: "..." }
-      const payload = contentType.includes("application/json") ? await res.json() : await res.text();
-      const html = typeof payload === "string" ? payload : (payload?.html ?? "");
-
-      if (!html) throw new Error("Rapport vide");
-
-      // 3) injecter le HTML final dans l’onglet
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-    } catch (e) {
-      console.error("Erreur ouverture rapport:", e);
-      win.close();
-      alert("Erreur lors de l’ouverture du rapport.");
-    } finally {
-      setReportLoading(false);
-    }
-  };
-
-  // --- States pour édition
-  const [editedData, setEditedData] = useState({
-    enseigne: "",
-    numero_recu: "",
-    montant_ttc: 0,
-    tva: 0,
-    ville: "",
-    adresse: "",
-    moyen_paiement: "",
-    categorie: "",
-    client_id: "",
-    processed_by: "",
-  });
-
-  // Sync editedData avec detail
-  useEffect(() => {
-    if (detail) {
-      setEditedData({
-        enseigne: detail?.enseigne ?? "",
-        numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
-        ville: detail?.ville ?? "",
-        adresse: detail?.adresse ?? "",
-        moyen_paiement: detail?.moyen_paiement ?? "",
-        categorie: detail?.categorie ?? "",
-        client_id: detail?.client_id ?? "",
-        processed_by: detail?.processed_by ?? "",
-      });
-    }
-  }, [detail]);
-
-  // Sauvegarde auto pendant l’édition
-  useEffect(() => {
-    if (!isEditing || !detail?.id) return;
-    const saveChanges = async () => {
-      try {
-        await (supabase as any)
-          .from("recus")
-          .update({
-            enseigne: editedData.enseigne,
-            numero_recu: editedData.numero_recu,
-            montant_ttc: editedData.montant_ttc,
-            tva: editedData.tva,
-            ville: editedData.ville,
-            adresse: editedData.adresse,
-            moyen_paiement: editedData.moyen_paiement,
-            categorie: editedData.categorie,
-            client_id: editedData.client_id || null,
-            processed_by: editedData.processed_by || null,
-          })
-          .eq("id", detail.id);
-      } catch (err) {
-        console.error("Erreur lors de la sauvegarde automatique:", err);
-      }
-    };
-    const timer = setTimeout(saveChanges, 500);
-    return () => clearTimeout(timer);
-  }, [editedData, isEditing, detail?.id]);
-
-  const ttc = detail?.montant_ttc ?? detail?.montant ?? null;
-  const tva = detail?.tva ?? 0;
-  const ht = typeof ttc === "number" ? Math.max(ttc - (typeof tva === "number" ? tva : 0), 0) : null;
-
-  const handleValidate = async () => {
-    if (!detail?.id) return;
-    try {
-      const { error } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
-      if (error) throw error;
-      onOpenChange(false);
-    } catch (err) {
-      console.error("Erreur lors de la validation:", err);
-    }
-  };
-
-  const handleCorrect = () => setIsEditing(true);
-
-  const handleSave = async () => {
-    if (!detail?.id) return;
-    try {
-      const { error } = await (supabase as any)
-        .from("recus")
-        .update({
-          enseigne: editedData.enseigne,
-          numero_recu: editedData.numero_recu,
-          montant_ttc: editedData.montant_ttc,
-          tva: editedData.tva,
-          ville: editedData.ville,
-          adresse: editedData.adresse,
-          moyen_paiement: editedData.moyen_paiement,
-          categorie: editedData.categorie,
-          client_id: editedData.client_id || null,
-          processed_by: editedData.processed_by || null,
-        })
-        .eq("id", detail.id);
-      if (error) throw error;
-      setIsEditing(false);
-      setActiveField(null);
-    } catch (err) {
-      console.error("Erreur lors de la sauvegarde:", err);
-    }
-  };
-
   const handleCancel = () => {
     setIsEditing(false);
     setActiveField(null);
@@ -211,8 +5,8 @@ export const ReceiptDetailDrawer = ({
       setEditedData({
         enseigne: detail?.enseigne ?? "",
         numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
+        montant_ttc: (detail?.montant_ttc ?? detail?.montant ?? 0) as number,
+        tva: (detail?.tva ?? 0) as number,
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
@@ -476,7 +270,7 @@ export const ReceiptDetailDrawer = ({
                       <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
                         Valider
                       </Button>
-                      <Button variant="outline" className="flex-1 h-10" onClick={handleCorrect}>
+                      <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
                         Corriger
                       </Button>
                     </div>
@@ -780,7 +574,7 @@ export const ReceiptDetailDrawer = ({
               <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
                 Valider
               </Button>
-              <Button variant="outline" className="flex-1 h-10" onClick={handleCorrect}>
+              <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
                 Corriger
               </Button>
             </div>
