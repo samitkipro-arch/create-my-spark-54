@@ -42,7 +42,7 @@ export const ReceiptDetailDrawer = ({
     if (!detail?.id) return;
     setReportLoading(true);
     try {
-      const res = await fetch("https://samilzr.app.n8n.cloud/webhook/rapport-analyse", {
+      const res = await fetch("https://samilzr.app.n8n.cloud/webhook-test/rapport-analyse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receipt_id: detail.id }),
