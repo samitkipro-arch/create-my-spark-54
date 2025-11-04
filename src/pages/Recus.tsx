@@ -82,6 +82,7 @@ const Recus = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const currentOpenReceiptId = useRef<number | null>(null);
+  const isDrawerOpenRef = useRef(false);
 
   // Load clients with realtime
   const { data: clients = [], refetch: refetchClients } = useQuery({
@@ -253,18 +254,24 @@ const Recus = () => {
     })();
   }, [selectedId, isDrawerOpen]);
 
+  // Sync ref avec state
+  useEffect(() => {
+    isDrawerOpenRef.current = isDrawerOpen;
+  }, [isDrawerOpen]);
+
   // Realtime updates
   useEffect(() => {
     const recusChannel = supabase
       .channel("recus-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
         const newRecu = payload.new as Receipt;
+        console.log("🔴 Realtime INSERT:", newRecu);
         
         // Refetch pour mettre à jour la liste
         refetch();
         
         // Ouvrir automatiquement le drawer avec le nouveau reçu si pas déjà ouvert
-        if (!isDrawerOpen || currentOpenReceiptId.current !== newRecu.id) {
+        if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
           currentOpenReceiptId.current = newRecu.id;
           setSelectedId(newRecu.id);
           setDetail(null);
@@ -281,13 +288,26 @@ const Recus = () => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
         const updatedRecu = payload.new as Receipt;
         const oldRecu = payload.old as Receipt;
+        console.log("🔵 Realtime UPDATE:", { 
+          id: updatedRecu.id,
+          oldStatus: oldRecu.status, 
+          newStatus: updatedRecu.status,
+          receipt_number: updatedRecu.receipt_number
+        });
         
         // Refetch pour mettre à jour la liste
         refetch();
         
-        // Si le statut passe à 'traite' et que le drawer n'est pas déjà ouvert pour ce reçu
-        if (updatedRecu.status === 'traite' && oldRecu.status !== 'traite') {
-          if (!isDrawerOpen || currentOpenReceiptId.current !== updatedRecu.id) {
+        // Ouvrir automatiquement le drawer dès qu'un receipt_number est assigné
+        // ou si le statut passe à 'traite'
+        const shouldOpen = (
+          (updatedRecu.receipt_number && !oldRecu.receipt_number) || // Nouveau numéro assigné
+          (updatedRecu.status === 'traite' && oldRecu.status !== 'traite') // Status devient traite
+        );
+        
+        if (shouldOpen) {
+          console.log("✅ Ouverture automatique du drawer pour reçu", updatedRecu.id);
+          if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
             currentOpenReceiptId.current = updatedRecu.id;
             setSelectedId(updatedRecu.id);
             setDetail(null);
@@ -326,7 +346,7 @@ const Recus = () => {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(membersChannel);
     };
-  }, [refetch, isDrawerOpen]);
+  }, [refetch]);
   
   // Mettre à jour la référence quand le drawer s'ouvre/ferme
   useEffect(() => {
