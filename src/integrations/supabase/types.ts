@@ -318,6 +318,7 @@ export type Database = {
       }
       get_next_receipt_number: { Args: { p_org_id: string }; Returns: number }
       get_receipt_credits: { Args: { p_user_id: string }; Returns: number }
+      get_user_org_id: { Args: { p_user_id: string }; Returns: string }
     }
     Enums: {
       receipt_status: "en_cours" | "traite" | "erreur"
