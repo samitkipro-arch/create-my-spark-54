@@ -86,7 +86,24 @@ serve(async (req) => {
     if (hasActiveSub) {
       const subscription = subscriptions.data[0];
       stripeSubscriptionId = subscription.id;
-      subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+      
+      // Vérifier et convertir les timestamps de manière sécurisée
+      const periodEnd = subscription.current_period_end;
+      const periodStart = subscription.current_period_start;
+      
+      logStep("Subscription timestamps", { 
+        periodEnd, 
+        periodStart,
+        periodEndType: typeof periodEnd,
+        periodStartType: typeof periodStart
+      });
+      
+      if (periodEnd && typeof periodEnd === 'number') {
+        subscriptionEnd = new Date(periodEnd * 1000).toISOString();
+      } else {
+        logStep("Warning: Invalid period_end", { periodEnd });
+      }
+      
       const priceId = subscription.items.data[0].price.id;
       
       const planInfo = PRICE_TO_PLAN[priceId];
@@ -99,30 +116,35 @@ serve(async (req) => {
         subscriptionId: subscription.id, 
         endDate: subscriptionEnd,
         plan,
-        interval
+        interval,
+        priceId
       });
 
-      // Mettre à jour la table subscriptions
-      const { error: upsertError } = await supabaseClient
-        .from('subscriptions')
-        .upsert({
-          user_id: user.id,
-          stripe_customer_id: stripeCustomerId,
-          stripe_subscription_id: stripeSubscriptionId,
-          plan: plan || 'unknown',
-          interval: interval || 'unknown',
-          status: 'active',
-          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-          current_period_end: subscriptionEnd,
-          cancel_at_period_end: subscription.cancel_at_period_end,
-        }, {
-          onConflict: 'stripe_subscription_id'
-        });
+      // Mettre à jour la table subscriptions seulement si on a les données nécessaires
+      if (periodStart && periodEnd && typeof periodStart === 'number' && typeof periodEnd === 'number') {
+        const { error: upsertError } = await supabaseClient
+          .from('subscriptions')
+          .upsert({
+            user_id: user.id,
+            stripe_customer_id: stripeCustomerId,
+            stripe_subscription_id: stripeSubscriptionId,
+            plan: plan || 'unknown',
+            interval: interval || 'unknown',
+            status: 'active',
+            current_period_start: new Date(periodStart * 1000).toISOString(),
+            current_period_end: new Date(periodEnd * 1000).toISOString(),
+            cancel_at_period_end: subscription.cancel_at_period_end || false,
+          }, {
+            onConflict: 'stripe_subscription_id'
+          });
 
-      if (upsertError) {
-        logStep("Error updating subscription in database", { error: upsertError });
+        if (upsertError) {
+          logStep("Error updating subscription in database", { error: upsertError });
+        } else {
+          logStep("Subscription updated in database");
+        }
       } else {
-        logStep("Subscription updated in database");
+        logStep("Skipping database update due to invalid timestamps");
       }
     } else {
       logStep("No active subscription found");
