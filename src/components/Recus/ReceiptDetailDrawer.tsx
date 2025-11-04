@@ -194,7 +194,7 @@ export const ReceiptDetailDrawer = ({
                   letterSpacing: '-0.03em',
                   minWidth: '0',
                   width: 'auto'
-                }} /><span className="text-2xl md:text-4xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
+                }} />
                   </div> : <p className="text-2xl md:text-4xl font-bold whitespace-nowrap tabular-nums">
                     {formatCurrency(editedData.montant_ttc)}
                   </p>}
