@@ -124,7 +124,7 @@ export const TeamMemberDetailDrawer = ({
       setIsEditing(false);
       onOpenChange(false);
     } catch (error: any) {
-      // Erreur silencieuse
+      toast.error(error.message || "Une erreur est survenue");
     }
   };
 

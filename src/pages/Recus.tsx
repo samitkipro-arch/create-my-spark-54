@@ -445,6 +445,10 @@ const Recus = () => {
               <div className="flex items-center justify-center py-16 text-muted-foreground">
                 Chargement…
               </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-16 text-sm text-destructive">
+                {error}
+              </div>
             ) : receipts.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
                 Aucun reçu n'a encore été traité
@@ -479,6 +483,9 @@ const Recus = () => {
                         <div className="flex items-start justify-between">
                           <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
+                            {receipt.receipt_number && (
+                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
+                            )}
                           </div>
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
@@ -494,6 +501,9 @@ const Recus = () => {
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <div className="text-muted-foreground">{receipt.moyen_paiement || "—"}</div>
+                          <div className="inline-flex px-2 py-1 rounded text-xs bg-primary/10 text-primary">
+                            {statusLabels[receipt.status || ''] || receipt.status || "—"}
+                          </div>
                         </div>
                         {(receipt.ville || receipt.numero_recu) && (
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -519,6 +529,7 @@ const Recus = () => {
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Moyen de paiement</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Statut</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -542,6 +553,9 @@ const Recus = () => {
                         >
                           <td className="py-3 px-4 text-sm">
                             <div className="font-medium">{receipt.enseigne || "—"}</div>
+                            {receipt.receipt_number && (
+                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
+                            )}
                           </td>
                           <td className="py-3 px-4 text-sm">{receipt.ville || "—"}</td>
                           <td className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums">
@@ -556,6 +570,15 @@ const Recus = () => {
                           <td className="py-3 px-4 text-sm">{receipt.moyen_paiement || "—"}</td>
                           <td className="py-3 px-4 text-sm">
                             {formatDate(receipt.date_traitement || receipt.created_at)}
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-150
+                              ${receipt.status === 'traite' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : ''}
+                              ${receipt.status === 'en_cours' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : ''}
+                              ${receipt.status === 'en_attente' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' : ''}
+                            `}>
+                              {statusLabels[receipt.status || ''] || receipt.status || "—"}
+                            </span>
                           </td>
                         </tr>
                       );
