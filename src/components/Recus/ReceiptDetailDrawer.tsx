@@ -173,11 +173,7 @@ export const ReceiptDetailDrawer = ({
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Chargement…</p>
         </div>
-      ) : error ? (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-destructive text-sm">{error}</p>
-        </div>
-      ) : detail ? (
+      ) : !detail ? (
         <>
           <SheetHeader>
             <div className="flex items-start justify-between">
@@ -477,11 +473,7 @@ export const ReceiptDetailDrawer = ({
     <div className="flex items-center justify-center h-full">
       <p className="text-muted-foreground">Chargement…</p>
     </div>
-  ) : error ? (
-    <div className="flex items-center justify-center h-full">
-      <p className="text-destructive text-sm">{error}</p>
-    </div>
-  ) : detail ? (
+  ) : !detail ? (
     <>
       {/* Header fixe */}
       <div className="flex-shrink-0 p-4 border-b border-border">

@@ -98,11 +98,7 @@ export const UploadInstructionsDialog = ({
       }
     } catch (error) {
       console.error("Erreur lors de l'upload:", error);
-      toast({
-        title: "Erreur d'envoi",
-        description: "Impossible d'envoyer le reçu. Veuillez réessayer.",
-        variant: "destructive",
-      });
+      // Erreur silencieuse
     } finally {
       setIsUploading(false);
     }

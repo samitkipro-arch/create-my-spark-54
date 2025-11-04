@@ -143,7 +143,7 @@ export const ClientDetailDrawer = ({
       setIsEditing(false);
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || "Une erreur est survenue");
+      // Erreur silencieuse
     }
   };
 
