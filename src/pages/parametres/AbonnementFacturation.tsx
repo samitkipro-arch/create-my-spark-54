@@ -2,13 +2,26 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 type BillingInterval = "monthly" | "yearly";
+
+// Mapping des price IDs Stripe
+const PRICE_IDS = {
+  essentiel: {
+    monthly: "price_1SPRFgD3myr3drrgxZBsTlZl",
+    yearly: "price_1SPKtQD3myr3drrgxODHVnrh",
+  },
+  avance: {
+    monthly: "price_1SHlZoD3myr3drrganWIUw9q",
+    yearly: "price_1SPL6OD3myr3drrgWIAMUkJi",
+  },
+};
 
 interface PricingTier {
   name: string;
@@ -18,7 +31,6 @@ interface PricingTier {
   features: string[];
   highlighted?: boolean;
   isEnterprise?: boolean;
-  current?: boolean;
   freeMonths?: number;
 }
 
@@ -45,7 +57,6 @@ const pricingTiers: PricingTier[] = [
     freeMonths: 3,
     description: "Pour les cabinets qui traitent un volume élevé de reçus chaque mois.",
     highlighted: true,
-    current: true,
     features: [
       "Tout du plan Essentiel +",
       "Volume illimité de reçus analysés.",
@@ -72,61 +83,100 @@ const pricingTiers: PricingTier[] = [
 ];
 
 const AbonnementFacturation = () => {
-  const { user } = useAuth();
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("monthly");
   const [receiptsCount, setReceiptsCount] = useState(0);
-  const [currentPlan, setCurrentPlan] = useState<string>("Avancé");
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const { subscription, checkSubscription } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
-      loadReceiptsCount();
-      loadCurrentPlan();
-    }
-  }, [user]);
+    const fetchData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-  const loadReceiptsCount = async () => {
+      const { count } = await supabase
+        .from('recus')
+        .select('*', { count: 'exact', head: true })
+        .eq('processed_by', user.id);
+      
+      setReceiptsCount(count || 0);
+    };
+
+    fetchData();
+    checkSubscription();
+  }, []);
+
+  const handleCheckout = async (tierName: string) => {
+    setCheckoutLoading(tierName);
     try {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
+      const priceId = PRICE_IDS[tierName.toLowerCase() as keyof typeof PRICE_IDS]?.[billingInterval];
+      if (!priceId) {
+        throw new Error("Price ID not found");
+      }
 
-      const { count, error } = await supabase
-        .from("recus")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", startOfMonth.toISOString());
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { priceId }
+      });
 
       if (error) throw error;
-      setReceiptsCount(count || 0);
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
     } catch (error) {
-      console.error("Erreur lors du chargement du nombre de reçus:", error);
+      console.error('Error creating checkout:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer la session de paiement. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckoutLoading(null);
     }
   };
 
-  const loadCurrentPlan = async () => {
-    // For now, we'll use the hardcoded "Avancé" as current plan
-    // In a real scenario, this would come from the subscriptions table
-    setCurrentPlan("Avancé");
+  const handleManageSubscription = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('customer-portal');
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch (error) {
+      console.error('Error opening customer portal:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'ouvrir le portail client. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getUsageText = () => {
-    switch (currentPlan) {
-      case "Essentiel":
+    if (!subscription.plan) {
+      return `Vous avez traité ${receiptsCount} reçus. Vous avez 5 crédits gratuits pour tester.`;
+    }
+    switch (subscription.plan) {
+      case "essentiel":
         return `Vous avez traité ${receiptsCount} reçus ce mois-ci sur 750 inclus.`;
-      case "Avancé":
+      case "avance":
         return "Reçus illimités — vous pouvez traiter autant de reçus que vous le souhaitez.";
-      case "Expert":
+      case "expert":
         return "Reçus illimités — accompagnement personnalisé.";
       default:
         return "";
     }
   };
 
-
   const fmt = new Intl.NumberFormat("fr-FR");
 
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-8 animate-fade-in-up">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold">Abonnement & Facturation</h1>
+          <p className="text-muted-foreground">{getUsageText()}</p>
+        </div>
+
         {/* Billing Toggle */}
         <div className="flex justify-center items-center gap-4">
           <button
@@ -155,15 +205,17 @@ const AbonnementFacturation = () => {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
-          {pricingTiers.map((tier, index) => {
+          {pricingTiers.map((tier) => {
             const isYearly = billingInterval === "yearly";
+            const isCurrentPlan = subscription.subscribed && subscription.plan === tier.name.toLowerCase();
 
             return (
               <Card
                 key={tier.name}
                 className={cn(
                   "relative flex flex-col",
-                  tier.highlighted && "border-primary border-2 shadow-lg scale-105"
+                  tier.highlighted && "border-primary border-2 shadow-lg scale-105",
+                  isCurrentPlan && "ring-2 ring-primary"
                 )}
               >
                 {tier.highlighted && (
@@ -176,7 +228,12 @@ const AbonnementFacturation = () => {
 
                 <CardHeader className={cn(tier.highlighted && "pt-8")}>
                   <div className="space-y-2">
-                    <CardTitle className="text-2xl">{tier.name}</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-2xl">{tier.name}</CardTitle>
+                      {isCurrentPlan && (
+                        <Badge variant="default">Plan actuel</Badge>
+                      )}
+                    </div>
                     {!tier.isEnterprise ? (
                       <div className="flex items-baseline gap-1">
                         <span className="text-5xl font-bold">{fmt.format(isYearly ? tier.yearlyMonthlyPrice : tier.monthlyPrice)}€</span>
@@ -191,31 +248,46 @@ const AbonnementFacturation = () => {
                       </p>
                     )}
                   </div>
-                  <CardDescription className="text-base mt-4">{tier.description}</CardDescription>
+                  <CardDescription className="text-base">{tier.description}</CardDescription>
                 </CardHeader>
-
                 <CardContent className="flex-1 flex flex-col">
-                  <div className="space-y-1 mb-6">
-                    <p className="font-medium text-sm mb-3">Ce que cela inclut :</p>
-                    {tier.features.map((feature, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">{feature}</span>
-                      </div>
+                  <ul className="space-y-3 mb-6 flex-1">
+                    {tier.features.map((feature, featureIndex) => (
+                      <li key={featureIndex} className="flex items-start gap-2">
+                        <Check className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                        <span className="text-sm text-muted-foreground">{feature}</span>
+                      </li>
                     ))}
-                  </div>
-
-                  <Button
-                    className="w-full mt-auto"
-                    variant={tier.highlighted ? "default" : "outline"}
-                    disabled={tier.current}
-                  >
-                    {tier.current
-                      ? "Plan actuel"
-                      : tier.isEnterprise
-                      ? "Être recontacté"
-                      : "Choisir ce plan"}
-                  </Button>
+                  </ul>
+                  {isCurrentPlan ? (
+                    <div className="space-y-2">
+                      <Button 
+                        className="w-full" 
+                        variant="secondary"
+                        size="lg"
+                        onClick={handleManageSubscription}
+                      >
+                        Gérer mon abonnement
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button 
+                      className="w-full" 
+                      variant={tier.highlighted ? "default" : "outline"}
+                      size="lg"
+                      onClick={() => tier.isEnterprise ? null : handleCheckout(tier.name)}
+                      disabled={checkoutLoading === tier.name}
+                    >
+                      {checkoutLoading === tier.name ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Chargement...
+                        </>
+                      ) : (
+                        tier.isEnterprise ? "Nous Contacter" : "Choisir ce plan"
+                      )}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );
