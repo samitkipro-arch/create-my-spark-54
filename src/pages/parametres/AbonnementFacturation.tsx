@@ -17,7 +17,7 @@ const PRICE_IDS = {
     monthly: "price_1SPbSpD3myr3drrgBBkv8hA5",
     yearly: "price_1SPKtQD3myr3drrgxODHVnrh",
   },
-  avance: {
+  avancé: {
     monthly: "price_1SHlZoD3myr3drrganWIUw9q",
     yearly: "price_1SPL6OD3myr3drrgWIAMUkJi",
   },
