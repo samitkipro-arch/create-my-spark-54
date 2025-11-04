@@ -189,6 +189,7 @@ export type Database = {
           numero_recu: string | null
           org_id: string
           processed_by: string
+          receipt_number: number | null
           source: string | null
           status: Database["public"]["Enums"]["receipt_status"]
           tva: number | null
@@ -214,6 +215,7 @@ export type Database = {
           numero_recu?: string | null
           org_id: string
           processed_by: string
+          receipt_number?: number | null
           source?: string | null
           status?: Database["public"]["Enums"]["receipt_status"]
           tva?: number | null
@@ -239,6 +241,7 @@ export type Database = {
           numero_recu?: string | null
           org_id?: string
           processed_by?: string
+          receipt_number?: number | null
           source?: string | null
           status?: Database["public"]["Enums"]["receipt_status"]
           tva?: number | null
@@ -313,6 +316,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      get_next_receipt_number: { Args: { p_org_id: string }; Returns: number }
       get_receipt_credits: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {

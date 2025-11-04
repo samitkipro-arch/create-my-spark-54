@@ -8,6 +8,7 @@ import { X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency, formatDateTime } from "@/lib/formatters";
 
 interface ReceiptDetailDrawerProps {
   open: boolean;
@@ -92,12 +93,6 @@ export const ReceiptDetailDrawer = ({
     return () => clearTimeout(timer);
   }, [editedData, isEditing, detail?.id]);
   
-  const fmtMoney = (v: number | null | undefined) =>
-    typeof v === "number" ? `${v.toFixed(2)}€` : "—";
-
-  const fmtDate = (s: string | null | undefined) =>
-    s ? new Date(s).toLocaleString("fr-FR") : "—";
-
   const ttc = detail?.montant_ttc ?? detail?.montant ?? null;
   const tva = detail?.tva ?? 0;
   const ht = typeof ttc === "number" ? Math.max(ttc - (typeof tva === "number" ? tva : 0), 0) : null;
@@ -202,19 +197,23 @@ export const ReceiptDetailDrawer = ({
                 />
                 </div>
                 <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                  Reçu n°{" "}
-                  <input
-                    type="text"
-                    value={editedData.numero_recu || "—"}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
-                    onFocus={() => setActiveField('numero_recu')}
-                    onBlur={() => setActiveField(null)}
-                    disabled={!isEditing}
-                    className={cn(
-                      "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs md:text-sm",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
-                    )}
-                  />
+                  {detail?.receipt_number ? `Reçu n°${detail.receipt_number}` : (
+                    <>
+                      Reçu n°{" "}
+                      <input
+                        type="text"
+                        value={editedData.numero_recu || "—"}
+                        onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
+                        onFocus={() => setActiveField('numero_recu')}
+                        onBlur={() => setActiveField(null)}
+                        disabled={!isEditing}
+                        className={cn(
+                          "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs md:text-sm",
+                          isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                        )}
+                      />
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -243,8 +242,8 @@ export const ReceiptDetailDrawer = ({
                     /><span className="text-2xl md:text-4xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
                   </div>
                 ) : (
-                  <p className="text-2xl md:text-4xl font-bold">
-                    {editedData.montant_ttc.toFixed(2)}€
+                  <p className="text-2xl md:text-4xl font-bold whitespace-nowrap tabular-nums">
+                    {formatCurrency(editedData.montant_ttc)}
                   </p>
                 )}
               </div>
@@ -255,8 +254,8 @@ export const ReceiptDetailDrawer = ({
               <Card>
                 <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
-                  <p className="text-lg md:text-2xl font-semibold">
-                    {(editedData.montant_ttc - editedData.tva).toFixed(2)}€
+                  <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
+                    {formatCurrency(editedData.montant_ttc - editedData.tva)}
                   </p>
                 </CardContent>
               </Card>
@@ -281,8 +280,8 @@ export const ReceiptDetailDrawer = ({
                       /><span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
                     </div>
                   ) : (
-                    <p className="text-lg md:text-2xl font-semibold">
-                      {editedData.tva.toFixed(2)}€
+                    <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
+                      {formatCurrency(editedData.tva)}
                     </p>
                   )}
                 </CardContent>
@@ -294,7 +293,7 @@ export const ReceiptDetailDrawer = ({
               <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                 <span className="text-xs md:text-sm text-muted-foreground">Date de traitement :</span>
                 <span className="text-xs md:text-sm font-medium">
-                  {fmtDate(detail?.date_traitement ?? detail?.created_at)}
+                  {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
                 </span>
               </div>
 
@@ -605,7 +604,7 @@ export const ReceiptDetailDrawer = ({
             <div className="flex justify-between items-center py-1.5 border-b border-border">
               <span className="text-xs text-muted-foreground">Date de traitement :</span>
               <span className="text-xs font-medium">
-                {fmtDate(detail?.date_traitement ?? detail?.created_at)}
+                {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
               </span>
             </div>
 

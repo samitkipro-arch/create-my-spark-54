@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { formatCurrency, formatDate } from "@/lib/formatters";
 
 type Receipt = {
   id: number;
@@ -18,6 +19,7 @@ type Receipt = {
   date_traitement?: string | null;
   date_recu?: string | null;
   numero_recu?: string | null;
+  receipt_number?: number | null;
   enseigne?: string | null;
   adresse?: string | null;
   ville?: string | null;
@@ -79,6 +81,7 @@ const Recus = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const currentOpenReceiptId = useRef<number | null>(null);
 
   // Load clients with realtime
   const { data: clients = [], refetch: refetchClients } = useQuery({
@@ -127,7 +130,7 @@ const Recus = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("recus")
-        .select("id, created_at, date_traitement, date_recu, numero_recu, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
+        .select("id, created_at, date_traitement, date_recu, numero_recu, receipt_number, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
 
       // Apply date range filter from global store (if set)
       if (storedDateRange.from && storedDateRange.to) {
@@ -174,6 +177,7 @@ const Recus = () => {
         date_traitement: r.date_traitement ?? null,
         date_recu: r.date_recu ?? null,
         numero_recu: r.numero_recu ?? null,
+        receipt_number: r.receipt_number ?? null,
         enseigne: r.enseigne ?? null,
         adresse: r.adresse ?? null,
         ville: r.ville ?? null,
@@ -259,20 +263,44 @@ const Recus = () => {
         // Refetch pour mettre à jour la liste
         refetch();
         
-        // Ouvrir automatiquement le drawer avec le nouveau reçu
-        setSelectedId(newRecu.id);
-        setDetail(null);
-        setDetailError(null);
-        setIsDrawerOpen(true);
-        
-        // Afficher une notification
-        toast({
-          title: "Nouveau reçu analysé !",
-          description: `${newRecu.enseigne || 'Reçu'} - ${newRecu.montant_ttc ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(newRecu.montant_ttc) : '—'}`,
-        });
+        // Ouvrir automatiquement le drawer avec le nouveau reçu si pas déjà ouvert
+        if (!isDrawerOpen || currentOpenReceiptId.current !== newRecu.id) {
+          currentOpenReceiptId.current = newRecu.id;
+          setSelectedId(newRecu.id);
+          setDetail(null);
+          setDetailError(null);
+          setIsDrawerOpen(true);
+          
+          // Afficher une notification
+          toast({
+            title: "Nouveau reçu analysé !",
+            description: `${newRecu.enseigne || 'Reçu'} - ${formatCurrency(newRecu.montant_ttc)}`,
+          });
+        }
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, () => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
+        const updatedRecu = payload.new as Receipt;
+        const oldRecu = payload.old as Receipt;
+        
+        // Refetch pour mettre à jour la liste
         refetch();
+        
+        // Si le statut passe à 'traite' et que le drawer n'est pas déjà ouvert pour ce reçu
+        if (updatedRecu.status === 'traite' && oldRecu.status !== 'traite') {
+          if (!isDrawerOpen || currentOpenReceiptId.current !== updatedRecu.id) {
+            currentOpenReceiptId.current = updatedRecu.id;
+            setSelectedId(updatedRecu.id);
+            setDetail(null);
+            setDetailError(null);
+            setIsDrawerOpen(true);
+            
+            // Afficher une notification
+            toast({
+              title: "Reçu validé !",
+              description: `${updatedRecu.enseigne || 'Reçu'} n°${updatedRecu.receipt_number || '—'}`,
+            });
+          }
+        }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
         refetch();
@@ -298,7 +326,16 @@ const Recus = () => {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(membersChannel);
     };
-  }, [refetch]);
+  }, [refetch, isDrawerOpen]);
+  
+  // Mettre à jour la référence quand le drawer s'ouvre/ferme
+  useEffect(() => {
+    if (!isDrawerOpen) {
+      currentOpenReceiptId.current = null;
+    } else if (selectedId) {
+      currentOpenReceiptId.current = selectedId;
+    }
+  }, [isDrawerOpen, selectedId]);
 
   return (
     <MainLayout>
@@ -402,24 +439,12 @@ const Recus = () => {
                 <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
-                    const formattedDate = dateValue 
-                      ? new Date(dateValue).toLocaleDateString("fr-FR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })
-                      : "—";
-                    
-                    const formattedMontantTTC = receipt.montant_ttc !== null && receipt.montant_ttc !== undefined
-                      ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ttc)
-                      : "—";
-                    
-                    const formattedMontantHT = receipt.montant_ht !== null && receipt.montant_ht !== undefined
-                      ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ht)
-                      : "—";
+                    const formattedDate = formatDate(dateValue);
+                    const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
+                    const formattedMontantHT = formatCurrency(receipt.montant_ht);
 
                     const statusLabels: Record<string, string> = {
-                      traite: "Traité",
+                      traite: "Validé",
                       en_cours: "En cours",
                       en_attente: "En attente"
                     };
@@ -436,17 +461,22 @@ const Recus = () => {
                         }}
                       >
                         <div className="flex items-start justify-between">
-                          <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
+                          <div>
+                            <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
+                            {receipt.receipt_number && (
+                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
+                            )}
+                          </div>
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
                             <span className="text-muted-foreground text-xs">TTC: </span>
-                            <span className="font-semibold">{formattedMontantTTC}</span>
+                            <span className="font-semibold whitespace-nowrap tabular-nums">{formattedMontantTTC}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-muted-foreground text-xs">HT: </span>
-                            <span>{formattedMontantHT}</span>
+                            <span className="whitespace-nowrap tabular-nums">{formattedMontantHT}</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-between text-sm">
@@ -472,44 +502,20 @@ const Recus = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant HT</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Moyen de paiement</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Statut</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Ville</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">N° de reçu</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant HT</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Moyen de paiement</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Statut</th>
                     </tr>
                   </thead>
                   <tbody>
                     {receipts.map((receipt) => {
-                      const dateValue = receipt.date_traitement || receipt.created_at;
-                      const formattedDate = dateValue 
-                        ? new Date(dateValue).toLocaleString("fr-FR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })
-                        : "—";
-                      
-                      const formattedMontantTTC = receipt.montant_ttc !== null && receipt.montant_ttc !== undefined
-                        ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ttc)
-                        : "—";
-                      
-                      const formattedTVA = receipt.tva !== null && receipt.tva !== undefined
-                        ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.tva)
-                        : "—";
-
-                      const formattedMontantHT = receipt.montant_ht !== null && receipt.montant_ht !== undefined
-                        ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(receipt.montant_ht)
-                        : "—";
-
                       const statusLabels: Record<string, string> = {
-                        traite: "Traité",
+                        traite: "Validé",
                         en_cours: "En cours",
                         en_attente: "En attente"
                       };
@@ -525,15 +531,35 @@ const Recus = () => {
                             setIsDrawerOpen(true);
                           }}
                         >
-                          <td className="py-3 px-4 text-sm">{formattedDate}</td>
-                          <td className="py-3 px-4 text-sm">{receipt.enseigne || "—"}</td>
-                          <td className="py-3 px-4 text-sm text-right font-medium">{formattedMontantTTC}</td>
-                          <td className="py-3 px-4 text-sm text-right">{formattedTVA}</td>
-                          <td className="py-3 px-4 text-sm text-right">{formattedMontantHT}</td>
-                          <td className="py-3 px-4 text-sm">{receipt.moyen_paiement || "—"}</td>
-                          <td className="py-3 px-4 text-sm">{receipt.status ? statusLabels[receipt.status] || receipt.status : "—"}</td>
+                          <td className="py-3 px-4 text-sm">
+                            <div className="font-medium">{receipt.enseigne || "—"}</div>
+                            {receipt.receipt_number && (
+                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
+                            )}
+                          </td>
                           <td className="py-3 px-4 text-sm">{receipt.ville || "—"}</td>
-                          <td className="py-3 px-4 text-sm">{receipt.numero_recu || "—"}</td>
+                          <td className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums">
+                            {formatCurrency(receipt.montant_ttc)}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums">
+                            {formatCurrency(receipt.montant_ht)}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums">
+                            {formatCurrency(receipt.tva)}
+                          </td>
+                          <td className="py-3 px-4 text-sm">{receipt.moyen_paiement || "—"}</td>
+                          <td className="py-3 px-4 text-sm">
+                            {formatDate(receipt.date_traitement || receipt.created_at)}
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-150
+                              ${receipt.status === 'traite' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : ''}
+                              ${receipt.status === 'en_cours' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : ''}
+                              ${receipt.status === 'en_attente' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' : ''}
+                            `}>
+                              {statusLabels[receipt.status || ''] || receipt.status || "—"}
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
