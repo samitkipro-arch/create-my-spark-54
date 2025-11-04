@@ -12,7 +12,6 @@ import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-
 type Receipt = {
   id: number;
   created_at: string | null;
@@ -33,12 +32,10 @@ type Receipt = {
   category_id?: string | null;
   org_id?: string | null;
 };
-
 type Client = {
   id: string;
   name: string;
 };
-
 type Member = {
   id: string;
   name: string;
@@ -47,34 +44,36 @@ type Member = {
 // Hook debounce
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(value);
     }, delay);
-    
     return () => {
       clearTimeout(handler);
     };
   }, [value, delay]);
-  
   return debouncedValue;
 }
-
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+
   // Global filters from store
-  const { dateRange: storedDateRange, clientId: storedClientId, memberId: storedMemberId, setClientId, setMemberId } = useGlobalFilters();
-  
+  const {
+    dateRange: storedDateRange,
+    clientId: storedClientId,
+    memberId: storedMemberId,
+    setClientId,
+    setMemberId
+  } = useGlobalFilters();
+
   // Local filters
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
-  
+
   // Drawer détail
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
@@ -85,53 +84,59 @@ const Recus = () => {
   const isDrawerOpenRef = useRef(false);
 
   // Load clients with realtime
-  const { data: clients = [], refetch: refetchClients } = useQuery({
+  const {
+    data: clients = [],
+    refetch: refetchClients
+  } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("clients")
-        .select("id, name")
-        .order("name", { ascending: true });
-      
+      const {
+        data,
+        error
+      } = await (supabase as any).from("clients").select("id, name").order("name", {
+        ascending: true
+      });
       if (error) throw error;
       return (data || []) as Client[];
-    },
+    }
   });
 
   // Load members with profiles and realtime
-  const { data: members = [], refetch: refetchMembers } = useQuery({
+  const {
+    data: members = [],
+    refetch: refetchMembers
+  } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any)
-        .from("org_members")
-        .select("user_id")
-      
+      const {
+        data: orgMembers,
+        error: omError
+      } = await (supabase as any).from("org_members").select("user_id");
       if (omError) throw omError;
       if (!orgMembers || orgMembers.length === 0) return [];
-      
       const userIds = orgMembers.map((om: any) => om.user_id);
-      
-      const { data: profiles, error: pError } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      
+      const {
+        data: profiles,
+        error: pError
+      } = await (supabase as any).from("profiles").select("user_id, first_name, last_name").in("user_id", userIds);
       if (pError) throw pError;
-      
       return (profiles || []).map((p: any) => ({
         id: p.user_id,
-        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom',
+        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Membre sans nom'
       })) as Member[];
-    },
+    }
   });
 
   // Load receipts with all filters
-  const { data: receipts = [], isLoading: loading, error: queryError, refetch } = useQuery({
+  const {
+    data: receipts = [],
+    isLoading: loading,
+    error: queryError,
+    refetch
+  } = useQuery({
     queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from("recus")
-        .select("id, created_at, date_traitement, date_recu, numero_recu, receipt_number, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
+      let query = (supabase as any).from("recus").select("id, created_at, date_traitement, date_recu, numero_recu, receipt_number, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id");
 
       // Apply date range filter from global store (if set)
       if (storedDateRange.from && storedDateRange.to) {
@@ -157,21 +162,25 @@ const Recus = () => {
       // Apply search filter (local) with escaped characters
       if (debouncedQuery) {
         const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
-        query = query.or(
-          `numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`
-        );
+        query = query.or(`numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`);
       }
 
       // Apply sorting
-      query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
-      query = query.order("created_at", { ascending: sortOrder === "asc" });
+      query = query.order("date_traitement", {
+        ascending: sortOrder === "asc",
+        nullsFirst: false
+      });
+      query = query.order("created_at", {
+        ascending: sortOrder === "asc"
+      });
 
       // Limit to 100 for performance
       query = query.limit(100);
-
-      const { data, error } = await query;
+      const {
+        data,
+        error
+      } = await query;
       if (error) throw error;
-
       return (data || []).map((r: any) => ({
         id: r.id,
         created_at: r.created_at ?? null,
@@ -190,60 +199,50 @@ const Recus = () => {
         client_id: r.client_id ?? null,
         processed_by: r.processed_by ?? null,
         category_id: r.category_id ?? null,
-        org_id: r.org_id ?? null,
+        org_id: r.org_id ?? null
       })) as Receipt[];
-    },
+    }
   });
-
   const error = queryError ? (queryError as any).message : null;
 
   // Fetch détail du reçu
   useEffect(() => {
     if (!selectedId || !isDrawerOpen) return;
-
     (async () => {
       setDetailLoading(true);
       setDetailError(null);
-
       try {
         // 1) lecture principale
-        const { data: r, error: e1 } = await (supabase as any)
-          .from("recus")
-          .select("*")
-          .eq("id", selectedId)
-          .single();
+        const {
+          data: r,
+          error: e1
+        } = await (supabase as any).from("recus").select("*").eq("id", selectedId).single();
         if (e1) throw e1;
-
         const receiptData = r as any;
         let processedByName: string | null = null;
         let clientName: string | null = null;
 
         // 2) profil (traité par)
         if (receiptData?.processed_by) {
-          const { data: p } = await (supabase as any)
-            .from("profiles")
-            .select("first_name, last_name")
-            .eq("user_id", receiptData.processed_by)
-            .maybeSingle();
+          const {
+            data: p
+          } = await (supabase as any).from("profiles").select("first_name, last_name").eq("user_id", receiptData.processed_by).maybeSingle();
           const profileData = p as any;
           processedByName = profileData ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim() : null;
         }
 
         // 3) client assigné
         if (receiptData?.client_id) {
-          const { data: c } = await (supabase as any)
-            .from("clients")
-            .select("name")
-            .eq("id", receiptData.client_id)
-            .maybeSingle();
+          const {
+            data: c
+          } = await (supabase as any).from("clients").select("name").eq("id", receiptData.client_id).maybeSingle();
           const clientData = c as any;
           clientName = clientData?.name ?? null;
         }
-
         setDetail({
           ...receiptData,
           _processedByName: processedByName,
-          _clientName: clientName,
+          _clientName: clientName
         });
       } catch (err: any) {
         setDetailError(err?.message || "Erreur lors du chargement du reçu");
@@ -261,93 +260,98 @@ const Recus = () => {
 
   // Realtime updates
   useEffect(() => {
-    const recusChannel = supabase
-      .channel("recus-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
-        const newRecu = payload.new as Receipt;
-        console.log("🔴 Realtime INSERT:", newRecu);
-        
-        // Refetch pour mettre à jour la liste
-        refetch();
-        
-        // Ouvrir automatiquement le drawer avec le nouveau reçu si pas déjà ouvert
-        if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
-          currentOpenReceiptId.current = newRecu.id;
-          setSelectedId(newRecu.id);
+    const recusChannel = supabase.channel("recus-realtime").on("postgres_changes", {
+      event: "INSERT",
+      schema: "public",
+      table: "recus"
+    }, payload => {
+      const newRecu = payload.new as Receipt;
+      console.log("🔴 Realtime INSERT:", newRecu);
+
+      // Refetch pour mettre à jour la liste
+      refetch();
+
+      // Ouvrir automatiquement le drawer avec le nouveau reçu si pas déjà ouvert
+      if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
+        currentOpenReceiptId.current = newRecu.id;
+        setSelectedId(newRecu.id);
+        setDetail(null);
+        setDetailError(null);
+        setIsDrawerOpen(true);
+
+        // Afficher une notification
+        toast({
+          title: "Nouveau reçu analysé !",
+          description: `${newRecu.enseigne || 'Reçu'} - ${formatCurrency(newRecu.montant_ttc)}`
+        });
+      }
+    }).on("postgres_changes", {
+      event: "UPDATE",
+      schema: "public",
+      table: "recus"
+    }, payload => {
+      const updatedRecu = payload.new as Receipt;
+      const oldRecu = payload.old as Receipt;
+      console.log("🔵 Realtime UPDATE:", {
+        id: updatedRecu.id,
+        oldStatus: oldRecu.status,
+        newStatus: updatedRecu.status,
+        receipt_number: updatedRecu.receipt_number
+      });
+
+      // Refetch pour mettre à jour la liste
+      refetch();
+
+      // Ouvrir automatiquement le drawer dès qu'un receipt_number est assigné
+      // ou si le statut passe à 'traite'
+      const shouldOpen = updatedRecu.receipt_number && !oldRecu.receipt_number ||
+      // Nouveau numéro assigné
+      updatedRecu.status === 'traite' && oldRecu.status !== 'traite' // Status devient traite
+      ;
+      if (shouldOpen) {
+        console.log("✅ Ouverture automatique du drawer pour reçu", updatedRecu.id);
+        if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
+          currentOpenReceiptId.current = updatedRecu.id;
+          setSelectedId(updatedRecu.id);
           setDetail(null);
           setDetailError(null);
           setIsDrawerOpen(true);
-          
+
           // Afficher une notification
           toast({
-            title: "Nouveau reçu analysé !",
-            description: `${newRecu.enseigne || 'Reçu'} - ${formatCurrency(newRecu.montant_ttc)}`,
+            title: "Reçu validé !",
+            description: `${updatedRecu.enseigne || 'Reçu'} n°${updatedRecu.receipt_number || '—'}`
           });
         }
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
-        const updatedRecu = payload.new as Receipt;
-        const oldRecu = payload.old as Receipt;
-        console.log("🔵 Realtime UPDATE:", { 
-          id: updatedRecu.id,
-          oldStatus: oldRecu.status, 
-          newStatus: updatedRecu.status,
-          receipt_number: updatedRecu.receipt_number
-        });
-        
-        // Refetch pour mettre à jour la liste
-        refetch();
-        
-        // Ouvrir automatiquement le drawer dès qu'un receipt_number est assigné
-        // ou si le statut passe à 'traite'
-        const shouldOpen = (
-          (updatedRecu.receipt_number && !oldRecu.receipt_number) || // Nouveau numéro assigné
-          (updatedRecu.status === 'traite' && oldRecu.status !== 'traite') // Status devient traite
-        );
-        
-        if (shouldOpen) {
-          console.log("✅ Ouverture automatique du drawer pour reçu", updatedRecu.id);
-          if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
-            currentOpenReceiptId.current = updatedRecu.id;
-            setSelectedId(updatedRecu.id);
-            setDetail(null);
-            setDetailError(null);
-            setIsDrawerOpen(true);
-            
-            // Afficher une notification
-            toast({
-              title: "Reçu validé !",
-              description: `${updatedRecu.enseigne || 'Reçu'} n°${updatedRecu.receipt_number || '—'}`,
-            });
-          }
-        }
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
-        refetch();
-      })
-      .subscribe();
-
-    const clientsChannel = supabase
-      .channel("clients-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
-        refetchClients();
-      })
-      .subscribe();
-
-    const membersChannel = supabase
-      .channel("members-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "org_members" }, () => {
-        refetchMembers();
-      })
-      .subscribe();
-
+      }
+    }).on("postgres_changes", {
+      event: "DELETE",
+      schema: "public",
+      table: "recus"
+    }, () => {
+      refetch();
+    }).subscribe();
+    const clientsChannel = supabase.channel("clients-realtime").on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "clients"
+    }, () => {
+      refetchClients();
+    }).subscribe();
+    const membersChannel = supabase.channel("members-realtime").on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "org_members"
+    }, () => {
+      refetchMembers();
+    }).subscribe();
     return () => {
       supabase.removeChannel(recusChannel);
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(membersChannel);
     };
   }, [refetch]);
-  
+
   // Mettre à jour la référence quand le drawer s'ouvre/ferme
   useEffect(() => {
     if (!isDrawerOpen) {
@@ -356,9 +360,7 @@ const Recus = () => {
       currentOpenReceiptId.current = selectedId;
     }
   }, [isDrawerOpen, selectedId]);
-
-  return (
-    <MainLayout>
+  return <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
@@ -372,7 +374,7 @@ const Recus = () => {
         </div>
 
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
-          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+          <Select value={sortOrder} onValueChange={v => setSortOrder(v as "desc" | "asc")}>
             <SelectTrigger className="w-full md:w-[240px]">
               <ArrowDownUp className="w-4 h-4 mr-2" />
               <SelectValue />
@@ -389,11 +391,9 @@ const Recus = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les clients</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
+              {clients.map(client => <SelectItem key={client.id} value={client.id}>
                   {client.name}
-                </SelectItem>
-              ))}
+                </SelectItem>)}
             </SelectContent>
           </Select>
           
@@ -403,15 +403,13 @@ const Recus = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les membres</SelectItem>
-              {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
+              {members.map(member => <SelectItem key={member.id} value={member.id}>
                   {member.name}
-                </SelectItem>
-              ))}
+                </SelectItem>)}
             </SelectContent>
           </Select>
           
-          <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as typeof selectedStatus)}>
+          <Select value={selectedStatus} onValueChange={v => setSelectedStatus(v as typeof selectedStatus)}>
             <SelectTrigger className="w-full md:w-[160px]">
               <SelectValue placeholder="Statut" />
             </SelectTrigger>
@@ -426,12 +424,7 @@ const Recus = () => {
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher par client, numéro ou adresse"
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <Input placeholder="Rechercher par client, numéro ou adresse" className="pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
           </div>
         </div>
@@ -441,51 +434,35 @@ const Recus = () => {
             <CardTitle>Liste des reçus</CardTitle>
           </CardHeader>
           <CardContent className="transition-all duration-200">
-            {loading ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground">
+            {loading ? <div className="flex items-center justify-center py-16 text-muted-foreground">
                 Chargement…
-              </div>
-            ) : error ? (
-              <div className="flex items-center justify-center py-16 text-sm text-destructive">
+              </div> : error ? <div className="flex items-center justify-center py-16 text-sm text-destructive">
                 {error}
-              </div>
-            ) : receipts.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground">
+              </div> : receipts.length === 0 ? <div className="flex items-center justify-center py-16 text-muted-foreground">
                 Aucun reçu n'a encore été traité
-              </div>
-            ) : (
-              <>
+              </div> : <>
                 {/* Mobile: Cards */}
                 <div className="md:hidden space-y-3 transition-all duration-200">
-                  {receipts.map((receipt) => {
-                    const dateValue = receipt.date_traitement || receipt.created_at;
-                    const formattedDate = formatDate(dateValue);
-                    const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
-                    const formattedMontantHT = formatCurrency(receipt.montant_ht);
-
-                    const statusLabels: Record<string, string> = {
-                      traite: "Validé",
-                      en_cours: "En cours",
-                      en_attente: "En attente"
-                    };
-
-                    return (
-                      <div
-                        key={receipt.id}
-                        className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3"
-                        onClick={() => {
-                          setSelectedId(receipt.id);
-                          setDetail(null);
-                          setDetailError(null);
-                          setIsDrawerOpen(true);
-                        }}
-                      >
+                  {receipts.map(receipt => {
+                const dateValue = receipt.date_traitement || receipt.created_at;
+                const formattedDate = formatDate(dateValue);
+                const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
+                const formattedMontantHT = formatCurrency(receipt.montant_ht);
+                const statusLabels: Record<string, string> = {
+                  traite: "Validé",
+                  en_cours: "En cours",
+                  en_attente: "En attente"
+                };
+                return <div key={receipt.id} className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3" onClick={() => {
+                  setSelectedId(receipt.id);
+                  setDetail(null);
+                  setDetailError(null);
+                  setIsDrawerOpen(true);
+                }}>
                         <div className="flex items-start justify-between">
                           <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
-                            {receipt.receipt_number && (
-                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
-                            )}
+                            {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
                           </div>
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
@@ -505,16 +482,13 @@ const Recus = () => {
                             {statusLabels[receipt.status || ''] || receipt.status || "—"}
                           </div>
                         </div>
-                        {(receipt.ville || receipt.numero_recu) && (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {(receipt.ville || receipt.numero_recu) && <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {receipt.ville && <span>{receipt.ville}</span>}
                             {receipt.ville && receipt.numero_recu && <span>•</span>}
                             {receipt.numero_recu && <span>N° {receipt.numero_recu}</span>}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          </div>}
+                      </div>;
+              })}
                 </div>
 
                 {/* Desktop: Table */}
@@ -529,33 +503,25 @@ const Recus = () => {
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Moyen de paiement</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date de traitement</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Statut</th>
+                      
                     </tr>
                   </thead>
                   <tbody>
-                    {receipts.map((receipt) => {
-                      const statusLabels: Record<string, string> = {
-                        traite: "Validé",
-                        en_cours: "En cours",
-                        en_attente: "En attente"
-                      };
-
-                      return (
-                        <tr 
-                          key={receipt.id} 
-                          className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
-                          onClick={() => {
-                            setSelectedId(receipt.id);
-                            setDetail(null);
-                            setDetailError(null);
-                            setIsDrawerOpen(true);
-                          }}
-                        >
+                    {receipts.map(receipt => {
+                    const statusLabels: Record<string, string> = {
+                      traite: "Validé",
+                      en_cours: "En cours",
+                      en_attente: "En attente"
+                    };
+                    return <tr key={receipt.id} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => {
+                      setSelectedId(receipt.id);
+                      setDetail(null);
+                      setDetailError(null);
+                      setIsDrawerOpen(true);
+                    }}>
                           <td className="py-3 px-4 text-sm">
                             <div className="font-medium">{receipt.enseigne || "—"}</div>
-                            {receipt.receipt_number && (
-                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
-                            )}
+                            {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
                           </td>
                           <td className="py-3 px-4 text-sm">{receipt.ville || "—"}</td>
                           <td className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums">
@@ -571,50 +537,27 @@ const Recus = () => {
                           <td className="py-3 px-4 text-sm">
                             {formatDate(receipt.date_traitement || receipt.created_at)}
                           </td>
-                          <td className="py-3 px-4 text-sm">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-150
-                              ${receipt.status === 'traite' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : ''}
-                              ${receipt.status === 'en_cours' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : ''}
-                              ${receipt.status === 'en_attente' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' : ''}
-                            `}>
-                              {statusLabels[receipt.status || ''] || receipt.status || "—"}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          
+                        </tr>;
+                  })}
                   </tbody>
                 </table>
                 </div>
-              </>
-            )}
+              </>}
           </CardContent>
         </Card>
 
-        <UploadInstructionsDialog
-          open={isDialogOpen}
-          onOpenChange={setIsDialogOpen}
-        />
+        <UploadInstructionsDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
 
-        <ReceiptDetailDrawer
-          open={isDrawerOpen}
-          onOpenChange={(open) => {
-            setIsDrawerOpen(open);
-            if (!open) {
-              setSelectedId(null);
-              setDetail(null);
-              setDetailError(null);
-            }
-          }}
-          detail={detail}
-          loading={detailLoading}
-          error={detailError}
-          clients={clients}
-          members={members}
-        />
+        <ReceiptDetailDrawer open={isDrawerOpen} onOpenChange={open => {
+        setIsDrawerOpen(open);
+        if (!open) {
+          setSelectedId(null);
+          setDetail(null);
+          setDetailError(null);
+        }
+      }} detail={detail} loading={detailLoading} error={detailError} clients={clients} members={members} />
       </div>
-    </MainLayout>
-  );
+    </MainLayout>;
 };
-
 export default Recus;
