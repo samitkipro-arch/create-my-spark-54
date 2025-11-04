@@ -14,7 +14,7 @@ type BillingInterval = "monthly" | "yearly";
 // Mapping des price IDs Stripe
 const PRICE_IDS = {
   essentiel: {
-    monthly: "price_1SPRFgD3myr3drrgxZBsTlZl",
+    monthly: "price_1SPbSpD3myr3drrgBBkv8hA5",
     yearly: "price_1SPKtQD3myr3drrgxODHVnrh",
   },
   avance: {
