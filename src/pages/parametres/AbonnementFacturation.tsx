@@ -191,7 +191,7 @@ const AbonnementFacturation = () => {
                     )}
                     {billingInterval === "yearly" && !tier.isEnterprise && (
                       <p className="text-sm text-green-500 font-medium">
-                        Économiser {yearlySavings.savings}€ / {yearlySavings.freeMonths} mois offerts
+                        Économiser {yearlySavings.savings}€
                       </p>
                     )}
                   </div>
