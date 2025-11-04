@@ -51,7 +51,18 @@ serve(async (req) => {
       logStep("No existing customer, will create new one");
     }
 
-    const origin = req.headers.get("origin") || "http://localhost:5173";
+    // Get origin and ensure it has a valid scheme
+    let origin = req.headers.get("origin") || req.headers.get("referer") || "";
+    
+    // Remove trailing slash if present
+    origin = origin.replace(/\/$/, "");
+    
+    // If no origin or it doesn't start with http, use a default
+    if (!origin || (!origin.startsWith("http://") && !origin.startsWith("https://"))) {
+      origin = "https://grvktogwmdirpcjhbqyc.supabase.co";
+    }
+    
+    logStep("Using origin for redirect URLs", { origin });
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
