@@ -13,19 +13,21 @@ type BillingInterval = "monthly" | "yearly";
 interface PricingTier {
   name: string;
   monthlyPrice: number;
-  yearlyPrice: number;
+  yearlyMonthlyPrice: number;
   description: string;
   features: string[];
   highlighted?: boolean;
   isEnterprise?: boolean;
   current?: boolean;
+  freeMonths?: number;
 }
 
 const pricingTiers: PricingTier[] = [
   {
     name: "Essentiel",
     monthlyPrice: 49,
-    yearlyPrice: 40.83,
+    yearlyMonthlyPrice: 41,
+    freeMonths: 2,
     description: "Pour les cabinets qui veulent démarrer simplement.",
     features: [
       "Jusqu'à 750 reçus analysés.",
@@ -39,7 +41,8 @@ const pricingTiers: PricingTier[] = [
   {
     name: "Avancé",
     monthlyPrice: 99,
-    yearlyPrice: 74.25,
+    yearlyMonthlyPrice: 74,
+    freeMonths: 3,
     description: "Pour les cabinets qui traitent un volume élevé de reçus chaque mois.",
     highlighted: true,
     current: true,
@@ -54,7 +57,7 @@ const pricingTiers: PricingTier[] = [
   {
     name: "Expert",
     monthlyPrice: 0,
-    yearlyPrice: 0,
+    yearlyMonthlyPrice: 0,
     description: "Pour les cabinets qui veulent un accompagnement et des intégrations sur-mesure.",
     isEnterprise: true,
     features: [
@@ -118,13 +121,8 @@ const AbonnementFacturation = () => {
     }
   };
 
-  const getYearlySavings = (tier: PricingTier) => {
-    const monthlyCost = tier.monthlyPrice * 12;
-    const yearlyCost = tier.yearlyPrice * 12;
-    const savings = monthlyCost - yearlyCost;
-    const freeMonths = Math.floor(savings / tier.yearlyPrice);
-    return { savings, freeMonths };
-  };
+
+  const fmt = new Intl.NumberFormat("fr-FR");
 
   return (
     <MainLayout>
@@ -158,9 +156,7 @@ const AbonnementFacturation = () => {
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
           {pricingTiers.map((tier, index) => {
-            const yearlySavings = getYearlySavings(tier);
-            const price = billingInterval === "monthly" ? tier.monthlyPrice : tier.yearlyPrice;
-            const interval = billingInterval === "monthly" ? "/mois" : "/an";
+            const isYearly = billingInterval === "yearly";
 
             return (
               <Card
@@ -181,17 +177,17 @@ const AbonnementFacturation = () => {
                 <CardHeader className={cn(tier.highlighted && "pt-8")}>
                   <div className="space-y-2">
                     <CardTitle className="text-2xl">{tier.name}</CardTitle>
-                     {!tier.isEnterprise ? (
+                    {!tier.isEnterprise ? (
                       <div className="flex items-baseline gap-1">
-                        <span className="text-5xl font-bold">{Math.round(price)}€</span>
-                        <span className="text-muted-foreground">{interval}</span>
+                        <span className="text-5xl font-bold">{fmt.format(isYearly ? tier.yearlyMonthlyPrice : tier.monthlyPrice)}€</span>
+                        <span className="text-muted-foreground">/mois</span>
                       </div>
                     ) : (
                       <div className="text-5xl font-bold">Sur Devis</div>
                     )}
-                    {billingInterval === "yearly" && !tier.isEnterprise && (
+                    {isYearly && !tier.isEnterprise && tier.freeMonths && (
                       <p className="text-sm text-green-500 font-medium">
-                        Économiser {yearlySavings.savings}€ / {yearlySavings.freeMonths} mois offerts
+                        Économiser {fmt.format(tier.monthlyPrice * tier.freeMonths)}€ / {tier.freeMonths} mois offerts
                       </p>
                     )}
                   </div>
