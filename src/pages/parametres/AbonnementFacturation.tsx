@@ -120,7 +120,8 @@ const AbonnementFacturation = () => {
 
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        // Rediriger dans la même fenêtre pour éviter le blocage des pop-ups
+        window.location.href = data.url;
       }
     } catch (error) {
       console.error('Error creating checkout:', error);
@@ -139,7 +140,8 @@ const AbonnementFacturation = () => {
       const { data, error } = await supabase.functions.invoke('customer-portal');
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        // Rediriger dans la même fenêtre pour éviter le blocage des pop-ups
+        window.location.href = data.url;
       }
     } catch (error) {
       console.error('Error opening customer portal:', error);
