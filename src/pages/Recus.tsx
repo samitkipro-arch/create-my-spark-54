@@ -859,6 +859,9 @@ const Recus = () => {
                   <p className="text-xs text-muted-foreground">
                     Cette URL est obligatoire. Finvisor va ajouter une ligne dans ce document Google Sheets.
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    Important : ouvrez votre Google Sheet → cliquez sur Partager → dans "Accès général" sélectionnez "Toute personne disposant du lien" → puis choisissez le rôle "Éditeur".
+                  </p>
                 </div>
               )}
 
