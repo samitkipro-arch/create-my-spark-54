@@ -135,24 +135,40 @@ const Recus = () => {
 
     setExportLoading(true);
     try {
-      const payload: any = {
-        method: exportMethod,
-        receipt_ids: selectedIds,
-        email: exportEmail,
-      };
+      // Récupérer l'utilisateur courant
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error("Utilisateur non authentifié");
+      }
 
-      if (exportMethod === "sheets" && sheetsSpreadsheetId) {
-        payload.sheets_spreadsheet_id = sheetsSpreadsheetId;
+      // Récupérer l'org_id de l'utilisateur
+      const { data: orgMember, error: orgError } = await supabase
+        .from("org_members")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (orgError || !orgMember) {
+        throw new Error("Organisation introuvable");
       }
-      if (exportMethod === "drive" && driveFolderId) {
-        payload.drive_folder_id = driveFolderId;
-      }
+
+      // Construire le payload avec les IDs en nombres
+      const payload = {
+        org_id: orgMember.org_id,
+        emails: exportEmail,
+        method: exportMethod,
+        receipt_ids: selectedIds.map(id => parseInt(id, 10)),
+      };
 
       const response = await fetch(N8N_EXPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
 
       const result = await response.json();
 
@@ -170,7 +186,7 @@ const Recus = () => {
       console.error("Export error:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de l'export.",
+        description: error.message || "Une erreur est survenue lors de l'export.",
         variant: "destructive",
       });
     } finally {
