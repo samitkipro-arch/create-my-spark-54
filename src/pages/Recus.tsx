@@ -91,15 +91,6 @@ const Recus = () => {
   const [driveFolderId, setDriveFolderId] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
-  // Microsoft OAuth state for Excel export
-  const [msConnected, setMsConnected] = useState(() => {
-    return sessionStorage.getItem("ms:token") !== null;
-  });
-  const [msWorkbooks, setMsWorkbooks] = useState<Array<{ id: string; name: string }>>([]);
-  const [msSheets, setMsSheets] = useState<Array<{ name: string }>>([]);
-  const [selectedWorkbookId, setSelectedWorkbookId] = useState("");
-  const [selectedSheetName, setSelectedSheetName] = useState("");
-  const [msLoading, setMsLoading] = useState(false);
 
   // n8n webhook URL
   const N8N_EXPORT_URL =
@@ -130,115 +121,8 @@ const Recus = () => {
     setExportEmail("");
     setSheetUrl("");
     setDriveFolderId("");
-    setSelectedWorkbookId("");
-    setSelectedSheetName("");
-    setMsWorkbooks([]);
-    setMsSheets([]);
   };
 
-  // Microsoft OAuth connection handler
-  const handleMicrosoftConnect = async () => {
-    setMsLoading(true);
-    try {
-      // TODO: Replace with real Microsoft OAuth flow
-      // For now, we simulate a successful connection
-      // Real implementation would:
-      // 1. Open popup to Microsoft OAuth endpoint with client_id and scopes
-      // 2. Handle redirect and extract access token
-      // 3. Store token securely
-      
-      // Mock token for development
-      const mockToken = "mock_ms_token_" + Date.now();
-      sessionStorage.setItem("ms:token", mockToken);
-      setMsConnected(true);
-
-      // Fetch workbooks after successful connection
-      await fetchWorkbooks();
-
-      toast({
-        title: "Connexion réussie",
-        description: "Votre compte Microsoft est connecté.",
-      });
-    } catch (error: any) {
-      console.error("Microsoft connection error:", error);
-      toast({
-        title: "Erreur de connexion",
-        description: error.message || "Impossible de se connecter à Microsoft.",
-        variant: "destructive",
-      });
-    } finally {
-      setMsLoading(false);
-    }
-  };
-
-  // Fetch Microsoft workbooks
-  const fetchWorkbooks = async () => {
-    setMsLoading(true);
-    try {
-      // TODO: Replace with real API call to Microsoft Graph API
-      // Real endpoint: GET https://graph.microsoft.com/v1.0/me/drive/root/search(q='.xlsx')?select=id,name
-      // Or: GET https://graph.microsoft.com/v1.0/me/drive/items/{item-id}/workbook
-      
-      // Mock workbooks for development
-      const mockWorkbooks = [
-        { id: "workbook-1", name: "Comptabilité 2025.xlsx" },
-        { id: "workbook-2", name: "Factures.xlsx" },
-        { id: "workbook-3", name: "Reçus Clients.xlsx" },
-      ];
-      
-      setMsWorkbooks(mockWorkbooks);
-    } catch (error: any) {
-      console.error("Fetch workbooks error:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de récupérer la liste des classeurs.",
-        variant: "destructive",
-      });
-    } finally {
-      setMsLoading(false);
-    }
-  };
-
-  // Fetch sheets for selected workbook
-  const fetchSheets = async (workbookId: string) => {
-    setMsLoading(true);
-    setMsSheets([]);
-    setSelectedSheetName("");
-    try {
-      // TODO: Replace with real API call to Microsoft Graph API
-      // Real endpoint: GET https://graph.microsoft.com/v1.0/me/drive/items/{workbookId}/workbook/worksheets
-      
-      // Mock sheets for development
-      const mockSheets = [
-        { name: "Reçus" },
-        { name: "Janvier" },
-        { name: "Février" },
-        { name: "Mars" },
-      ];
-      
-      setMsSheets(mockSheets);
-    } catch (error: any) {
-      console.error("Fetch sheets error:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de récupérer la liste des feuilles.",
-        variant: "destructive",
-      });
-    } finally {
-      setMsLoading(false);
-    }
-  };
-
-  // Handle workbook selection
-  const handleWorkbookChange = (workbookId: string) => {
-    setSelectedWorkbookId(workbookId);
-    if (workbookId) {
-      fetchSheets(workbookId);
-    } else {
-      setMsSheets([]);
-      setSelectedSheetName("");
-    }
-  };
 
   // Handle export validation and submission
   const handleExportSubmit = async () => {
@@ -259,34 +143,6 @@ const Recus = () => {
         variant: "destructive",
       });
       return;
-    }
-
-    // Validation pour Excel (Microsoft OAuth)
-    if (exportMethod === "excel") {
-      if (!msConnected) {
-        toast({
-          title: "Erreur",
-          description: "Veuillez vous connecter à Microsoft.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!selectedWorkbookId) {
-        toast({
-          title: "Erreur",
-          description: "Sélectionnez un classeur.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!selectedSheetName) {
-        toast({
-          title: "Erreur",
-          description: "Sélectionnez une feuille.",
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     // Validation pour Google Drive
@@ -328,14 +184,6 @@ const Recus = () => {
       // Payload spécifique pour Google Sheets
       if (exportMethod === "sheets" && sheetUrl) {
         payload.sheet_url = sheetUrl;
-      }
-
-      // Payload spécifique pour Excel (Microsoft)
-      if (exportMethod === "excel") {
-        payload.excel = {
-          workbook_id: selectedWorkbookId,
-          sheet_name: selectedSheetName,
-        };
       }
 
       // Payload spécifique pour Google Drive
@@ -1022,67 +870,6 @@ const Recus = () => {
                 </div>
               )}
 
-              {exportMethod === "excel" && (
-                <div className="space-y-4">
-                  <p className="text-xs text-muted-foreground">
-                    Connectez votre compte Microsoft pour choisir un classeur et une feuille.
-                  </p>
-                  
-                  {!msConnected ? (
-                    <Button 
-                      onClick={handleMicrosoftConnect} 
-                      disabled={msLoading}
-                      className="w-full"
-                    >
-                      {msLoading ? "Connexion..." : "Se connecter à Microsoft"}
-                    </Button>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="workbook-select">Classeur (Workbook) *</Label>
-                        <Select 
-                          value={selectedWorkbookId} 
-                          onValueChange={handleWorkbookChange}
-                          disabled={msLoading || msWorkbooks.length === 0}
-                        >
-                          <SelectTrigger id="workbook-select" className="w-full">
-                            <SelectValue placeholder="Sélectionnez un classeur" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {msWorkbooks.map(wb => (
-                              <SelectItem key={wb.id} value={wb.id}>
-                                {wb.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {selectedWorkbookId && (
-                        <div className="space-y-2">
-                          <Label htmlFor="sheet-select">Feuille (Sheet) *</Label>
-                          <Select 
-                            value={selectedSheetName} 
-                            onValueChange={setSelectedSheetName}
-                            disabled={msLoading || msSheets.length === 0}
-                          >
-                            <SelectTrigger id="sheet-select" className="w-full">
-                              <SelectValue placeholder="Sélectionnez une feuille" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {msSheets.map(sheet => (
-                                <SelectItem key={sheet.name} value={sheet.name}>
-                                  {sheet.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {exportMethod === "drive" && (
                 <div className="space-y-2">
@@ -1103,7 +890,7 @@ const Recus = () => {
               </Button>
               <Button 
                 onClick={handleExportSubmit} 
-                disabled={exportLoading || (exportMethod === "excel" && (!msConnected || !selectedWorkbookId || !selectedSheetName))}
+                disabled={exportLoading}
               >
                 {exportLoading ? "Export en cours..." : "Valider l'export"}
               </Button>
