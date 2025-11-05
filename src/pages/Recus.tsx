@@ -214,6 +214,7 @@ const Recus = () => {
       // Construire le payload selon la méthode
       const payload: any = {
         method: exportMethod,
+        org_id: orgMember.org_id,
         receipt_ids: selectedIds.map(id => parseInt(id, 10)),
       };
 
