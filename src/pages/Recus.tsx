@@ -124,10 +124,10 @@ const Recus = () => {
 
   // Handle export validation and submission
   const handleExportSubmit = async () => {
-    if (!exportMethod || !exportEmail || selectedIds.length === 0) {
+    if (!exportMethod || selectedIds.length === 0) {
       toast({
         title: "Erreur",
-        description: "Veuillez sélectionner une méthode et renseigner un email.",
+        description: "Veuillez sélectionner une méthode.",
         variant: "destructive",
       });
       return;
@@ -138,6 +138,16 @@ const Recus = () => {
       toast({
         title: "Erreur",
         description: "L'URL Google Sheet est obligatoire pour lancer l'export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation pour Excel et Google Drive
+    if ((exportMethod === "excel" || exportMethod === "drive") && !exportEmail) {
+      toast({
+        title: "Erreur",
+        description: "L'email est obligatoire pour cette méthode d'export.",
         variant: "destructive",
       });
       return;
