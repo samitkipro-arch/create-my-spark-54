@@ -89,6 +89,20 @@ const Recus = () => {
   const [exportEmail, setExportEmail] = useState("");
   const [sheetUrl, setSheetUrl] = useState("");
   const [driveFolderId, setDriveFolderId] = useState("");
+  const [workbookId, setWorkbookId] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("receipts:workbookId") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [sheetName, setSheetName] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("receipts:sheetName") || "";
+    } catch {
+      return "";
+    }
+  });
   const [exportLoading, setExportLoading] = useState(false);
 
 
@@ -109,6 +123,16 @@ const Recus = () => {
     }
   }, [selectedIds]);
 
+  // Persist workbookId and sheetName to sessionStorage
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("receipts:workbookId", workbookId);
+      sessionStorage.setItem("receipts:sheetName", sheetName);
+    } catch (e) {
+      console.error("Failed to save Excel settings to sessionStorage", e);
+    }
+  }, [workbookId, sheetName]);
+
   // Selection helpers
   const toggleOne = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -121,6 +145,7 @@ const Recus = () => {
     setExportEmail("");
     setSheetUrl("");
     setDriveFolderId("");
+    // Note: we keep workbookId and sheetName persisted for reuse
   };
 
 
@@ -143,6 +168,18 @@ const Recus = () => {
         variant: "destructive",
       });
       return;
+    }
+
+    // Validation pour Excel
+    if (exportMethod === "excel") {
+      if (!workbookId || !sheetName) {
+        toast({
+          title: "Erreur",
+          description: "Veuillez renseigner le Workbook ID et le nom de la feuille.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     // Validation pour Google Drive
@@ -176,7 +213,6 @@ const Recus = () => {
 
       // Construire le payload selon la méthode
       const payload: any = {
-        org_id: orgMember.org_id,
         method: exportMethod,
         receipt_ids: selectedIds.map(id => parseInt(id, 10)),
       };
@@ -184,6 +220,12 @@ const Recus = () => {
       // Payload spécifique pour Google Sheets
       if (exportMethod === "sheets" && sheetUrl) {
         payload.sheet_url = sheetUrl;
+      }
+
+      // Payload spécifique pour Excel
+      if (exportMethod === "excel") {
+        payload.workbook_id = workbookId;
+        payload.sheet_name = sheetName;
       }
 
       // Payload spécifique pour Google Drive
@@ -870,6 +912,38 @@ const Recus = () => {
                 </div>
               )}
 
+              {exportMethod === "excel" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="workbook-id">Classeur (Workbook ID) *</Label>
+                    <Input
+                      id="workbook-id"
+                      type="text"
+                      placeholder="01ABCDEF234567890!12345"
+                      value={workbookId}
+                      onChange={(e) => setWorkbookId(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Dans Excel Online, ouvrez le classeur → l'URL contient l'ID entre /items/&#123;ID&#125;/
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sheet-name">Feuille (Sheet name) *</Label>
+                    <Input
+                      id="sheet-name"
+                      type="text"
+                      placeholder="Feuil1"
+                      value={sheetName}
+                      onChange={(e) => setSheetName(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Exemple : Feuil1, Sheet1, etc.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {exportMethod === "drive" && (
                 <div className="space-y-2">
@@ -890,7 +964,10 @@ const Recus = () => {
               </Button>
               <Button 
                 onClick={handleExportSubmit} 
-                disabled={exportLoading}
+                disabled={
+                  exportLoading || 
+                  (exportMethod === "excel" && (!workbookId || !sheetName))
+                }
               >
                 {exportLoading ? "Export en cours..." : "Valider l'export"}
               </Button>
