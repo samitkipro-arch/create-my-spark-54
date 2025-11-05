@@ -87,7 +87,7 @@ const Recus = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportMethod, setExportMethod] = useState<"sheets" | "excel" | "drive" | "">("");
   const [exportEmail, setExportEmail] = useState("");
-  const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
   const [driveFolderId, setDriveFolderId] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -118,7 +118,7 @@ const Recus = () => {
     setExportOpen(false);
     setExportMethod("");
     setExportEmail("");
-    setSheetsSpreadsheetId("");
+    setSheetUrl("");
     setDriveFolderId("");
   };
 
@@ -128,6 +128,16 @@ const Recus = () => {
       toast({
         title: "Erreur",
         description: "Veuillez sélectionner une méthode et renseigner un email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validation spécifique pour Google Sheets
+    if (exportMethod === "sheets" && !sheetUrl) {
+      toast({
+        title: "Erreur",
+        description: "L'URL Google Sheet est obligatoire pour lancer l'export.",
         variant: "destructive",
       });
       return;
@@ -153,12 +163,17 @@ const Recus = () => {
       }
 
       // Construire le payload avec les IDs en nombres
-      const payload = {
+      const payload: any = {
         org_id: orgMember.org_id,
-        emails: exportEmail,
+        email: exportEmail,
         method: exportMethod,
         receipt_ids: selectedIds.map(id => parseInt(id, 10)),
       };
+
+      // Ajouter l'URL du sheet si méthode sheets
+      if (exportMethod === "sheets" && sheetUrl) {
+        payload.sheet_url = sheetUrl;
+      }
 
       const response = await fetch(N8N_EXPORT_URL, {
         method: "POST",
@@ -832,13 +847,18 @@ const Recus = () => {
 
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
-                  <Label htmlFor="sheets-id">ID Spreadsheet (optionnel)</Label>
+                  <Label htmlFor="sheet-url">URL du Google Sheet cible *</Label>
                   <Input
-                    id="sheets-id"
-                    placeholder="1a2b3c4d..."
-                    value={sheetsSpreadsheetId}
-                    onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
+                    id="sheet-url"
+                    type="url"
+                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                    value={sheetUrl}
+                    onChange={(e) => setSheetUrl(e.target.value)}
+                    required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Cette URL est obligatoire. Finvisor va ajouter une ligne dans ce document Google Sheets.
+                  </p>
                 </div>
               )}
 
