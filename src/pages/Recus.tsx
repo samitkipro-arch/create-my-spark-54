@@ -834,17 +834,6 @@ const Recus = () => {
                 </RadioGroup>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="export-email">Email destinataire *</Label>
-                <Input
-                  id="export-email"
-                  type="email"
-                  placeholder="email@exemple.fr"
-                  value={exportEmail}
-                  onChange={(e) => setExportEmail(e.target.value)}
-                />
-              </div>
-
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
                   <Label htmlFor="sheet-url">URL du Google Sheet cible *</Label>
@@ -865,14 +854,15 @@ const Recus = () => {
                 </div>
               )}
 
-              {exportMethod === "drive" && (
+              {(exportMethod === "excel" || exportMethod === "drive") && (
                 <div className="space-y-2">
-                  <Label htmlFor="drive-folder">ID Dossier Drive (optionnel)</Label>
+                  <Label htmlFor="export-email">Email destinataire *</Label>
                   <Input
-                    id="drive-folder"
-                    placeholder="1a2b3c4d..."
-                    value={driveFolderId}
-                    onChange={(e) => setDriveFolderId(e.target.value)}
+                    id="export-email"
+                    type="email"
+                    placeholder="email@exemple.fr"
+                    value={exportEmail}
+                    onChange={(e) => setExportEmail(e.target.value)}
                   />
                 </div>
               )}
