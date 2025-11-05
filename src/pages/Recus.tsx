@@ -75,8 +75,15 @@ const Recus = () => {
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Export selection state
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Export selection state with sessionStorage persistence
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    try {
+      const stored = sessionStorage.getItem("receipts:selectedIds");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [exportOpen, setExportOpen] = useState(false);
   const [exportMethod, setExportMethod] = useState<"sheets" | "excel" | "drive" | "">("");
   const [exportEmail, setExportEmail] = useState("");
@@ -91,6 +98,15 @@ const Recus = () => {
 
   // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
+
+  // Persist selectedIds to sessionStorage
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("receipts:selectedIds", JSON.stringify(selectedIds));
+    } catch (e) {
+      console.error("Failed to save selection to sessionStorage", e);
+    }
+  }, [selectedIds]);
 
   // Selection helpers
   const toggleOne = (id: string) =>
@@ -546,7 +562,7 @@ const Recus = () => {
                 Aucun reçu n'a encore été traité
               </div> : <>
                 {/* Mobile: Cards */}
-                <div className="md:hidden space-y-3 transition-all duration-200">
+                <div className="md:hidden space-y-3 transition-all duration-200 pb-24">
                   {receipts.map(receipt => {
                 const dateValue = receipt.date_traitement || receipt.created_at;
                 const formattedDate = formatDate(dateValue);
@@ -557,13 +573,35 @@ const Recus = () => {
                   en_cours: "En cours",
                   en_attente: "En attente"
                 };
-                return <div key={receipt.id} className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3" onClick={() => {
-                  setSelectedId(receipt.id);
-                  setDetail(null);
-                  setDetailError(null);
-                  setIsDrawerOpen(true);
-                }}>
-                        <div className="flex items-start justify-between">
+                const isSelected = selectedIds.includes(String(receipt.id));
+                return <div 
+                  key={receipt.id} 
+                  className={`relative p-4 rounded-lg bg-card/50 border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3 ${
+                    isSelected ? 'ring-2 ring-primary/40 border-primary/40' : 'border-border'
+                  }`}
+                  onClick={() => {
+                    toggleOne(String(receipt.id));
+                  }}
+                  data-selected={isSelected}
+                >
+                        {/* Circular checkbox */}
+                        <div 
+                          className="absolute left-3 top-3 z-10 h-7 w-7 rounded-full bg-card shadow-sm ring-1 ring-border flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOne(String(receipt.id));
+                          }}
+                          aria-label="Sélectionner ce reçu"
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleOne(String(receipt.id))}
+                            className="h-5 w-5 rounded-full"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+
+                        <div className="flex items-start justify-between pl-8">
                           <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
                             {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
@@ -694,6 +732,37 @@ const Recus = () => {
               </>}
           </CardContent>
         </Card>
+
+        {/* Mobile sticky action bar */}
+        {selectedIds.length > 0 && (
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-lg safe-area-inset-bottom">
+            <div className="flex items-center gap-2 p-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleAll(receipts.map(r => String(r.id)))}
+                className="flex-1"
+              >
+                Tout sélectionner
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedIds([])}
+                className="flex-1"
+              >
+                Effacer
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setExportOpen(true)}
+                className="flex-1"
+              >
+                Exporter ({selectedIds.length})
+              </Button>
+            </div>
+          </div>
+        )}
 
         <UploadInstructionsDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
 
