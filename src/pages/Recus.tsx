@@ -584,28 +584,31 @@ const Recus = () => {
                   }}
                   data-selected={isSelected}
                 >
-                        {/* Circular checkbox */}
-                        <div 
-                          className="absolute left-3 top-3 z-10 h-7 w-7 rounded-full bg-card shadow-sm ring-1 ring-border flex items-center justify-center"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleOne(String(receipt.id));
-                          }}
-                          aria-label="Sélectionner ce reçu"
-                        >
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleOne(String(receipt.id))}
-                            className="h-5 w-5 rounded-full"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-
-                        <div className="flex items-start justify-between pl-8">
-                          <div>
-                            <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
-                            {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            {/* Circular checkbox aligned with title (mobile only) */}
+                            <div 
+                              className="md:hidden h-7 w-7 rounded-full bg-card shadow-sm ring-1 ring-border flex items-center justify-center flex-shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleOne(String(receipt.id));
+                              }}
+                              aria-label="Sélectionner ce reçu"
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleOne(String(receipt.id))}
+                                className="h-5 w-5 rounded-full"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                            
+                            <div>
+                              <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
+                              {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
+                            </div>
                           </div>
+                          
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
