@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 type Receipt = {
   id: number;
@@ -71,8 +75,92 @@ const Recus = () => {
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Export selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportMethod, setExportMethod] = useState<"sheets" | "excel" | "drive" | "">("");
+  const [exportEmail, setExportEmail] = useState("");
+  const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
+  const [driveFolderId, setDriveFolderId] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
+
+  // n8n webhook URL
+  const N8N_EXPORT_URL =
+    (import.meta as any).env?.VITE_N8N_EXPORT_URL ??
+    "https://samilzr.app.n8n.cloud/webhook-test/export-receipt";
+
   // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
+
+  // Selection helpers
+  const toggleOne = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleAll = (allIds: string[]) =>
+    setSelectedIds(prev => prev.length === allIds.length ? [] : allIds);
+  const resetExportUI = () => {
+    setSelectedIds([]);
+    setExportOpen(false);
+    setExportMethod("");
+    setExportEmail("");
+    setSheetsSpreadsheetId("");
+    setDriveFolderId("");
+  };
+
+  // Handle export validation and submission
+  const handleExportSubmit = async () => {
+    if (!exportMethod || !exportEmail || selectedIds.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner une méthode et renseigner un email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const payload: any = {
+        method: exportMethod,
+        receipt_ids: selectedIds,
+        email: exportEmail,
+      };
+
+      if (exportMethod === "sheets" && sheetsSpreadsheetId) {
+        payload.sheets_spreadsheet_id = sheetsSpreadsheetId;
+      }
+      if (exportMethod === "drive" && driveFolderId) {
+        payload.drive_folder_id = driveFolderId;
+      }
+
+      const response = await fetch(N8N_EXPORT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (result.download_url) {
+        window.open(result.download_url, "_blank");
+      }
+
+      toast({
+        title: "Export lancé !",
+        description: "Le lien/fichier sera envoyé par e-mail.",
+      });
+
+      resetExportUI();
+    } catch (error: any) {
+      console.error("Export error:", error);
+      toast({
+        title: "Erreur",
+        description: "Une erreur est survenue lors de l'export.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   // Drawer détail
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -364,7 +452,23 @@ const Recus = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            <Button variant="outline" className="flex-1 md:flex-initial">Exporter</Button>
+            <Button
+              variant="outline"
+              className="flex-1 md:flex-initial"
+              onClick={() => {
+                if (selectedIds.length === 0) {
+                  toast({
+                    title: "Aucun reçu sélectionné",
+                    description: "Sélectionnez au moins un reçu.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setExportOpen(true);
+              }}
+            >
+              {selectedIds.length > 0 ? `Exporter (${selectedIds.length})` : "Exporter"}
+            </Button>
             <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Ajouter un reçu</span>
@@ -496,6 +600,14 @@ const Recus = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
+                      <th className="w-10 py-3 px-4">
+                        <Checkbox
+                          checked={selectedIds.length === receipts.length && receipts.length > 0}
+                          onCheckedChange={() => toggleAll(receipts.map(r => String(r.id)))}
+                          disabled={receipts.length === 0}
+                          aria-label="Tout sélectionner"
+                        />
+                      </th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Ville</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
@@ -513,28 +625,64 @@ const Recus = () => {
                       en_cours: "En cours",
                       en_attente: "En attente"
                     };
-                    return <tr key={receipt.id} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => {
-                      setSelectedId(receipt.id);
-                      setDetail(null);
-                      setDetailError(null);
-                      setIsDrawerOpen(true);
-                    }}>
-                          <td className="py-3 px-4 text-sm">
+                    return <tr key={receipt.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                          <td className="py-3 px-4 w-10" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.includes(String(receipt.id))}
+                              onCheckedChange={() => toggleOne(String(receipt.id))}
+                            />
+                          </td>
+                          <td className="py-3 px-4 text-sm cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>
                             <div className="font-medium">{receipt.enseigne || "—"}</div>
                             {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
                           </td>
-                          <td className="py-3 px-4 text-sm">{receipt.ville || "—"}</td>
-                          <td className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums">
+                          <td className="py-3 px-4 text-sm cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>{receipt.ville || "—"}</td>
+                          <td className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>
                             {formatCurrency(receipt.montant_ttc)}
                           </td>
-                          <td className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums">
+                          <td className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>
                             {formatCurrency(receipt.montant_ht)}
                           </td>
-                          <td className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums">
+                          <td className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>
                             {formatCurrency(receipt.tva)}
                           </td>
-                          <td className="py-3 px-4 text-sm">{receipt.moyen_paiement || "—"}</td>
-                          <td className="py-3 px-4 text-sm">
+                          <td className="py-3 px-4 text-sm cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>{receipt.moyen_paiement || "—"}</td>
+                          <td className="py-3 px-4 text-sm cursor-pointer" onClick={() => {
+                            setSelectedId(receipt.id);
+                            setDetail(null);
+                            setDetailError(null);
+                            setIsDrawerOpen(true);
+                          }}>
                             {formatDate(receipt.date_traitement || receipt.created_at)}
                           </td>
                           
@@ -557,6 +705,77 @@ const Recus = () => {
           setDetailError(null);
         }
       }} detail={detail} loading={detailLoading} error={detailError} clients={clients} members={members} />
+
+        {/* Export Dialog */}
+        <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Exporter les reçus sélectionnés</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Méthode d'export</Label>
+                <RadioGroup value={exportMethod} onValueChange={(v) => setExportMethod(v as any)}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="sheets" id="sheets" />
+                    <Label htmlFor="sheets" className="font-normal cursor-pointer">Google Sheets</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="excel" id="excel" />
+                    <Label htmlFor="excel" className="font-normal cursor-pointer">Excel</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="drive" id="drive" />
+                    <Label htmlFor="drive" className="font-normal cursor-pointer">Google Drive</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="export-email">Email destinataire *</Label>
+                <Input
+                  id="export-email"
+                  type="email"
+                  placeholder="email@exemple.fr"
+                  value={exportEmail}
+                  onChange={(e) => setExportEmail(e.target.value)}
+                />
+              </div>
+
+              {exportMethod === "sheets" && (
+                <div className="space-y-2">
+                  <Label htmlFor="sheets-id">ID Spreadsheet (optionnel)</Label>
+                  <Input
+                    id="sheets-id"
+                    placeholder="1a2b3c4d..."
+                    value={sheetsSpreadsheetId}
+                    onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {exportMethod === "drive" && (
+                <div className="space-y-2">
+                  <Label htmlFor="drive-folder">ID Dossier Drive (optionnel)</Label>
+                  <Input
+                    id="drive-folder"
+                    placeholder="1a2b3c4d..."
+                    value={driveFolderId}
+                    onChange={(e) => setDriveFolderId(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>
+                Fermer
+              </Button>
+              <Button onClick={handleExportSubmit} disabled={exportLoading}>
+                {exportLoading ? "Export en cours..." : "Valider l'export"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>;
 };
