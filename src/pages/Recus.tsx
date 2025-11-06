@@ -98,7 +98,7 @@ const Recus = () => {
 
   // Local filters
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-  const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
+  const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "erreur">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Export state
