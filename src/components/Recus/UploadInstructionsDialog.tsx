@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -15,10 +10,7 @@ interface UploadInstructionsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export const UploadInstructionsDialog = ({
-  open,
-  onOpenChange,
-}: UploadInstructionsDialogProps) => {
+export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructionsDialogProps) => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -31,21 +23,25 @@ export const UploadInstructionsDialog = ({
 
     try {
       // Récupérer les informations de l'utilisateur et de l'organisation
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!user || !session?.access_token) {
         throw new Error("Utilisateur non authentifié");
       }
 
       // Récupérer l'org_id de l'utilisateur depuis org_members ou profiles
       let orgId = null;
-      
+
       // Essayer d'abord org_members
       const { data: orgMember, error: orgMemberError } = await (supabase as any)
-        .from('org_members')
-        .select('org_id')
-        .eq('user_id', user.id)
+        .from("org_members")
+        .select("org_id")
+        .eq("user_id", user.id)
         .single();
 
       if (orgMember?.org_id) {
@@ -53,18 +49,18 @@ export const UploadInstructionsDialog = ({
       } else {
         // Fallback sur profiles si org_members n'a rien
         const { data: profile, error: profileError } = await (supabase as any)
-          .from('profiles')
-          .select('org_id')
-          .eq('user_id', user.id)
+          .from("profiles")
+          .select("org_id")
+          .eq("user_id", user.id)
           .single();
-        
+
         if (profile?.org_id) {
           orgId = profile.org_id;
         }
       }
 
       if (!orgId) {
-        console.error('Erreur org_members:', orgMemberError);
+        console.error("Erreur org_members:", orgMemberError);
         throw new Error("Organisation non trouvée. Veuillez contacter le support.");
       }
 
@@ -77,7 +73,7 @@ export const UploadInstructionsDialog = ({
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${session.access_token}`
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: formData,
       });
@@ -88,9 +84,9 @@ export const UploadInstructionsDialog = ({
           title: "Reçu envoyé pour analyse",
           description: "Le reçu est en cours d'analyse. Vous serez notifié une fois le traitement terminé.",
         });
-        
+
         onOpenChange(false);
-        setFileInputKey(prev => prev + 1);
+        setFileInputKey((prev) => prev + 1);
       } else {
         const errorText = await response.text();
         console.error("❌ Erreur webhook n8n:", response.status, errorText);
@@ -159,7 +155,10 @@ export const UploadInstructionsDialog = ({
           <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
             <div className="relative">
               <Frame className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
-              <X className="w-7 h-7 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" strokeWidth={3} />
+              <X
+                className="w-7 h-7 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                strokeWidth={3}
+              />
             </div>
             <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Évitez tout texte ou objet autour du reçu pour une meilleure détection.
