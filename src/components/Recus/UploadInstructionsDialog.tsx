@@ -16,8 +16,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
   // URL du webhook n8n (prod) : variable d'env prioritaire, sinon fallback
   const N8N_INGEST_URL =
-    (import.meta as any).env?.VITE_N8N_INGEST_URL ??
-    "https://samilzr.app.n8n.cloud/webhook/Finvisor";
+    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook/Upload-receipt";
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -43,7 +42,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       let orgId: string | null = null;
 
       // Essayer d'abord org_members
-      const { data: orgMember, error: orgMemberError } = await (supabase as any)
+      const { data: orgMember } = await (supabase as any)
         .from("org_members")
         .select("org_id")
         .eq("user_id", user.id)
@@ -70,17 +69,15 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       }
 
       // ---- CORRECTION CORS ----
-      // On n'envoie PAS de header Authorization pour éviter le preflight CORS.
-      // On met le token dans le body (FormData) + toutes les infos nécessaires.
+      // Pas de headers custom pour éviter le preflight CORS.
       const formData = new FormData();
       formData.append("file", file);
       formData.append("org_id", orgId);
       formData.append("user_id", user.id);
-      formData.append("supabase_token", session.access_token); // ⬅️ le token ici (pas en header)
+      formData.append("supabase_token", session.access_token); // token dans le body
 
       const response = await fetch(N8N_INGEST_URL, {
         method: "POST",
-        // ❌ pas de headers custom → pas de blocage CORS
         body: formData,
       });
 
@@ -112,7 +109,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground max-h-[90vh] md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
+      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base md:text-2xl font-semibold text-center text-foreground mb-3 md:mb-8">
             👉 Quelques consignes avant l'envoi
