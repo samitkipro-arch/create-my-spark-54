@@ -66,19 +66,22 @@ function downloadPdfBlob(blob: Blob, selectedIds: string[]) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// Helper: récupère l'org courante (utilisé dans toutes les queries)
+// Helper: récupère l'org courante (robuste: org_members -> fallback profiles)
 async function getCurrentOrgId() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Utilisateur non authentifié");
-  const { data: orgMember, error } = await supabase
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", user.id)
-    .single();
-  if (error || !orgMember) throw new Error("Organisation introuvable");
-  return orgMember.org_id as string;
+
+  const { data: orgMember } = await supabase.from("org_members").select("org_id").eq("user_id", user.id).maybeSingle();
+
+  if (orgMember?.org_id) return String(orgMember.org_id);
+
+  const { data: profile } = await supabase.from("profiles").select("org_id").eq("user_id", user.id).maybeSingle();
+
+  if (profile?.org_id) return String(profile.org_id);
+
+  throw new Error("Organisation non trouvée pour cet utilisateur.");
 }
 
 const Recus = () => {
@@ -242,14 +245,24 @@ const Recus = () => {
     },
   });
 
-  // Receipts list (scopée à l'org)
+  // Receipts list (scopée à l'org) + garde-fous sur filtres invalides
   const {
     data: receipts = [],
     isLoading: loading,
     error: queryError,
     refetch,
   } = useQuery({
-    queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
+    queryKey: [
+      "recus",
+      storedDateRange,
+      storedClientId,
+      storedMemberId,
+      selectedStatus,
+      debouncedQuery,
+      sortOrder,
+      clients.length,
+      members.length,
+    ],
     queryFn: async () => {
       const orgId = await getCurrentOrgId();
 
@@ -263,10 +276,10 @@ const Recus = () => {
       if (storedDateRange.from && storedDateRange.to) {
         query = query.gte("date_traitement", storedDateRange.from).lte("date_traitement", storedDateRange.to);
       }
-      if (storedClientId && storedClientId !== "all") {
+      if (storedClientId && storedClientId !== "all" && clients.some((c) => c.id === storedClientId)) {
         query = query.eq("client_id", storedClientId);
       }
-      if (storedMemberId && storedMemberId !== "all") {
+      if (storedMemberId && storedMemberId !== "all" && members.some((m) => m.id === storedMemberId)) {
         query = query.eq("processed_by", storedMemberId);
       }
       if (selectedStatus && selectedStatus !== "all") {
@@ -290,6 +303,21 @@ const Recus = () => {
   });
 
   const error = queryError ? (queryError as any).message : null;
+
+  // Assainir filtres s'ils ne correspondent pas à l'org courante
+  useEffect(() => {
+    if (storedClientId && storedClientId !== "all") {
+      const ok = clients.some((c) => c.id === storedClientId);
+      if (!ok) setClientId("all");
+    }
+  }, [clients, storedClientId, setClientId]);
+
+  useEffect(() => {
+    if (storedMemberId && storedMemberId !== "all") {
+      const ok = members.some((m) => m.id === storedMemberId);
+      if (!ok) setMemberId("all");
+    }
+  }, [members, storedMemberId, setMemberId]);
 
   // Fetch détail reçu
   useEffect(() => {
@@ -427,7 +455,7 @@ const Recus = () => {
           )
           .subscribe();
       } catch {
-        // si org introuvable / non auth : pas de canal
+        // non authentifié / org introuvable : pas de canal
       }
     })();
 
