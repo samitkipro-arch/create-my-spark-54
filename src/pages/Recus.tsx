@@ -101,7 +101,7 @@ const Recus = () => {
 
   // n8n webhook URL
   const N8N_EXPORT_URL =
-    (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/export-receipt"; // <-- PROD (remplace l'ancien /webhook-test/export-receipt)
+    (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/export-receipt";
 
   // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
