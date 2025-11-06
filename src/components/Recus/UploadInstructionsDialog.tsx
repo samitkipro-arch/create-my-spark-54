@@ -14,9 +14,9 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  // URL du webhook n8n (prod) : variable d'env prioritaire, sinon fallback
+  // URL du webhook n8n (test) : variable d'env prioritaire, sinon fallback
   const N8N_INGEST_URL =
-    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook/Upload-receipt";
+    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/upload";
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -68,7 +68,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         throw new Error("Organisation non trouvée. Veuillez contacter le support.");
       }
 
-      // ---- CORRECTION CORS ----
       // Pas de headers custom pour éviter le preflight CORS.
       const formData = new FormData();
       formData.append("file", file);
