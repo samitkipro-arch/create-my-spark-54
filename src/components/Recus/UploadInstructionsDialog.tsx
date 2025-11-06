@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -10,13 +15,12 @@ interface UploadInstructionsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructionsDialogProps) => {
+export const UploadInstructionsDialog = ({
+  open,
+  onOpenChange,
+}: UploadInstructionsDialogProps) => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-
-  // URL du webhook n8n (test) : variable d'env prioritaire, sinon fallback
-  const N8N_INGEST_URL =
-    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/Finvisor";
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -27,56 +31,54 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
     try {
       // Récupérer les informations de l'utilisateur et de l'organisation
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      
       if (!user || !session?.access_token) {
         throw new Error("Utilisateur non authentifié");
       }
 
       // Récupérer l'org_id de l'utilisateur depuis org_members ou profiles
-      let orgId: string | null = null;
-
+      let orgId = null;
+      
       // Essayer d'abord org_members
-      const { data: orgMember } = await (supabase as any)
-        .from("org_members")
-        .select("org_id")
-        .eq("user_id", user.id)
+      const { data: orgMember, error: orgMemberError } = await (supabase as any)
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
         .single();
 
       if (orgMember?.org_id) {
-        orgId = String(orgMember.org_id);
+        orgId = orgMember.org_id;
       } else {
         // Fallback sur profiles si org_members n'a rien
-        const { data: profile } = await (supabase as any)
-          .from("profiles")
-          .select("org_id")
-          .eq("user_id", user.id)
+        const { data: profile, error: profileError } = await (supabase as any)
+          .from('profiles')
+          .select('org_id')
+          .eq('user_id', user.id)
           .single();
-
+        
         if (profile?.org_id) {
-          orgId = String(profile.org_id);
+          orgId = profile.org_id;
         }
       }
 
       if (!orgId) {
-        console.error("Organisation introuvable pour l'utilisateur.");
+        console.error('Erreur org_members:', orgMemberError);
         throw new Error("Organisation non trouvée. Veuillez contacter le support.");
       }
 
-      // Pas de headers custom pour éviter le preflight CORS.
       const formData = new FormData();
       formData.append("file", file);
       formData.append("org_id", orgId);
       formData.append("user_id", user.id);
-      formData.append("supabase_token", session.access_token); // token dans le body
+      // client_id est optionnel et peut être ajouté plus tard
 
-      const response = await fetch(N8N_INGEST_URL, {
+      const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: formData,
       });
 
@@ -86,9 +88,9 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           title: "Reçu envoyé pour analyse",
           description: "Le reçu est en cours d'analyse. Vous serez notifié une fois le traitement terminé.",
         });
-
+        
         onOpenChange(false);
-        setFileInputKey((prev) => prev + 1);
+        setFileInputKey(prev => prev + 1);
       } else {
         const errorText = await response.text();
         console.error("❌ Erreur webhook n8n:", response.status, errorText);
@@ -108,7 +110,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
+      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground max-h-[90vh] md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base md:text-2xl font-semibold text-center text-foreground mb-3 md:mb-8">
             👉 Quelques consignes avant l'envoi
@@ -146,7 +148,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           </div>
 
           {/* Reçu bien cadré */}
-          <div className="flex flex-col items-center text center space-y-1.5 md:space-y-3">
+          <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
             <Frame className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
             <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Le reçu doit être entièrement visible et bien cadré dans l'image.
@@ -157,10 +159,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
             <div className="relative">
               <Frame className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
-              <X
-                className="w-7 h-7 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                strokeWidth={3}
-              />
+              <X className="w-7 h-7 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" strokeWidth={3} />
             </div>
             <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Évitez tout texte ou objet autour du reçu pour une meilleure détection.
