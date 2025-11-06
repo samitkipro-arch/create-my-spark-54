@@ -41,22 +41,21 @@ type Receipt = {
 type Client = { id: string; name: string };
 type Member = { id: string; name: string };
 
-// -- Debounce hook
+// Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
+    const h = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(h);
   }, [value, delay]);
   return debouncedValue;
 }
 
-// -- Helper: force le téléchargement d'un Blob PDF
+// Force le téléchargement d'un Blob PDF
 function downloadPdfBlob(blob: Blob, selectedIds: string[]) {
   const url = URL.createObjectURL(blob);
   const filename =
     selectedIds.length === 1 ? `finvisor-recu-${selectedIds[0]}.pdf` : `finvisor-recus-${selectedIds.length}.pdf`;
-
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
@@ -64,14 +63,28 @@ function downloadPdfBlob(blob: Blob, selectedIds: string[]) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// Helper: récupère l'org courante (utilisé dans toutes les queries)
+async function getCurrentOrgId() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Utilisateur non authentifié");
+  const { data: orgMember, error } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (error || !orgMember) throw new Error("Organisation introuvable");
+  return orgMember.org_id as string;
 }
 
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Global filters from store
+  // Global filters
   const {
     dateRange: storedDateRange,
     clientId: storedClientId,
@@ -85,7 +98,7 @@ const Recus = () => {
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Export selection state with sessionStorage persistence
+  // Export state
   const [selectedIds, setSelectedIds] = useState<string[]>(() => {
     try {
       const stored = sessionStorage.getItem("receipts:selectedIds");
@@ -99,14 +112,13 @@ const Recus = () => {
   const [sheetUrl, setSheetUrl] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
-  // n8n webhook URL
+  // n8n webhook URL (export)
   const N8N_EXPORT_URL =
     (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/export-receipt";
 
-  // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
 
-  // Persist selectedIds to sessionStorage
+  // Persist selection
   useEffect(() => {
     try {
       sessionStorage.setItem("receipts:selectedIds", JSON.stringify(selectedIds));
@@ -115,7 +127,6 @@ const Recus = () => {
     }
   }, [selectedIds]);
 
-  // Selection helpers
   const toggleOne = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
@@ -126,18 +137,11 @@ const Recus = () => {
     setSheetUrl("");
   };
 
-  // Handle export validation and submission
   const handleExportSubmit = async () => {
     if (!exportMethod || selectedIds.length === 0) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez sélectionner une méthode.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Veuillez sélectionner une méthode.", variant: "destructive" });
       return;
     }
-
-    // Validation spécifique pour Google Sheets
     if (exportMethod === "sheets" && !sheetUrl) {
       toast({
         title: "Erreur",
@@ -149,32 +153,14 @@ const Recus = () => {
 
     setExportLoading(true);
     try {
-      // Récupérer l'utilisateur courant
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) throw new Error("Utilisateur non authentifié");
+      const orgId = await getCurrentOrgId();
 
-      // Récupérer l'org_id de l'utilisateur
-      const { data: orgMember, error: orgError } = await supabase
-        .from("org_members")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single();
-      if (orgError || !orgMember) throw new Error("Organisation introuvable");
-
-      // Construire le payload commun
       const payload: any = {
         method: exportMethod,
-        org_id: orgMember.org_id,
+        org_id: orgId,
         receipt_ids: selectedIds.map((id) => parseInt(id, 10)),
       };
-
-      // Payload spécifique pour Google Sheets
-      if (exportMethod === "sheets" && sheetUrl) {
-        payload.sheet_url = sheetUrl;
-      }
+      if (exportMethod === "sheets" && sheetUrl) payload.sheet_url = sheetUrl;
 
       const response = await fetch(N8N_EXPORT_URL, {
         method: "POST",
@@ -184,30 +170,17 @@ const Recus = () => {
 
       if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
 
-      // Gestion différenciée selon la méthode
       if (exportMethod === "pdf") {
-        // Réponse PDF = BINAIRE
         const blob = await response.blob();
         downloadPdfBlob(blob, selectedIds);
-
-        toast({
-          title: "Export PDF réussi !",
-          description: "Le téléchargement a démarré.",
-        });
-
+        toast({ title: "Export PDF réussi !", description: "Le téléchargement a démarré." });
         resetExportUI();
         return;
       }
 
-      // Sinon Google Sheets => JSON
       const result = await response.json();
       if (result.download_url) window.open(result.download_url, "_blank");
-
-      toast({
-        title: "Export lancé !",
-        description: "Le lien/fichier sera disponible sous peu.",
-      });
-
+      toast({ title: "Export lancé !", description: "Le lien/fichier sera disponible sous peu." });
       resetExportUI();
     } catch (error: any) {
       console.error("Export error:", error);
@@ -230,28 +203,34 @@ const Recus = () => {
   const currentOpenReceiptId = useRef<number | null>(null);
   const isDrawerOpenRef = useRef(false);
 
-  // Load clients with realtime
+  // Clients (scopés à l'org)
   const { data: clients = [], refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const orgId = await getCurrentOrgId();
+      const { data, error } = await supabase
         .from("clients")
         .select("id, name")
+        .eq("org_id", orgId)
         .order("name", { ascending: true });
       if (error) throw error;
       return (data || []) as Client[];
     },
   });
 
-  // Load members with profiles and realtime
+  // Members (org_members -> profiles)
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
+      const orgId = await getCurrentOrgId();
+      const { data: orgMembers, error: omError } = await supabase
+        .from("org_members")
+        .select("user_id")
+        .eq("org_id", orgId);
       if (omError) throw omError;
-      if (!orgMembers || orgMembers.length === 0) return [];
+      if (!orgMembers?.length) return [];
       const userIds = orgMembers.map((om: any) => om.user_id);
-      const { data: profiles, error: pError } = await (supabase as any)
+      const { data: profiles, error: pError } = await supabase
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", userIds);
@@ -263,7 +242,7 @@ const Recus = () => {
     },
   });
 
-  // Load receipts with all filters
+  // Receipts list (scopée à l'org) — PRINCIPAL FIX
   const {
     data: receipts = [],
     isLoading: loading,
@@ -272,15 +251,17 @@ const Recus = () => {
   } = useQuery({
     queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
     queryFn: async () => {
-      let query = (supabase as any)
+      const orgId = await getCurrentOrgId();
+
+      let query = supabase
         .from("recus")
         .select(
           "id, created_at, date_traitement, date_recu, numero_recu, receipt_number, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id",
-        );
+        )
+        .eq("org_id", orgId);
 
       if (storedDateRange.from && storedDateRange.to) {
-        query = query.gte("date_traitement", storedDateRange.from);
-        query = query.lte("date_traitement", storedDateRange.to);
+        query = query.gte("date_traitement", storedDateRange.from).lte("date_traitement", storedDateRange.to);
       }
       if (storedClientId && storedClientId !== "all") {
         query = query.eq("client_id", storedClientId);
@@ -296,46 +277,28 @@ const Recus = () => {
         query = query.or(`numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`);
       }
 
-      query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
-      query = query.order("created_at", { ascending: sortOrder === "asc" });
-      query = query.limit(100);
+      query = query
+        .order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false })
+        .order("created_at", { ascending: sortOrder === "asc" })
+        .limit(100);
 
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        created_at: r.created_at ?? null,
-        date_traitement: r.date_traitement ?? null,
-        date_recu: r.date_recu ?? null,
-        numero_recu: r.numero_recu ?? null,
-        receipt_number: r.receipt_number ?? null,
-        enseigne: r.enseigne ?? null,
-        adresse: r.adresse ?? null,
-        ville: r.ville ?? null,
-        montant_ht: r.montant_ht ?? null,
-        montant_ttc: r.montant_ttc ?? null,
-        tva: r.tva ?? null,
-        moyen_paiement: r.moyen_paiement ?? null,
-        status: r.status ?? null,
-        client_id: r.client_id ?? null,
-        processed_by: r.processed_by ?? null,
-        category_id: r.category_id ?? null,
-        org_id: r.org_id ?? null,
-      })) as Receipt[];
+      return (data || []) as Receipt[];
     },
   });
 
   const error = queryError ? (queryError as any).message : null;
 
-  // Fetch détail du reçu
+  // Fetch détail reçu
   useEffect(() => {
     if (!selectedId || !isDrawerOpen) return;
     (async () => {
       setDetailLoading(true);
       setDetailError(null);
       try {
-        const { data: r, error: e1 } = await (supabase as any).from("recus").select("*").eq("id", selectedId).single();
+        const { data: r, error: e1 } = await supabase.from("recus").select("*").eq("id", selectedId).single();
         if (e1) throw e1;
         const receiptData = r as any;
 
@@ -343,7 +306,7 @@ const Recus = () => {
         let clientName: string | null = null;
 
         if (receiptData?.processed_by) {
-          const { data: p } = await (supabase as any)
+          const { data: p } = await supabase
             .from("profiles")
             .select("first_name, last_name")
             .eq("user_id", receiptData.processed_by)
@@ -355,7 +318,7 @@ const Recus = () => {
         }
 
         if (receiptData?.client_id) {
-          const { data: c } = await (supabase as any)
+          const { data: c } = await supabase
             .from("clients")
             .select("name")
             .eq("id", receiptData.client_id)
@@ -379,13 +342,12 @@ const Recus = () => {
     isDrawerOpenRef.current = isDrawerOpen;
   }, [isDrawerOpen]);
 
-  // Realtime updates
+  // Realtime
   useEffect(() => {
     const recusChannel = supabase
       .channel("recus-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
         const newRecu = payload.new as Receipt;
-        console.log("🔴 Realtime INSERT:", newRecu);
         refetch();
         if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
           currentOpenReceiptId.current = newRecu.id;
@@ -402,13 +364,6 @@ const Recus = () => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
         const updatedRecu = payload.new as Receipt;
         const oldRecu = payload.old as Receipt;
-        console.log("🔵 Realtime UPDATE:", {
-          id: updatedRecu.id,
-          oldStatus: oldRecu.status,
-          newStatus: updatedRecu.status,
-          receipt_number: updatedRecu.receipt_number,
-        });
-
         refetch();
 
         const shouldOpen =
@@ -416,7 +371,6 @@ const Recus = () => {
           (updatedRecu.status === "traite" && oldRecu.status !== "traite");
 
         if (shouldOpen) {
-          console.log("✅ Ouverture automatique du drawer pour reçu", updatedRecu.id);
           if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
             currentOpenReceiptId.current = updatedRecu.id;
             setSelectedId(updatedRecu.id);
