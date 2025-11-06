@@ -37,11 +37,11 @@ export const ReceiptDetailDrawer = ({
   // --- Ouverture du rapport (état)
   const [reportLoading, setReportLoading] = useState(false);
 
-  // https://samilzr.app.n8n.cloud/webhook-test/test-simple
+  // https://samilzr.app.n8n.cloud/webhook/test-simple
   // Idéalement via env : VITE_N8N_REPORT_URL
   const N8N_REPORT_URL =
   (import.meta as any).env?.VITE_N8N_REPORT_URL ??
-  "https://samilzr.app.n8n.cloud/webhook-test/test-simple";
+  "https://samilzr.app.n8n.cloud/webhook/test-simple";
 
   // --- Ouvrir le rapport : ouvre l’onglet AVANT le fetch (anti pop-up block)
   const openReport = async () => {
