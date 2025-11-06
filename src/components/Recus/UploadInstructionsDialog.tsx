@@ -14,6 +14,10 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
+  // URL du webhook n8n (test) : variable d'env prioritaire, sinon fallback
+  const N8N_INGEST_URL =
+    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/upload";
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -35,46 +39,44 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       }
 
       // Récupérer l'org_id de l'utilisateur depuis org_members ou profiles
-      let orgId = null;
+      let orgId: string | null = null;
 
       // Essayer d'abord org_members
-      const { data: orgMember, error: orgMemberError } = await (supabase as any)
+      const { data: orgMember } = await (supabase as any)
         .from("org_members")
         .select("org_id")
         .eq("user_id", user.id)
         .single();
 
       if (orgMember?.org_id) {
-        orgId = orgMember.org_id;
+        orgId = String(orgMember.org_id);
       } else {
         // Fallback sur profiles si org_members n'a rien
-        const { data: profile, error: profileError } = await (supabase as any)
+        const { data: profile } = await (supabase as any)
           .from("profiles")
           .select("org_id")
           .eq("user_id", user.id)
           .single();
 
         if (profile?.org_id) {
-          orgId = profile.org_id;
+          orgId = String(profile.org_id);
         }
       }
 
       if (!orgId) {
-        console.error("Erreur org_members:", orgMemberError);
+        console.error("Organisation introuvable pour l'utilisateur.");
         throw new Error("Organisation non trouvée. Veuillez contacter le support.");
       }
 
+      // Pas de headers custom pour éviter le preflight CORS.
       const formData = new FormData();
       formData.append("file", file);
       formData.append("org_id", orgId);
       formData.append("user_id", user.id);
-      // client_id est optionnel et peut être ajouté plus tard
+      formData.append("supabase_token", session.access_token); // token dans le body
 
-      const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
+      const response = await fetch(N8N_INGEST_URL, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
         body: formData,
       });
 
@@ -106,7 +108,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground max-h-[90vh] md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
+      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground md:max-h-[90vh] max-h-[60vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base md:text-2xl font-semibold text-center text-foreground mb-3 md:mb-8">
             👉 Quelques consignes avant l'envoi
@@ -144,7 +146,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           </div>
 
           {/* Reçu bien cadré */}
-          <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
+          <div className="flex flex-col items-center text center space-y-1.5 md:space-y-3">
             <Frame className="w-10 h-10 md:w-16 md:h-16 text-white" strokeWidth={1.5} />
             <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
               Le reçu doit être entièrement visible et bien cadré dans l'image.
