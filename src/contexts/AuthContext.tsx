@@ -37,10 +37,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkSubscription = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Refresh session to ensure we have a valid token
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      
+      // Fallback to getSession if refresh fails
+      const currentSession = session || (await supabase.auth.getSession()).data.session;
       
       // Ne pas appeler la fonction si pas de session valide
-      if (!session?.access_token) {
+      if (!currentSession?.access_token) {
         console.log('No valid session for subscription check');
         setSubscription({
           subscribed: false,
@@ -51,10 +55,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      console.log('Checking subscription with valid session');
+      console.log('Checking subscription with refreshed session');
       const { data, error } = await supabase.functions.invoke('check-subscription', {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${currentSession.access_token}`,
         },
       });
 
