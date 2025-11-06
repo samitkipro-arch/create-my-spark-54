@@ -242,7 +242,7 @@ const Recus = () => {
     },
   });
 
-  // Receipts list (scopée à l'org) — PRINCIPAL FIX
+  // Receipts list (scopée à l'org)
   const {
     data: receipts = [],
     isLoading: loading,
@@ -342,71 +342,99 @@ const Recus = () => {
     isDrawerOpenRef.current = isDrawerOpen;
   }, [isDrawerOpen]);
 
-  // Realtime
+  // Realtime (filtré par org_id)
   useEffect(() => {
-    const recusChannel = supabase
-      .channel("recus-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
-        const newRecu = payload.new as Receipt;
-        refetch();
-        if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
-          currentOpenReceiptId.current = newRecu.id;
-          setSelectedId(newRecu.id);
-          setDetail(null);
-          setDetailError(null);
-          setIsDrawerOpen(true);
-          toast({
-            title: "Nouveau reçu analysé !",
-            description: `${newRecu.enseigne || "Reçu"} - ${formatCurrency(newRecu.montant_ttc)}`,
-          });
-        }
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
-        const updatedRecu = payload.new as Receipt;
-        const oldRecu = payload.old as Receipt;
-        refetch();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let clientsChannel: ReturnType<typeof supabase.channel> | null = null;
+    let membersChannel: ReturnType<typeof supabase.channel> | null = null;
 
-        const shouldOpen =
-          (updatedRecu.receipt_number && !oldRecu.receipt_number) ||
-          (updatedRecu.status === "traite" && oldRecu.status !== "traite");
+    (async () => {
+      try {
+        const orgId = await getCurrentOrgId();
 
-        if (shouldOpen) {
-          if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
-            currentOpenReceiptId.current = updatedRecu.id;
-            setSelectedId(updatedRecu.id);
-            setDetail(null);
-            setDetailError(null);
-            setIsDrawerOpen(true);
-            toast({
-              title: "Reçu validé !",
-              description: `${updatedRecu.enseigne || "Reçu"} n°${updatedRecu.receipt_number || "—"}`,
-            });
-          }
-        }
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
-        refetch();
-      })
-      .subscribe();
+        channel = supabase
+          .channel("recus-realtime")
+          .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "recus", filter: `org_id=eq.${orgId}` },
+            (payload) => {
+              const newRecu = payload.new as Receipt;
+              refetch();
+              if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
+                currentOpenReceiptId.current = newRecu.id;
+                setSelectedId(newRecu.id);
+                setDetail(null);
+                setDetailError(null);
+                setIsDrawerOpen(true);
+                toast({
+                  title: "Nouveau reçu analysé !",
+                  description: `${newRecu.enseigne || "Reçu"} - ${formatCurrency(newRecu.montant_ttc)}`,
+                });
+              }
+            },
+          )
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "recus", filter: `org_id=eq.${orgId}` },
+            (payload) => {
+              const updatedRecu = payload.new as Receipt;
+              const oldRecu = payload.old as Receipt;
+              refetch();
 
-    const clientsChannel = supabase
-      .channel("clients-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
-        refetchClients();
-      })
-      .subscribe();
+              const shouldOpen =
+                (updatedRecu.receipt_number && !oldRecu.receipt_number) ||
+                (updatedRecu.status === "traite" && oldRecu.status !== "traite");
 
-    const membersChannel = supabase
-      .channel("members-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "org_members" }, () => {
-        refetchMembers();
-      })
-      .subscribe();
+              if (shouldOpen) {
+                if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
+                  currentOpenReceiptId.current = updatedRecu.id;
+                  setSelectedId(updatedRecu.id);
+                  setDetail(null);
+                  setDetailError(null);
+                  setIsDrawerOpen(true);
+                  toast({
+                    title: "Reçu validé !",
+                    description: `${updatedRecu.enseigne || "Reçu"} n°${updatedRecu.receipt_number || "—"}`,
+                  });
+                }
+              }
+            },
+          )
+          .on(
+            "postgres_changes",
+            { event: "DELETE", schema: "public", table: "recus", filter: `org_id=eq.${orgId}` },
+            () => {
+              refetch();
+            },
+          )
+          .subscribe();
+
+        clientsChannel = supabase
+          .channel("clients-realtime")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "clients", filter: `org_id=eq.${orgId}` },
+            () => refetchClients(),
+          )
+          .subscribe();
+
+        membersChannel = supabase
+          .channel("members-realtime")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+            () => refetchMembers(),
+          )
+          .subscribe();
+      } catch {
+        // si org introuvable / non auth : pas de canal
+      }
+    })();
 
     return () => {
-      supabase.removeChannel(recusChannel);
-      supabase.removeChannel(clientsChannel);
-      supabase.removeChannel(membersChannel);
+      if (channel) supabase.removeChannel(channel);
+      if (clientsChannel) supabase.removeChannel(clientsChannel);
+      if (membersChannel) supabase.removeChannel(membersChannel);
     };
   }, [refetch, refetchClients, refetchMembers]);
 
