@@ -16,7 +16,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
   // URL du webhook n8n (test) : variable d'env prioritaire, sinon fallback
   const N8N_INGEST_URL =
-    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/upload";
+    (import.meta as any).env?.VITE_N8N_INGEST_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/Finvisor";
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
