@@ -41,12 +41,12 @@ type Receipt = {
 type Client = { id: string; name: string };
 type Member = { id: string; name: string };
 
-/* Debounce */
+// --- debounce helper ---
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
-    const h = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(h);
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
   }, [value, delay]);
   return debouncedValue;
 }
@@ -54,7 +54,7 @@ function useDebounce<T>(value: T, delay: number): T {
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  /* Global filters */
+  // Global filters
   const {
     dateRange: storedDateRange,
     clientId: storedClientId,
@@ -63,29 +63,32 @@ const Recus = () => {
     setMemberId,
   } = useGlobalFilters();
 
-  /* Local filters */
+  // Local filters
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  /* Export state */
+  // Export selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportMethod, setExportMethod] = useState<"sheets" | "pdf" | "">("");
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
-  /* n8n prod webhook for export */
+  // PDF modal state
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  // n8n webhook (PROD)
   const N8N_EXPORT_URL =
     (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/export-receipt";
 
   const debouncedQuery = useDebounce(searchQuery, 400);
 
+  // Selection helpers
   const toggleOne = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
   const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
-
   const resetExportUI = () => {
     setSelectedIds([]);
     setExportOpen(false);
@@ -93,26 +96,25 @@ const Recus = () => {
     setSheetsSpreadsheetId("");
   };
 
-  /* Submit export -> n8n */
+  // Submit export
   const handleExportSubmit = async () => {
     if (!exportMethod || selectedIds.length === 0) {
       toast({
-        title: "Aucun reçu sélectionné",
-        description: "Sélectionnez au moins un reçu et une méthode d’export.",
+        title: "Sélection incomplète",
+        description: "Choisissez une méthode et des reçus.",
         variant: "destructive",
       });
       return;
     }
 
+    setExportLoading(true);
     try {
-      setExportLoading(true);
-
-      const payload: Record<string, any> = {
+      const payload: any = {
         method: exportMethod, // "sheets" | "pdf"
-        receipt_ids: selectedIds, // array of string IDs
+        receipt_ids: selectedIds, // array of ids (string[])
       };
-      if (exportMethod === "sheets" && sheetsSpreadsheetId.trim()) {
-        payload.sheets_spreadsheet_id = sheetsSpreadsheetId.trim();
+      if (exportMethod === "sheets" && sheetsSpreadsheetId) {
+        payload.sheet_url = sheetsSpreadsheetId; // ton flow lit sheet_url (ou remappe côté n8n)
       }
 
       const res = await fetch(N8N_EXPORT_URL, {
@@ -121,28 +123,37 @@ const Recus = () => {
         body: JSON.stringify(payload),
       });
 
-      // n8n peut répondre 200/202; s'il renvoie un lien direct, on l'ouvre
-      const text = await res.text();
-      let result: any = {};
+      const contentType = res.headers.get("content-type") || "";
+
+      // PDF: le flow répond en binaire (application/pdf) via "Respond to Webhook"
+      if (exportMethod === "pdf" && contentType.includes("application/pdf")) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setPdfUrl(url);
+        setPdfModalOpen(true);
+        resetExportUI();
+        setExportLoading(false);
+        return;
+      }
+
+      // Sheets / fallback JSON
+      let data: any = null;
       try {
-        result = text ? JSON.parse(text) : {};
+        data = await res.json();
       } catch {
-        /* ignore parse */
+        /* ignore */
       }
 
       if (!res.ok) {
-        throw new Error(result?.error || `HTTP ${res.status}`);
+        throw new Error(data?.error || `HTTP ${res.status}`);
       }
 
-      if (result.download_url) {
-        window.open(result.download_url, "_blank");
+      const link = data?.sheet_url || data?.download_url;
+      if (link) {
+        window.open(link, "_blank");
+      } else if (exportMethod === "sheets") {
+        toast({ title: "Export Google Sheets", description: "Export déclenché." });
       }
-
-      toast({
-        title: "Export lancé",
-        description:
-          exportMethod === "sheets" ? "Google Sheets va être créé/mis à jour." : "Le PDF est en cours de génération.",
-      });
 
       resetExportUI();
     } catch (err: any) {
@@ -157,7 +168,7 @@ const Recus = () => {
     }
   };
 
-  /* Drawer détail */
+  // Drawer détail
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -166,7 +177,7 @@ const Recus = () => {
   const currentOpenReceiptId = useRef<number | null>(null);
   const isDrawerOpenRef = useRef(false);
 
-  /* Clients */
+  // Clients
   const { data: clients = [], refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -179,7 +190,7 @@ const Recus = () => {
     },
   });
 
-  /* Members (profiles) */
+  // Members (org_members -> profiles)
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
@@ -199,7 +210,7 @@ const Recus = () => {
     },
   });
 
-  /* Receipts */
+  // Receipts list
   const {
     data: receipts = [],
     isLoading: loading,
@@ -232,18 +243,13 @@ const Recus = () => {
         query = query.or(`numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`);
       }
 
-      query = query.order("date_traitement", {
-        ascending: sortOrder === "asc",
-        nullsFirst: false,
-      });
-      query = query.order("created_at", {
-        ascending: sortOrder === "asc",
-      });
-
+      query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
+      query = query.order("created_at", { ascending: sortOrder === "asc" });
       query = query.limit(100);
 
       const { data, error } = await query;
       if (error) throw error;
+
       return (data || []).map((r: any) => ({
         id: r.id,
         created_at: r.created_at ?? null,
@@ -269,7 +275,7 @@ const Recus = () => {
 
   const error = queryError ? (queryError as any).message : null;
 
-  /* Fetch détail */
+  // Drawer detail fetch
   useEffect(() => {
     if (!selectedId || !isDrawerOpen) return;
     (async () => {
@@ -278,7 +284,6 @@ const Recus = () => {
       try {
         const { data: r, error: e1 } = await (supabase as any).from("recus").select("*").eq("id", selectedId).single();
         if (e1) throw e1;
-
         const receiptData = r as any;
         let processedByName: string | null = null;
         let clientName: string | null = null;
@@ -294,21 +299,16 @@ const Recus = () => {
             ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim()
             : null;
         }
-
         if (receiptData?.client_id) {
           const { data: c } = await (supabase as any)
             .from("clients")
             .select("name")
             .eq("id", receiptData.client_id)
             .maybeSingle();
-          clientName = (c as any)?.name ?? null;
+          const clientData = c as any;
+          clientName = clientData?.name ?? null;
         }
-
-        setDetail({
-          ...receiptData,
-          _processedByName: processedByName,
-          _clientName: clientName,
-        });
+        setDetail({ ...receiptData, _processedByName: processedByName, _clientName: clientName });
       } catch (err: any) {
         setDetailError(err?.message || "Erreur lors du chargement du reçu");
         setDetail(null);
@@ -322,21 +322,19 @@ const Recus = () => {
     isDrawerOpenRef.current = isDrawerOpen;
   }, [isDrawerOpen]);
 
-  /* Realtime */
+  // Realtime
   useEffect(() => {
     const recusChannel = supabase
       .channel("recus-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
         const newRecu = payload.new as Receipt;
         refetch();
-
         if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
           currentOpenReceiptId.current = newRecu.id;
           setSelectedId(newRecu.id);
           setDetail(null);
           setDetailError(null);
           setIsDrawerOpen(true);
-
           toast({
             title: "Nouveau reçu analysé !",
             description: `${newRecu.enseigne || "Reçu"} - ${formatCurrency(newRecu.montant_ttc)}`,
@@ -347,11 +345,9 @@ const Recus = () => {
         const updatedRecu = payload.new as Receipt;
         const oldRecu = payload.old as Receipt;
         refetch();
-
         const shouldOpen =
           (!!updatedRecu.receipt_number && !oldRecu.receipt_number) ||
           (updatedRecu.status === "traite" && oldRecu.status !== "traite");
-
         if (shouldOpen) {
           if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
             currentOpenReceiptId.current = updatedRecu.id;
@@ -359,7 +355,6 @@ const Recus = () => {
             setDetail(null);
             setDetailError(null);
             setIsDrawerOpen(true);
-
             toast({
               title: "Reçu validé !",
               description: `${updatedRecu.enseigne || "Reçu"} n°${updatedRecu.receipt_number || "—"}`,
@@ -367,7 +362,9 @@ const Recus = () => {
           }
         }
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => refetch())
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
+        refetch();
+      })
       .subscribe();
 
     const clientsChannel = supabase
@@ -385,7 +382,7 @@ const Recus = () => {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(membersChannel);
     };
-  }, [refetch]);
+  }, [refetch, refetchClients, refetchMembers]);
 
   useEffect(() => {
     if (!isDrawerOpen) currentOpenReceiptId.current = null;
@@ -395,9 +392,8 @@ const Recus = () => {
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
-        {/* Top actions */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex gap-3 w-full md:w-auto">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
+          <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
             <Button
               variant="outline"
               className="flex-1 md:flex-initial"
@@ -424,8 +420,7 @@ const Recus = () => {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
           <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
             <SelectTrigger className="w-full md:w-[240px]">
               <ArrowDownUp className="w-4 h-4 mr-2" />
@@ -490,12 +485,11 @@ const Recus = () => {
           </div>
         </div>
 
-        {/* List */}
-        <Card className="bg-card border-border">
-          <CardHeader>
+        <Card className="bg-card border-border transition-all duration-200">
+          <CardHeader className="transition-all duration-150">
             <CardTitle>Liste des reçus</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="transition-all duration-200">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">Chargement…</div>
             ) : error ? (
@@ -506,8 +500,8 @@ const Recus = () => {
               </div>
             ) : (
               <>
-                {/* Mobile cards */}
-                <div className="md:hidden space-y-3">
+                {/* Mobile: Cards + pastille sélection */}
+                <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
                     const formattedDate = formatDate(dateValue);
@@ -518,10 +512,12 @@ const Recus = () => {
                       en_cours: "En cours",
                       en_attente: "En attente",
                     };
+                    const checked = selectedIds.includes(String(receipt.id));
+
                     return (
                       <div
                         key={receipt.id}
-                        className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 space-y-3"
+                        className="relative p-4 rounded-lg bg-card/50 border border-border hover:bg-muted/50 transition-all duration-200 space-y-3"
                         onClick={() => {
                           setSelectedId(receipt.id);
                           setDetail(null);
@@ -529,7 +525,18 @@ const Recus = () => {
                           setIsDrawerOpen(true);
                         }}
                       >
-                        <div className="flex items-start justify-between">
+                        {/* pastille sélection en haut à droite */}
+                        <div
+                          className="absolute right-3 top-3"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOne(String(receipt.id));
+                          }}
+                        >
+                          <Checkbox checked={checked} onCheckedChange={() => toggleOne(String(receipt.id))} />
+                        </div>
+
+                        <div className="flex items-start justify-between pr-8">
                           <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
                             {receipt.receipt_number && (
@@ -569,7 +576,7 @@ const Recus = () => {
                   })}
                 </div>
 
-                {/* Desktop table */}
+                {/* Desktop: Table */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -604,7 +611,6 @@ const Recus = () => {
                               onCheckedChange={() => toggleOne(String(receipt.id))}
                             />
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -619,7 +625,6 @@ const Recus = () => {
                               <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
                             )}
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -631,7 +636,6 @@ const Recus = () => {
                           >
                             {receipt.ville || "—"}
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -643,7 +647,6 @@ const Recus = () => {
                           >
                             {formatCurrency(receipt.montant_ttc)}
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -655,7 +658,6 @@ const Recus = () => {
                           >
                             {formatCurrency(receipt.montant_ht)}
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -667,7 +669,6 @@ const Recus = () => {
                           >
                             {formatCurrency(receipt.tva)}
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -679,7 +680,6 @@ const Recus = () => {
                           >
                             {receipt.moyen_paiement || "—"}
                           </td>
-
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -701,10 +701,8 @@ const Recus = () => {
           </CardContent>
         </Card>
 
-        {/* Upload dialog */}
         <UploadInstructionsDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
 
-        {/* Drawer detail */}
         <ReceiptDetailDrawer
           open={isDrawerOpen}
           onOpenChange={(open) => {
@@ -750,10 +748,10 @@ const Recus = () => {
 
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
-                  <Label htmlFor="sheets-id">ID Spreadsheet (optionnel)</Label>
+                  <Label htmlFor="sheets-id">URL/ID Spreadsheet (optionnel)</Label>
                   <Input
                     id="sheets-id"
-                    placeholder="1a2b3c4d..."
+                    placeholder="https://docs.google.com/spreadsheets/...  (ou ID)"
                     value={sheetsSpreadsheetId}
                     onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
                   />
@@ -765,8 +763,44 @@ const Recus = () => {
               <Button variant="outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>
                 Fermer
               </Button>
-              <Button onClick={handleExportSubmit} disabled={exportLoading}>
+              <Button onClick={handleExportSubmit} disabled={exportLoading || !exportMethod}>
                 {exportLoading ? "Export en cours..." : "Valider l'export"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* PDF download modal */}
+        <Dialog
+          open={pdfModalOpen}
+          onOpenChange={(o) => {
+            setPdfModalOpen(o);
+            if (!o && pdfUrl) {
+              URL.revokeObjectURL(pdfUrl);
+              setPdfUrl(null);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Export PDF prêt</DialogTitle>
+            </DialogHeader>
+            <div className="py-2">
+              <p className="text-sm text-muted-foreground">Votre fichier PDF est prêt à être téléchargé.</p>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPdfModalOpen(false);
+                }}
+              >
+                Fermer
+              </Button>
+              <Button asChild disabled={!pdfUrl}>
+                <a href={pdfUrl ?? "#"} download="finvisor.pdf" target="_blank" rel="noreferrer">
+                  Télécharger le PDF
+                </a>
               </Button>
             </DialogFooter>
           </DialogContent>
