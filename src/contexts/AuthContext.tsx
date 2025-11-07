@@ -88,57 +88,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Vérifier et réparer le lien org_members si nécessaire
-  const ensureOrgMembership = async (userId: string) => {
-    try {
-      // Vérifier si l'utilisateur a un profil avec org_id
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('org_id')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (!profile?.org_id) return;
-
-      // Vérifier si l'utilisateur est déjà dans org_members avec le bon user_id
-      const { data: existingMember } = await supabase
-        .from('org_members')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('org_id', profile.org_id)
-        .maybeSingle();
-
-      if (existingMember) return; // Déjà OK
-
-      // Chercher une entrée avec user_id NULL pour cette org
-      const { data: nullMember } = await supabase
-        .from('org_members')
-        .select('id')
-        .is('user_id', null)
-        .eq('org_id', profile.org_id)
-        .limit(1)
-        .maybeSingle();
-
-      if (nullMember) {
-        // Mettre à jour l'entrée existante avec le user_id correct
-        await supabase
-          .from('org_members')
-          .update({ user_id: userId })
-          .eq('id', nullMember.id);
-      } else {
-        // Créer une nouvelle entrée
-        await supabase
-          .from('org_members')
-          .insert({
-            user_id: userId,
-            org_id: profile.org_id,
-          });
-      }
-    } catch (error) {
-      console.error('Error ensuring org membership:', error);
-    }
-  };
-
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
@@ -174,16 +123,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    
-    // Vérifier et créer l'entrée org_members si nécessaire
-    if (!error && data.user) {
-      await ensureOrgMembership(data.user.id);
-    }
-    
     return { error };
   };
 
@@ -198,16 +141,61 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         data: {
           first_name: firstName,
           last_name: lastName,
-          organization_id: organisationId, // Passer l'org_id au trigger
         }
       }
     });
 
-    // Vérifier et créer l'entrée org_members immédiatement après signup
     if (!error && data.user) {
-      // Attendre un court instant que le trigger handle_new_user se termine
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await ensureOrgMembership(data.user.id);
+      // Utiliser setTimeout pour éviter le deadlock avec onAuthStateChange
+      setTimeout(async () => {
+        try {
+          let orgId = organisationId;
+
+          // Si pas d'organisation fournie, en créer une nouvelle
+          if (!orgId) {
+            const { data: newOrg, error: orgError } = await (supabase as any)
+              .from('orgs')
+              .insert({ name: `Organisation de ${firstName} ${lastName}` })
+              .select('id')
+              .single();
+
+            if (orgError || !newOrg) {
+              console.error('Erreur création organisation:', orgError);
+              return;
+            }
+            orgId = newOrg.id;
+          }
+
+          // Créer le profil
+          const { error: profileError } = await (supabase as any)
+            .from('profiles')
+            .insert({
+              user_id: data.user!.id,
+              first_name: firstName,
+              last_name: lastName,
+            });
+
+          if (profileError) {
+            console.error('Erreur création profil:', profileError);
+          }
+
+          // Ajouter l'utilisateur à l'organisation
+          const { error: memberError } = await (supabase as any)
+            .from('org_members')
+            .insert({
+              user_id: data.user!.id,
+              org_id: orgId,
+              role: 'viewer',
+              is_active: true,
+            });
+
+          if (memberError) {
+            console.error('Erreur ajout membre organisation:', memberError);
+          }
+        } catch (err) {
+          console.error('Erreur lors du signup:', err);
+        }
+      }, 0);
     }
 
     return { error };

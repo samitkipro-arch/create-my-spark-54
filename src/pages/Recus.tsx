@@ -75,36 +75,14 @@ const Recus = () => {
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Export selection state with sessionStorage persistence
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
-    try {
-      const stored = sessionStorage.getItem("receipts:selectedIds");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Export selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportMethod, setExportMethod] = useState<"sheets" | "excel" | "drive" | "">("");
   const [exportEmail, setExportEmail] = useState("");
-  const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
   const [driveFolderId, setDriveFolderId] = useState("");
-  const [workbookId, setWorkbookId] = useState<string>(() => {
-    try {
-      return sessionStorage.getItem("receipts:workbookId") || "";
-    } catch {
-      return "";
-    }
-  });
-  const [sheetName, setSheetName] = useState<string>(() => {
-    try {
-      return sessionStorage.getItem("receipts:sheetName") || "";
-    } catch {
-      return "";
-    }
-  });
   const [exportLoading, setExportLoading] = useState(false);
-
 
   // n8n webhook URL
   const N8N_EXPORT_URL =
@@ -113,25 +91,6 @@ const Recus = () => {
 
   // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
-
-  // Persist selectedIds to sessionStorage
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("receipts:selectedIds", JSON.stringify(selectedIds));
-    } catch (e) {
-      console.error("Failed to save selection to sessionStorage", e);
-    }
-  }, [selectedIds]);
-
-  // Persist workbookId and sheetName to sessionStorage
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("receipts:workbookId", workbookId);
-      sessionStorage.setItem("receipts:sheetName", sheetName);
-    } catch (e) {
-      console.error("Failed to save Excel settings to sessionStorage", e);
-    }
-  }, [workbookId, sheetName]);
 
   // Selection helpers
   const toggleOne = (id: string) =>
@@ -143,50 +102,16 @@ const Recus = () => {
     setExportOpen(false);
     setExportMethod("");
     setExportEmail("");
-    setSheetUrl("");
+    setSheetsSpreadsheetId("");
     setDriveFolderId("");
-    // Note: we keep workbookId and sheetName persisted for reuse
   };
-
 
   // Handle export validation and submission
   const handleExportSubmit = async () => {
-    if (!exportMethod || selectedIds.length === 0) {
+    if (!exportMethod || !exportEmail || selectedIds.length === 0) {
       toast({
         title: "Erreur",
-        description: "Veuillez sélectionner une méthode.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validation spécifique pour Google Sheets
-    if (exportMethod === "sheets" && !sheetUrl) {
-      toast({
-        title: "Erreur",
-        description: "L'URL Google Sheet est obligatoire pour lancer l'export.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validation pour Excel
-    if (exportMethod === "excel") {
-      if (!workbookId || !sheetName) {
-        toast({
-          title: "Erreur",
-          description: "Veuillez renseigner le Workbook ID et le nom de la feuille.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    // Validation pour Google Drive
-    if (exportMethod === "drive" && !exportEmail) {
-      toast({
-        title: "Erreur",
-        description: "L'email est obligatoire pour cette méthode d'export.",
+        description: "Veuillez sélectionner une méthode et renseigner un email.",
         variant: "destructive",
       });
       return;
@@ -194,44 +119,17 @@ const Recus = () => {
 
     setExportLoading(true);
     try {
-      // Récupérer l'utilisateur courant
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        throw new Error("Utilisateur non authentifié");
-      }
-
-      // Récupérer l'org_id de l'utilisateur
-      const { data: orgMember, error: orgError } = await supabase
-        .from("org_members")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (orgError || !orgMember) {
-        throw new Error("Organisation introuvable");
-      }
-
-      // Construire le payload selon la méthode
       const payload: any = {
         method: exportMethod,
-        org_id: orgMember.org_id,
-        receipt_ids: selectedIds.map(id => parseInt(id, 10)),
+        receipt_ids: selectedIds,
+        email: exportEmail,
       };
 
-      // Payload spécifique pour Google Sheets
-      if (exportMethod === "sheets" && sheetUrl) {
-        payload.sheet_url = sheetUrl;
+      if (exportMethod === "sheets" && sheetsSpreadsheetId) {
+        payload.sheets_spreadsheet_id = sheetsSpreadsheetId;
       }
-
-      // Payload spécifique pour Excel
-      if (exportMethod === "excel") {
-        payload.workbook_id = workbookId;
-        payload.sheet_name = sheetName;
-      }
-
-      // Payload spécifique pour Google Drive
-      if (exportMethod === "drive" && exportEmail) {
-        payload.email = exportEmail;
+      if (exportMethod === "drive" && driveFolderId) {
+        payload.drive_folder_id = driveFolderId;
       }
 
       const response = await fetch(N8N_EXPORT_URL, {
@@ -239,10 +137,6 @@ const Recus = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
 
       const result = await response.json();
 
@@ -260,7 +154,7 @@ const Recus = () => {
       console.error("Export error:", error);
       toast({
         title: "Erreur",
-        description: error.message || "Une erreur est survenue lors de l'export.",
+        description: "Une erreur est survenue lors de l'export.",
         variant: "destructive",
       });
     } finally {
@@ -652,7 +546,7 @@ const Recus = () => {
                 Aucun reçu n'a encore été traité
               </div> : <>
                 {/* Mobile: Cards */}
-                <div className="md:hidden space-y-3 transition-all duration-200 pb-24">
+                <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map(receipt => {
                 const dateValue = receipt.date_traitement || receipt.created_at;
                 const formattedDate = formatDate(dateValue);
@@ -663,42 +557,17 @@ const Recus = () => {
                   en_cours: "En cours",
                   en_attente: "En attente"
                 };
-                const isSelected = selectedIds.includes(String(receipt.id));
-                return <div 
-                  key={receipt.id} 
-                  className={`relative p-4 rounded-lg bg-card/50 border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3 ${
-                    isSelected ? 'ring-2 ring-primary/40 border-primary/40' : 'border-border'
-                  }`}
-                  onClick={() => {
-                    toggleOne(String(receipt.id));
-                  }}
-                  data-selected={isSelected}
-                >
+                return <div key={receipt.id} className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 transition-all duration-200 space-y-3" onClick={() => {
+                  setSelectedId(receipt.id);
+                  setDetail(null);
+                  setDetailError(null);
+                  setIsDrawerOpen(true);
+                }}>
                         <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            {/* Circular checkbox aligned with title (mobile only) */}
-                            <div 
-                              className="md:hidden h-7 w-7 rounded-full bg-card shadow-sm ring-1 ring-border flex items-center justify-center flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleOne(String(receipt.id));
-                              }}
-                              aria-label="Sélectionner ce reçu"
-                            >
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleOne(String(receipt.id))}
-                                className="h-5 w-5 rounded-full"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            </div>
-                            
-                            <div>
-                              <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
-                              {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
-                            </div>
+                          <div>
+                            <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
+                            {receipt.receipt_number && <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>}
                           </div>
-                          
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -826,37 +695,6 @@ const Recus = () => {
           </CardContent>
         </Card>
 
-        {/* Mobile sticky action bar */}
-        {selectedIds.length > 0 && (
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border shadow-lg safe-area-inset-bottom">
-            <div className="flex items-center gap-2 p-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => toggleAll(receipts.map(r => String(r.id)))}
-                className="flex-1"
-              >
-                Tout sélectionner
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedIds([])}
-                className="flex-1"
-              >
-                Effacer
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setExportOpen(true)}
-                className="flex-1"
-              >
-                Exporter ({selectedIds.length})
-              </Button>
-            </div>
-          </div>
-        )}
-
         <UploadInstructionsDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
 
         <ReceiptDetailDrawer open={isDrawerOpen} onOpenChange={open => {
@@ -893,68 +731,37 @@ const Recus = () => {
                 </RadioGroup>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="export-email">Email destinataire *</Label>
+                <Input
+                  id="export-email"
+                  type="email"
+                  placeholder="email@exemple.fr"
+                  value={exportEmail}
+                  onChange={(e) => setExportEmail(e.target.value)}
+                />
+              </div>
+
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
-                  <Label htmlFor="sheet-url">URL du Google Sheet cible *</Label>
+                  <Label htmlFor="sheets-id">ID Spreadsheet (optionnel)</Label>
                   <Input
-                    id="sheet-url"
-                    type="url"
-                    placeholder="https://docs.google.com/spreadsheets/d/..."
-                    value={sheetUrl}
-                    onChange={(e) => setSheetUrl(e.target.value)}
-                    required
+                    id="sheets-id"
+                    placeholder="1a2b3c4d..."
+                    value={sheetsSpreadsheetId}
+                    onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Cette URL est obligatoire. Finvisor va ajouter une ligne dans ce document Google Sheets.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Important : ouvrez votre Google Sheet → cliquez sur Partager → dans "Accès général" sélectionnez "Toute personne disposant du lien" → puis choisissez le rôle "Éditeur".
-                  </p>
-                </div>
-              )}
-
-              {exportMethod === "excel" && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="workbook-id">Classeur (Workbook ID) *</Label>
-                    <Input
-                      id="workbook-id"
-                      type="text"
-                      placeholder="01ABCDEF234567890!12345"
-                      value={workbookId}
-                      onChange={(e) => setWorkbookId(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Dans Excel Online, ouvrez le classeur → l'URL contient l'ID entre /items/&#123;ID&#125;/
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sheet-name">Feuille (Sheet name) *</Label>
-                    <Input
-                      id="sheet-name"
-                      type="text"
-                      placeholder="Feuil1"
-                      value={sheetName}
-                      onChange={(e) => setSheetName(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Exemple : Feuil1, Sheet1, etc.
-                    </p>
-                  </div>
                 </div>
               )}
 
               {exportMethod === "drive" && (
                 <div className="space-y-2">
-                  <Label htmlFor="export-email">Email destinataire *</Label>
+                  <Label htmlFor="drive-folder">ID Dossier Drive (optionnel)</Label>
                   <Input
-                    id="export-email"
-                    type="email"
-                    placeholder="email@exemple.fr"
-                    value={exportEmail}
-                    onChange={(e) => setExportEmail(e.target.value)}
+                    id="drive-folder"
+                    placeholder="1a2b3c4d..."
+                    value={driveFolderId}
+                    onChange={(e) => setDriveFolderId(e.target.value)}
                   />
                 </div>
               )}
@@ -963,13 +770,7 @@ const Recus = () => {
               <Button variant="outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>
                 Fermer
               </Button>
-              <Button 
-                onClick={handleExportSubmit} 
-                disabled={
-                  exportLoading || 
-                  (exportMethod === "excel" && (!workbookId || !sheetName))
-                }
-              >
+              <Button onClick={handleExportSubmit} disabled={exportLoading}>
                 {exportLoading ? "Export en cours..." : "Valider l'export"}
               </Button>
             </DialogFooter>
