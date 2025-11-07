@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-// ==== NOUVELLES ICÔNES ====
-import { IconPhoneRotate, IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
+// ==== ICÔNES (smartphone corrigé) ====
+import { IconSmartphoneRotate, IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -187,7 +187,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
               {/* Téléphone en paysage */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
                 <div className="relative">
-                  <IconPhoneRotate className="w-10 h-10 md:w-16 md:h-16 text-white" />
+                  <IconSmartphoneRotate className="w-10 h-10 md:w-16 md:h-16 text-white" />
                 </div>
                 <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
                   Prenez la photo de votre reçu en orientant votre téléphone en mode paysage.
