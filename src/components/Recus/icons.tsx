@@ -4,7 +4,7 @@ interface IconProps {
   className?: string;
 }
 
-export const IconPhoneRotate: React.FC<IconProps> = ({ className = "" }) => (
+export const IconSmartphoneRotate: React.FC<IconProps> = ({ className = "" }) => (
   <svg
     viewBox="0 0 24 24"
     fill="none"
