@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Smartphone, Lightbulb, Frame, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Upload modal with:
+ * - Always-centered dialog (fixed + translate, high z-index)
+ * - Upload -> "Analyse IA en cours…" overlay with progress bar
+ * - No red toasts; inline soft errors with retry
+ * - Auto-close when a new receipt row is inserted (drawer opens on your side)
+ */
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -11,113 +19,102 @@ interface UploadInstructionsDialogProps {
 
 export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructionsDialogProps) => {
   const [fileInputKey, setFileInputKey] = useState(0);
-
-  // Nouveaux états overlay
   const [isUploading, setIsUploading] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [overlayMessage, setOverlayMessage] = useState<"idle" | "upload" | "processing" | "done" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0); // 0..100
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [softError, setSoftError] = useState<string | null>(null);
 
-  // Pour arrêter proprement le timer et la subscription
-  const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const orgIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  const uploadStartedAt = useRef<number | null>(null);
+  const rtSubRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Utilitaire : clear timer + realtime channel
-  const cleanupRealtime = () => {
-    if (progressTimerRef.current) {
-      clearInterval(progressTimerRef.current);
-      progressTimerRef.current = null;
+  // Progress animation: while uploading/processing, gently ramp to 90% max,
+  // then finish to 100% on success.
+  useEffect(() => {
+    if (!isUploading) return;
+
+    let current = 0;
+    // If we relaunch after retry, keep the visible progression smoother:
+    if (progress > 0) current = progress;
+
+    const id = setInterval(() => {
+      // approach 90% but never exceed until we mark success
+      current = Math.min(90, current + Math.max(1, Math.floor((90 - current) / 8)));
+      setProgress(current);
+    }, 300);
+
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUploading]);
+
+  // Clean RT subscription on unmount/close
+  useEffect(() => {
+    if (!open && rtSubRef.current) {
+      supabase.removeChannel(rtSubRef.current);
+      rtSubRef.current = null;
     }
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
+  }, [open]);
+
+  const attachRealtimeForReceipts = async () => {
+    // Ensure we listen only once per upload
+    if (rtSubRef.current) {
+      supabase.removeChannel(rtSubRef.current);
+      rtSubRef.current = null;
     }
+    if (!orgIdRef.current) return;
+
+    // Listen to inserts on public.recus for this org
+    const channel = supabase.channel("recus-on-insert-upload-modal").on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "recus",
+        filter: `org_id=eq.${orgIdRef.current}`,
+      },
+      (payload) => {
+        // Optionally filter by time (ignore old inserts)
+        const now = Date.now();
+        const started = uploadStartedAt.current ?? now;
+        // When we see an insert after our upload started, close the modal.
+        if (now - started >= 0) {
+          setProgress(100);
+          setStatusMsg("Analyse terminée.");
+          // Small delay to let the user see 100%, then close
+          setTimeout(() => {
+            onOpenChange(false);
+            cleanupAfterUpload();
+          }, 250);
+        }
+      },
+    );
+
+    rtSubRef.current = channel;
+    await channel.subscribe();
   };
 
-  // Reset total (utilisé par "Réessayer")
-  const hardReset = () => {
-    cleanupRealtime();
+  const cleanupAfterUpload = () => {
     setIsUploading(false);
-    setShowOverlay(false);
     setProgress(0);
-    setOverlayMessage("idle");
-    setErrorMsg(null);
+    setStatusMsg(null);
+    setSoftError(null);
     setFileInputKey((k) => k + 1);
-  };
 
-  // Ferme le dialog proprement
-  const closeDialog = () => {
-    cleanupRealtime();
-    onOpenChange(false);
-    setTimeout(() => {
-      // petit délai pour laisser le drawer s’ouvrir de l’autre côté
-      hardReset();
-    }, 250);
-  };
-
-  // Abonnement à l’insert des reçus pour fermer le dialog dès que le nouvel enregistrement arrive
-  const watchNewReceiptAndClose = async (orgId: string, currentUserId: string) => {
-    // Crée une channel si inexistante
-    if (!channelRef.current) {
-      channelRef.current = supabase.channel("recus-insert-listener");
+    if (rtSubRef.current) {
+      supabase.removeChannel(rtSubRef.current);
+      rtSubRef.current = null;
     }
-
-    channelRef.current
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "recus",
-          // on filtre sur l'org pour éviter de réagir aux inserts des autres orgs
-          filter: `org_id=eq.${orgId}`,
-        },
-        (payload: any) => {
-          try {
-            // Optionnel : on vérifie si processed_by correspond à l'user courant si disponible
-            const row = payload?.new ?? payload?.record ?? {};
-            if (!row) return;
-
-            // On considère l'insert comme succès pour l’utilisateur courant
-            // (si tu veux être plus strict, décommente la condition ci-dessous)
-            // if (row.processed_by && row.processed_by !== currentUserId) return;
-
-            setOverlayMessage("done");
-            setProgress(100);
-
-            // ferme le dialog juste après un tout petit délai pour la transition
-            setTimeout(() => closeDialog(), 250);
-          } catch {
-            // on ignore les erreurs ici pour ne pas polluer l’UI
-          }
-        },
-      )
-      .subscribe();
-  };
-
-  // Timer de progression qui grimpe jusqu’à 85% en attendant l’insert
-  const startProgressTimer = () => {
-    if (progressTimerRef.current) return;
-    progressTimerRef.current = setInterval(() => {
-      setProgress((p) => {
-        // on plafonne avant 85% tant qu’on n’a pas reçu l’insert
-        if (p >= 85) return 85;
-        // progression fluide
-        return p + Math.max(1, Math.floor((90 - p) / 10));
-      });
-    }, 350);
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setSoftError(null);
+    setStatusMsg("Préparation de l'envoi…");
     setIsUploading(true);
-    setShowOverlay(true);
-    setOverlayMessage("upload");
-    setErrorMsg(null);
-    setProgress(8); // petit jump initial
+    uploadStartedAt.current = Date.now();
 
     try {
       // Auth
@@ -131,15 +128,15 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       if (!user || !session?.access_token) {
         throw new Error("Utilisateur non authentifié.");
       }
+      userIdRef.current = user.id;
 
-      // Récup org_id (org_members -> profiles fallback)
+      // org_id: try org_members first, then profiles
       let orgId: string | null = null;
-
       const { data: orgMember } = await (supabase as any)
         .from("org_members")
         .select("org_id")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (orgMember?.org_id) {
         orgId = orgMember.org_id;
@@ -148,27 +145,28 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           .from("profiles")
           .select("org_id")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
         if (profile?.org_id) orgId = profile.org_id;
       }
 
       if (!orgId) {
-        throw new Error("Organisation introuvable.");
+        throw new Error("Organisation introuvable pour cet utilisateur.");
       }
+      orgIdRef.current = orgId;
 
-      // Démarre le timer de progression
-      startProgressTimer();
+      // Start realtime listener so that when the new reçu is inserted,
+      // we auto-close the dialog (drawer opens on your side).
+      await attachRealtimeForReceipts();
 
-      // Lance l’écoute de l’insert pour fermer automatiquement
-      watchNewReceiptAndClose(orgId, user.id);
+      setStatusMsg("Envoi du reçu vers Finvisor IA…");
 
-      // Prépare formData
+      // Build form-data
       const formData = new FormData();
       formData.append("file", file);
       formData.append("org_id", orgId);
       formData.append("user_id", user.id);
 
-      // Upload vers n8n
+      // Send to n8n webhook
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook/Finvisor", {
         method: "POST",
         headers: {
@@ -178,51 +176,66 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Erreur d’envoi (${response.status})`);
+        const errorText = await response.text().catch(() => "");
+        throw new Error(errorText || `Erreur ${response.status} lors de l'envoi.`);
       }
 
-      // Envoi ok -> on passe en mode "processing"
-      setOverlayMessage("processing");
-      setProgress((p) => Math.max(p, 60));
-      // On attend maintenant le signal de l’insert (realtime) pour monter à 100% et fermer
+      setStatusMsg("Analyse IA en cours…");
+      // After this point, we wait the realtime insert to close the modal.
+      // (progress animation continues until 100% when the insert arrives)
     } catch (err: any) {
-      // Pas de toast rouge : on affiche discrètement dans l’overlay
-      setOverlayMessage("error");
-      setErrorMsg(err?.message || "Un problème est survenu pendant l’envoi. Vérifiez votre connexion et réessayez.");
-      // on arrête le timer, on laisse le user décider de réessayer
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
+      setSoftError(err?.message?.toString?.() ?? "Une erreur est survenue pendant l'envoi. Réessaie dans un instant.");
       setIsUploading(false);
+      setStatusMsg(null);
     }
   };
 
-  // Si on ferme le dialog (open=false), on nettoie tout
-  useEffect(() => {
-    if (!open) {
-      cleanupRealtime();
-      setShowOverlay(false);
-      setOverlayMessage("idle");
-      setErrorMsg(null);
-      setProgress(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const retry = () => {
+    setSoftError(null);
+    setStatusMsg(null);
+    setIsUploading(false);
+    setProgress(0);
+    setFileInputKey((k) => k + 1);
+  };
+
+  // Always-centered dialog content classes:
+  // - fixed + translate center
+  // - high z-index
+  // - robust max sizes
+  const dialogClasses = useMemo(
+    () =>
+      [
+        "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+        "z-[100]", // above the app shell
+        "bg-[#0E1420] border-border text-foreground",
+        "w-[92vw] max-w-2xl",
+        "max-h-[90vh] overflow-y-auto",
+        "shadow-2xl",
+      ].join(" "),
+    [],
+  );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0E1420] border-border max-w-2xl text-foreground max-h-[90vh] md:max-h-[90vh] max-h-[60vh] overflow-y-auto relative">
-        {/* Contenu "normal" — caché quand l’overlay est visible */}
-        {!showOverlay && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-base md:text-2xl font-semibold text-center text-foreground mb-3 md:mb-8">
-                👉 Quelques consignes avant l&apos;envoi
-              </DialogTitle>
-            </DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) cleanupAfterUpload();
+      }}
+    >
+      {/* Force an overlay with high z-index so the modal is clearly above the app */}
+      <div className="fixed inset-0 z-[95] bg-black/60 data-[state=open]:animate-in" aria-hidden />
 
+      <DialogContent className={dialogClasses}>
+        <DialogHeader>
+          <DialogTitle className="text-base md:text-2xl font-semibold text-center mb-3 md:mb-6">
+            👉 Quelques consignes avant l&apos;envoi
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* MAIN BODY (hidden when uploading, we show overlay instead) */}
+        {!isUploading && (
+          <>
             <div className="grid grid-cols-2 gap-3 md:gap-8 mb-3 md:mb-8">
               {/* Téléphone en paysage */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
@@ -307,49 +320,50 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           </>
         )}
 
-        {/* OVERLAY Analyse IA en cours — visible pendant upload/processing/erreur */}
-        {showOverlay && (
-          <div className="absolute inset-0 flex items-center justify-center p-4 md:p-8">
-            <div className="w-full max-w-xl rounded-2xl shadow-xl bg-[#0B5BFF]/95 border border-white/10 px-6 py-6 md:px-10 md:py-10">
-              <div className="text-center space-y-3 md:space-y-4">
-                <p className="text-white text-sm md:text-xl font-semibold">
-                  {overlayMessage === "error"
-                    ? "Échec d’envoi"
-                    : overlayMessage === "done"
-                      ? "Analyse terminée !"
-                      : overlayMessage === "upload"
-                        ? "Envoi du reçu…"
-                        : overlayMessage === "processing"
-                          ? "Analyse IA en cours…"
-                          : "Analyse IA en cours…"}
-                </p>
+        {/* OVERLAY “Analyse IA en cours…” */}
+        {isUploading && (
+          <div className="relative">
+            <div className="rounded-2xl bg-[#165DFF] text-white p-6 md:p-8">
+              <p className="text-center text-base md:text-xl font-semibold mb-6">
+                {statusMsg ?? "Analyse IA en cours…"}
+              </p>
 
-                {/* Barre de progression */}
-                <div className="w-full bg-white/20 rounded-full h-2 md:h-2.5 overflow-hidden">
-                  <div className="h-full bg-white transition-all duration-300" style={{ width: `${progress}%` }} />
-                </div>
+              {/* Progress bar */}
+              <div className="w-full h-2 md:h-2.5 rounded-full bg-white/25 overflow-hidden">
+                <div
+                  className="h-full bg-white transition-[width] duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
 
-                {/* Sous-texte / erreur discrète */}
-                {overlayMessage !== "error" ? (
-                  <p className="text-white/80 text-xs md:text-sm">
-                    Veuillez patienter, cela prend généralement quelques secondes.
-                  </p>
-                ) : (
-                  <p className="text-white text-xs md:text-sm">{errorMsg}</p>
-                )}
-
-                {/* Actions en cas d’erreur */}
-                {overlayMessage === "error" && (
-                  <div className="pt-2">
-                    <Button
-                      onClick={hardReset}
-                      className="bg-white text-black hover:bg-white/90 text-xs md:text-sm h-8 md:h-10"
-                    >
+              {/* Soft error (no red toast) */}
+              {softError && (
+                <div className="mt-4 text-center text-white/90 text-xs md:text-sm">
+                  <p className="mb-3">{softError}</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button onClick={retry} className="bg-white text-black hover:bg-white/90 h-8 md:h-9 px-3 md:px-4">
                       Réessayer
                     </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        onOpenChange(false);
+                        cleanupAfterUpload();
+                      }}
+                      className="h-8 md:h-9 px-3 md:px-4"
+                    >
+                      Fermer
+                    </Button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Hint (hidden if error) */}
+              {!softError && (
+                <p className="mt-3 text-center text-white/80 text-[11px] md:text-xs">
+                  Cette étape peut prendre quelques secondes. Vous verrez le reçu s’ouvrir automatiquement.
+                </p>
+              )}
             </div>
           </div>
         )}
