@@ -85,8 +85,24 @@ const Recus = () => {
     }
   });
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportMethod, setExportMethod] = useState<"sheets" | "pdf" | "">("");
+  const [exportMethod, setExportMethod] = useState<"sheets" | "excel" | "drive" | "">("");
+  const [exportEmail, setExportEmail] = useState("");
   const [sheetUrl, setSheetUrl] = useState("");
+  const [driveFolderId, setDriveFolderId] = useState("");
+  const [workbookId, setWorkbookId] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("receipts:workbookId") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [sheetName, setSheetName] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("receipts:sheetName") || "";
+    } catch {
+      return "";
+    }
+  });
   const [exportLoading, setExportLoading] = useState(false);
 
 
@@ -107,6 +123,16 @@ const Recus = () => {
     }
   }, [selectedIds]);
 
+  // Persist workbookId and sheetName to sessionStorage
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("receipts:workbookId", workbookId);
+      sessionStorage.setItem("receipts:sheetName", sheetName);
+    } catch (e) {
+      console.error("Failed to save Excel settings to sessionStorage", e);
+    }
+  }, [workbookId, sheetName]);
+
   // Selection helpers
   const toggleOne = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -116,7 +142,10 @@ const Recus = () => {
     setSelectedIds([]);
     setExportOpen(false);
     setExportMethod("");
+    setExportEmail("");
     setSheetUrl("");
+    setDriveFolderId("");
+    // Note: we keep workbookId and sheetName persisted for reuse
   };
 
 
@@ -141,6 +170,28 @@ const Recus = () => {
       return;
     }
 
+    // Validation pour Excel
+    if (exportMethod === "excel") {
+      if (!workbookId || !sheetName) {
+        toast({
+          title: "Erreur",
+          description: "Veuillez renseigner le Workbook ID et le nom de la feuille.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Validation pour Google Drive
+    if (exportMethod === "drive" && !exportEmail) {
+      toast({
+        title: "Erreur",
+        description: "L'email est obligatoire pour cette méthode d'export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setExportLoading(true);
     try {
       // Récupérer l'utilisateur courant
@@ -160,7 +211,7 @@ const Recus = () => {
         throw new Error("Organisation introuvable");
       }
 
-      // Construire le payload commun
+      // Construire le payload selon la méthode
       const payload: any = {
         method: exportMethod,
         org_id: orgMember.org_id,
@@ -170,6 +221,17 @@ const Recus = () => {
       // Payload spécifique pour Google Sheets
       if (exportMethod === "sheets" && sheetUrl) {
         payload.sheet_url = sheetUrl;
+      }
+
+      // Payload spécifique pour Excel
+      if (exportMethod === "excel") {
+        payload.workbook_id = workbookId;
+        payload.sheet_name = sheetName;
+      }
+
+      // Payload spécifique pour Google Drive
+      if (exportMethod === "drive" && exportEmail) {
+        payload.email = exportEmail;
       }
 
       const response = await fetch(N8N_EXPORT_URL, {
@@ -182,30 +244,16 @@ const Recus = () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      // Gestion différenciée selon la méthode
-      if (exportMethod === "pdf") {
-        // Réponse PDF (binaire)
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
+      const result = await response.json();
 
-        toast({
-          title: "Export PDF réussi !",
-          description: "Le PDF a été ouvert dans un nouvel onglet.",
-        });
-      } else {
-        // Réponse JSON (Google Sheets)
-        const result = await response.json();
-
-        if (result.download_url) {
-          window.open(result.download_url, "_blank");
-        }
-
-        toast({
-          title: "Export lancé !",
-          description: "Le lien/fichier sera disponible sous peu.",
-        });
+      if (result.download_url) {
+        window.open(result.download_url, "_blank");
       }
+
+      toast({
+        title: "Export lancé !",
+        description: "Le lien/fichier sera envoyé par e-mail.",
+      });
 
       resetExportUI();
     } catch (error: any) {
@@ -835,8 +883,12 @@ const Recus = () => {
                     <Label htmlFor="sheets" className="font-normal cursor-pointer">Google Sheets</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="pdf" id="pdf" />
-                    <Label htmlFor="pdf" className="font-normal cursor-pointer">PDF (Finvisor)</Label>
+                    <RadioGroupItem value="excel" id="excel" />
+                    <Label htmlFor="excel" className="font-normal cursor-pointer">Excel</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="drive" id="drive" />
+                    <Label htmlFor="drive" className="font-normal cursor-pointer">Google Drive</Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -860,6 +912,52 @@ const Recus = () => {
                   </p>
                 </div>
               )}
+
+              {exportMethod === "excel" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="workbook-id">Classeur (Workbook ID) *</Label>
+                    <Input
+                      id="workbook-id"
+                      type="text"
+                      placeholder="01ABCDEF234567890!12345"
+                      value={workbookId}
+                      onChange={(e) => setWorkbookId(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Dans Excel Online, ouvrez le classeur → l'URL contient l'ID entre /items/&#123;ID&#125;/
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sheet-name">Feuille (Sheet name) *</Label>
+                    <Input
+                      id="sheet-name"
+                      type="text"
+                      placeholder="Feuil1"
+                      value={sheetName}
+                      onChange={(e) => setSheetName(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Exemple : Feuil1, Sheet1, etc.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {exportMethod === "drive" && (
+                <div className="space-y-2">
+                  <Label htmlFor="export-email">Email destinataire *</Label>
+                  <Input
+                    id="export-email"
+                    type="email"
+                    placeholder="email@exemple.fr"
+                    value={exportEmail}
+                    onChange={(e) => setExportEmail(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>
@@ -867,7 +965,10 @@ const Recus = () => {
               </Button>
               <Button 
                 onClick={handleExportSubmit} 
-                disabled={exportLoading}
+                disabled={
+                  exportLoading || 
+                  (exportMethod === "excel" && (!workbookId || !sheetName))
+                }
               >
                 {exportLoading ? "Export en cours..." : "Valider l'export"}
               </Button>
