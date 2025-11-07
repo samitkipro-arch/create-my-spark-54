@@ -35,14 +35,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
   const navigate = useNavigate();
 
+  // Fonction pour lier un utilisateur à une organisation
   const linkUserToOrg = async (userId: string) => {
     try {
-      // 1. Chercher le profil de l'utilisateur pour obtenir son org_id
+      // 1. Chercher le profil de l'utilisateur pour voir s'il a déjà un org_id
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('org_id, first_name, last_name, email')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
         console.error('Error fetching profile:', profileError);
@@ -53,64 +54,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // 2. Si pas d'org_id dans le profil, chercher une org avec owner_id = userId
       if (!orgId) {
-        const { data: ownedOrg, error: ownedOrgError } = await supabase
+        const { data: existingOrg, error: orgError } = await supabase
           .from('orgs')
           .select('id')
           .eq('owner_id', userId)
           .maybeSingle();
 
-        if (ownedOrgError) {
-          console.error('Error fetching owned org:', ownedOrgError);
+        if (orgError && orgError.code !== 'PGRST116') {
+          console.error('Error fetching org:', orgError);
+          return;
         }
 
         // 3. Si toujours pas d'org, en créer une
-        if (!ownedOrg) {
+        if (!existingOrg) {
           const orgName = profile?.first_name && profile?.last_name
             ? `Organisation de ${profile.first_name} ${profile.last_name}`
             : profile?.email?.split('@')[0] || 'Mon Organisation';
 
-          const { data: newOrg, error: newOrgError } = await supabase
+          const { data: newOrg, error: createOrgError } = await supabase
             .from('orgs')
             .insert({ name: orgName, owner_id: userId })
             .select('id')
             .single();
 
-          if (newOrgError) {
-            console.error('Error creating org:', newOrgError);
+          if (createOrgError) {
+            console.error('Error creating org:', createOrgError);
             return;
           }
 
           orgId = newOrg.id;
 
-          // Mettre à jour le profil avec le nouvel org_id
+          // Mettre à jour le profil avec l'org_id
           await supabase
             .from('profiles')
             .update({ org_id: orgId })
             .eq('user_id', userId);
         } else {
-          orgId = ownedOrg.id;
+          orgId = existingOrg.id;
         }
       }
 
       // 4. Vérifier si l'utilisateur est dans org_members
-      const { data: existingMember } = await supabase
+      const { data: membership, error: membershipError } = await supabase
         .from('org_members')
         .select('id')
         .eq('user_id', userId)
         .eq('org_id', orgId)
         .maybeSingle();
 
-      // 5. Si pas dans org_members, l'ajouter avec role = 'member'
-      if (!existingMember) {
-        const { error: memberError } = await supabase
+      if (membershipError && membershipError.code !== 'PGRST116') {
+        console.error('Error checking membership:', membershipError);
+        return;
+      }
+
+      // 5. Si pas dans org_members, l'ajouter
+      if (!membership && orgId) {
+        const { error: insertMemberError } = await supabase
           .from('org_members')
           .insert({
             user_id: userId,
             org_id: orgId,
           });
 
-        if (memberError) {
-          console.error('Error adding user to org_members:', memberError);
+        if (insertMemberError) {
+          console.error('Error adding to org_members:', insertMemberError);
         }
       }
     } catch (error) {
@@ -122,7 +129,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // Ne pas appeler la fonction si pas de session valide
       if (!session?.access_token) {
         console.log('No valid session for subscription check');
         setSubscription({
@@ -172,14 +178,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
         
-        // Check subscription when user logs in
         if (session?.user) {
           setTimeout(() => {
             checkSubscription();
@@ -188,13 +192,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
       
-      // Check subscription for existing session
       if (session?.user) {
         setTimeout(() => {
           checkSubscription();
@@ -211,7 +213,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       password,
     });
 
-    // Lier l'utilisateur à une organisation immédiatement après le login
+    // Lier l'utilisateur à son organisation après login
     if (!error && data.user) {
       await linkUserToOrg(data.user.id);
     }
@@ -235,8 +237,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
-    // Le trigger handle_new_user s'occupe de créer l'org, le profil et le membership
-    // Pas besoin de code supplémentaire ici
+    // Le trigger handle_new_user gère la création de l'org, du profil et de org_members
+    // Mais on appelle linkUserToOrg pour s'assurer que tout est cohérent
+    if (!error && data.user) {
+      await linkUserToOrg(data.user.id);
+    }
 
     return { error };
   };
