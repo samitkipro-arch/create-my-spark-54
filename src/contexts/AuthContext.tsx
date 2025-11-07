@@ -142,36 +142,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
         
         // Check subscription when user logs in
         if (session?.user) {
-          // Vérifier le lien org_members
-          await ensureOrgMembership(session.user.id);
-          
-          setTimeout(() => {
-            checkSubscription();
+          // Différer les appels Supabase pour éviter les deadlocks
+          setTimeout(async () => {
+            await ensureOrgMembership(session.user.id);
+            await checkSubscription();
           }, 0);
         }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
       
       // Check subscription for existing session
       if (session?.user) {
-        // Vérifier le lien org_members
-        await ensureOrgMembership(session.user.id);
-        
-        setTimeout(() => {
-          checkSubscription();
+        setTimeout(async () => {
+          await ensureOrgMembership(session.user.id);
+          await checkSubscription();
         }, 0);
       }
     });
