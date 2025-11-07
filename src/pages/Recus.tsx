@@ -748,13 +748,18 @@ const Recus = () => {
 
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
-                  <Label htmlFor="sheets-id">URL/ID Spreadsheet (optionnel)</Label>
+                  <Label htmlFor="sheets-id">URL de votre feuille Google Sheets (ou ID)</Label>
                   <Input
                     id="sheets-id"
                     placeholder="https://docs.google.com/spreadsheets/...  (ou ID)"
                     value={sheetsSpreadsheetId}
                     onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Important :</strong> Cliquez sur <em>Partager</em> → mettez{" "}
+                    <em>Toute personne disposant du lien</em> en <em>Peut modifier</em> avant de lancer l’export Google
+                    Sheets.
+                  </p>
                 </div>
               )}
             </div>
