@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-// ==== ICÔNES (smartphone corrigé) ====
-import { IconSmartphoneRotate, IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
+// ==== ICÔNES ====
+// (on garde tes icônes custom pour lumière + cadrage)
+import { IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -187,7 +188,18 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
               {/* Téléphone en paysage */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
                 <div className="relative">
-                  <IconSmartphoneRotate className="w-10 h-10 md:w-16 md:h-16 text-white" />
+                  <Smartphone className="w-10 h-10 md:w-16 md:h-16 text-white rotate-90" strokeWidth={1.5} />
+                  <div className="absolute -bottom-0.5 -right-0.5 md:-bottom-2 md:-right-2">
+                    <svg
+                      className="w-5 h-5 md:w-8 md:h-8 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M17 8l4 4m0 0l-4 4m4-4H3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
                 </div>
                 <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
                   Prenez la photo de votre reçu en orientant votre téléphone en mode paysage.
