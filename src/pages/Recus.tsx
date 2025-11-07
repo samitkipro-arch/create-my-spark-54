@@ -748,10 +748,10 @@ const Recus = () => {
 
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
-                  <Label htmlFor="sheets-id">URL de votre feuille Google Sheets (ou ID)</Label>
+                  <Label htmlFor="sheets-id">URL de votre feuille Google Sheets</Label>
                   <Input
                     id="sheets-id"
-                    placeholder="https://docs.google.com/spreadsheets/...  (ou ID)"
+                    placeholder="https://docs.google.com/spreadsheets/d/…/edit"
                     value={sheetsSpreadsheetId}
                     onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
                   />
