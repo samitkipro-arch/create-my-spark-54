@@ -149,10 +149,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         // Check subscription when user logs in
         if (session?.user) {
-          // Différer les appels Supabase pour éviter les deadlocks
-          setTimeout(async () => {
-            await ensureOrgMembership(session.user.id);
-            await checkSubscription();
+          setTimeout(() => {
+            checkSubscription();
           }, 0);
         }
       }
@@ -166,9 +164,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Check subscription for existing session
       if (session?.user) {
-        setTimeout(async () => {
-          await ensureOrgMembership(session.user.id);
-          await checkSubscription();
+        setTimeout(() => {
+          checkSubscription();
         }, 0);
       }
     });
@@ -177,10 +174,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    // Vérifier et créer l'entrée org_members si nécessaire
+    if (!error && data.user) {
+      await ensureOrgMembership(data.user.id);
+    }
+    
     return { error };
   };
 
@@ -195,64 +198,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         data: {
           first_name: firstName,
           last_name: lastName,
+          organization_id: organisationId, // Passer l'org_id au trigger
         }
       }
     });
 
+    // Vérifier et créer l'entrée org_members immédiatement après signup
     if (!error && data.user) {
-      // Utiliser setTimeout pour éviter le deadlock avec onAuthStateChange
-      setTimeout(async () => {
-        try {
-          let orgId = organisationId;
-
-          // Si pas d'organisation fournie, en créer une nouvelle
-          if (!orgId) {
-            const { data: newOrg, error: orgError } = await (supabase as any)
-              .from('orgs')
-              .insert({ name: `Organisation de ${firstName} ${lastName}` })
-              .select('id')
-              .single();
-
-            if (orgError || !newOrg) {
-              console.error('Erreur création organisation:', orgError);
-              return;
-            }
-            orgId = newOrg.id;
-          }
-
-          // Créer le profil avec l'org_id
-          const { error: profileError } = await (supabase as any)
-            .from('profiles')
-            .insert({
-              user_id: data.user!.id,
-              first_name: firstName,
-              last_name: lastName,
-              email: email,
-              org_id: orgId,
-            });
-
-          if (profileError) {
-            console.error('Erreur création profil:', profileError);
-          }
-
-          // Ajouter l'utilisateur à l'organisation
-          const { error: memberError } = await (supabase as any)
-            .from('org_members')
-            .insert({
-              user_id: data.user!.id,
-              org_id: orgId,
-              first_name: firstName,
-              last_name: lastName,
-              email: email,
-            });
-
-          if (memberError) {
-            console.error('Erreur ajout membre organisation:', memberError);
-          }
-        } catch (err) {
-          console.error('Erreur lors du signup:', err);
-        }
-      }, 0);
+      // Attendre un court instant que le trigger handle_new_user se termine
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await ensureOrgMembership(data.user.id);
     }
 
     return { error };
