@@ -73,7 +73,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook/Finvisor", {
         method: "POST",
         headers: {
-          Authorization: Bearer ${session.access_token},
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: formData,
       });
@@ -90,7 +90,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       } else {
         const errorText = await response.text();
         console.error("❌ Erreur webhook n8n:", response.status, errorText);
-        throw new Error(Erreur ${response.status}: ${errorText || "Erreur lors de l'envoi"});
+        throw new Error(`Erreur ${response.status}: ${errorText || "Erreur lors de l'envoi"}`);
       }
     } catch (error) {
       console.error("Erreur lors de l'upload:", error);
