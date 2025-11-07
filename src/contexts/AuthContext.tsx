@@ -88,16 +88,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Vérifier et réparer le lien org_members si nécessaire
+  const ensureOrgMembership = async (userId: string) => {
+    try {
+      // Vérifier si l'utilisateur a un profil avec org_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('org_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!profile?.org_id) return;
+
+      // Vérifier si l'utilisateur est déjà dans org_members avec le bon user_id
+      const { data: existingMember } = await supabase
+        .from('org_members')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('org_id', profile.org_id)
+        .maybeSingle();
+
+      if (existingMember) return; // Déjà OK
+
+      // Chercher une entrée avec user_id NULL pour cette org
+      const { data: nullMember } = await supabase
+        .from('org_members')
+        .select('id')
+        .is('user_id', null)
+        .eq('org_id', profile.org_id)
+        .limit(1)
+        .maybeSingle();
+
+      if (nullMember) {
+        // Mettre à jour l'entrée existante avec le user_id correct
+        await supabase
+          .from('org_members')
+          .update({ user_id: userId })
+          .eq('id', nullMember.id);
+      } else {
+        // Créer une nouvelle entrée
+        await supabase
+          .from('org_members')
+          .insert({
+            user_id: userId,
+            org_id: profile.org_id,
+          });
+      }
+    } catch (error) {
+      console.error('Error ensuring org membership:', error);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
         
         // Check subscription when user logs in
         if (session?.user) {
+          // Vérifier le lien org_members
+          await ensureOrgMembership(session.user.id);
+          
           setTimeout(() => {
             checkSubscription();
           }, 0);
@@ -106,13 +160,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
       
       // Check subscription for existing session
       if (session?.user) {
+        // Vérifier le lien org_members
+        await ensureOrgMembership(session.user.id);
+        
         setTimeout(() => {
           checkSubscription();
         }, 0);
@@ -166,13 +223,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             orgId = newOrg.id;
           }
 
-          // Créer le profil
+          // Créer le profil avec l'org_id
           const { error: profileError } = await (supabase as any)
             .from('profiles')
             .insert({
               user_id: data.user!.id,
               first_name: firstName,
               last_name: lastName,
+              email: email,
+              org_id: orgId,
             });
 
           if (profileError) {
@@ -185,8 +244,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             .insert({
               user_id: data.user!.id,
               org_id: orgId,
-              role: 'viewer',
-              is_active: true,
+              first_name: firstName,
+              last_name: lastName,
+              email: email,
             });
 
           if (memberError) {
