@@ -38,22 +38,15 @@ type Receipt = {
   org_id?: string | null;
 };
 
-type Client = {
-  id: string;
-  name: string;
-};
+type Client = { id: string; name: string };
+type Member = { id: string; name: string };
 
-type Member = {
-  id: string;
-  name: string;
-};
-
-// Hook debounce
+/* Debounce */
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
+    const h = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(h);
   }, [value, delay]);
   return debouncedValue;
 }
@@ -61,7 +54,7 @@ function useDebounce<T>(value: T, delay: number): T {
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Global filters from store
+  /* Global filters */
   const {
     dateRange: storedDateRange,
     clientId: storedClientId,
@@ -70,105 +63,90 @@ const Recus = () => {
     setMemberId,
   } = useGlobalFilters();
 
-  // Local filters
+  /* Local filters */
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Export selection state
+  /* Export state */
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportMethod, setExportMethod] = useState<"sheets" | "pdf" | "">("");
-  const [exportEmail, setExportEmail] = useState("");
-  const [sheetUrl, setSheetUrl] = useState(""); // URL complète du Google Sheet
+  const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
-  // n8n webhook URL
+  /* n8n prod webhook for export */
   const N8N_EXPORT_URL =
-    (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/export-receipt";
+    (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/export-receipt";
 
-  // Debounce recherche
   const debouncedQuery = useDebounce(searchQuery, 400);
 
-  // Selection helpers
   const toggleOne = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
 
   const resetExportUI = () => {
+    setSelectedIds([]);
     setExportOpen(false);
     setExportMethod("");
-    setExportEmail("");
-    setSheetUrl("");
+    setSheetsSpreadsheetId("");
   };
 
-  // Handle export validation and submission (Sheets / PDF uniquement)
+  /* Submit export -> n8n */
   const handleExportSubmit = async () => {
-    if (selectedIds.length === 0) {
+    if (!exportMethod || selectedIds.length === 0) {
       toast({
         title: "Aucun reçu sélectionné",
-        description: "Sélectionnez au moins un reçu.",
+        description: "Sélectionnez au moins un reçu et une méthode d’export.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!exportMethod) {
-      toast({
-        title: "Méthode manquante",
-        description: "Choisissez Google Sheets ou PDF.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (exportMethod === "sheets" && !sheetUrl.trim()) {
-      toast({
-        title: "URL Google Sheets requise",
-        description: "Collez l’URL complète de votre Google Sheet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setExportLoading(true);
     try {
-      const payload: any = {
+      setExportLoading(true);
+
+      const payload: Record<string, any> = {
         method: exportMethod, // "sheets" | "pdf"
-        receipt_ids: selectedIds,
+        receipt_ids: selectedIds, // array of string IDs
       };
-
-      if (exportEmail.trim()) {
-        payload.email = exportEmail.trim();
-      }
-      if (exportMethod === "sheets") {
-        payload.sheet_url = sheetUrl.trim(); // URL complète du sheet
+      if (exportMethod === "sheets" && sheetsSpreadsheetId.trim()) {
+        payload.sheets_spreadsheet_id = sheetsSpreadsheetId.trim();
       }
 
-      const response = await fetch(N8N_EXPORT_URL, {
+      const res = await fetch(N8N_EXPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json().catch(() => ({}));
+      // n8n peut répondre 200/202; s'il renvoie un lien direct, on l'ouvre
+      const text = await res.text();
+      let result: any = {};
+      try {
+        result = text ? JSON.parse(text) : {};
+      } catch {
+        /* ignore parse */
+      }
 
-      if (result?.download_url) {
+      if (!res.ok) {
+        throw new Error(result?.error || `HTTP ${res.status}`);
+      }
+
+      if (result.download_url) {
         window.open(result.download_url, "_blank");
       }
 
       toast({
         title: "Export lancé",
         description:
-          exportMethod === "pdf"
-            ? "Le PDF sera téléchargé ou envoyé par e-mail."
-            : "Les données sont envoyées vers votre Google Sheet.",
+          exportMethod === "sheets" ? "Google Sheets va être créé/mis à jour." : "Le PDF est en cours de génération.",
       });
 
       resetExportUI();
-    } catch (error: any) {
-      console.error("Export error:", error);
+    } catch (err: any) {
+      console.error("Export error:", err);
       toast({
         title: "Erreur d’export",
         description: "Une erreur est survenue lors de l’export.",
@@ -179,7 +157,7 @@ const Recus = () => {
     }
   };
 
-  // Drawer détail
+  /* Drawer détail */
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -188,7 +166,7 @@ const Recus = () => {
   const currentOpenReceiptId = useRef<number | null>(null);
   const isDrawerOpenRef = useRef(false);
 
-  // Load clients with realtime
+  /* Clients */
   const { data: clients = [], refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -201,21 +179,19 @@ const Recus = () => {
     },
   });
 
-  // Load members with profiles and realtime
+  /* Members (profiles) */
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
       const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
       if (omError) throw omError;
       if (!orgMembers || orgMembers.length === 0) return [];
-
       const userIds = orgMembers.map((om: any) => om.user_id);
       const { data: profiles, error: pError } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", userIds);
       if (pError) throw pError;
-
       return (profiles || []).map((p: any) => ({
         id: p.user_id,
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
@@ -223,7 +199,7 @@ const Recus = () => {
     },
   });
 
-  // Load receipts with all filters
+  /* Receipts */
   const {
     data: receipts = [],
     isLoading: loading,
@@ -238,34 +214,24 @@ const Recus = () => {
           "id, created_at, date_traitement, date_recu, numero_recu, receipt_number, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id",
         );
 
-      // Apply date range filter from global store (if set)
       if (storedDateRange.from && storedDateRange.to) {
         query = query.gte("date_traitement", storedDateRange.from);
         query = query.lte("date_traitement", storedDateRange.to);
       }
-
-      // Apply client filter from global store
       if (storedClientId && storedClientId !== "all") {
         query = query.eq("client_id", storedClientId);
       }
-
-      // Apply member filter from global store
       if (storedMemberId && storedMemberId !== "all") {
         query = query.eq("processed_by", storedMemberId);
       }
-
-      // Apply status filter (local)
       if (selectedStatus && selectedStatus !== "all") {
         query = query.eq("status", selectedStatus);
       }
-
-      // Apply search filter (local) with escaped characters
       if (debouncedQuery) {
         const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
         query = query.or(`numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`);
       }
 
-      // Apply sorting
       query = query.order("date_traitement", {
         ascending: sortOrder === "asc",
         nullsFirst: false,
@@ -274,12 +240,10 @@ const Recus = () => {
         ascending: sortOrder === "asc",
       });
 
-      // Limit to 100 for performance
       query = query.limit(100);
 
       const { data, error } = await query;
       if (error) throw error;
-
       return (data || []).map((r: any) => ({
         id: r.id,
         created_at: r.created_at ?? null,
@@ -305,14 +269,13 @@ const Recus = () => {
 
   const error = queryError ? (queryError as any).message : null;
 
-  // Fetch détail du reçu
+  /* Fetch détail */
   useEffect(() => {
     if (!selectedId || !isDrawerOpen) return;
     (async () => {
       setDetailLoading(true);
       setDetailError(null);
       try {
-        // 1) lecture principale
         const { data: r, error: e1 } = await (supabase as any).from("recus").select("*").eq("id", selectedId).single();
         if (e1) throw e1;
 
@@ -320,7 +283,6 @@ const Recus = () => {
         let processedByName: string | null = null;
         let clientName: string | null = null;
 
-        // 2) profil (traité par)
         if (receiptData?.processed_by) {
           const { data: p } = await (supabase as any)
             .from("profiles")
@@ -333,15 +295,13 @@ const Recus = () => {
             : null;
         }
 
-        // 3) client assigné
         if (receiptData?.client_id) {
           const { data: c } = await (supabase as any)
             .from("clients")
             .select("name")
             .eq("id", receiptData.client_id)
             .maybeSingle();
-          const clientData = c as any;
-          clientName = clientData?.name ?? null;
+          clientName = (c as any)?.name ?? null;
         }
 
         setDetail({
@@ -358,23 +318,18 @@ const Recus = () => {
     })();
   }, [selectedId, isDrawerOpen]);
 
-  // Sync ref avec state
   useEffect(() => {
     isDrawerOpenRef.current = isDrawerOpen;
   }, [isDrawerOpen]);
 
-  // Realtime updates
+  /* Realtime */
   useEffect(() => {
     const recusChannel = supabase
       .channel("recus-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
         const newRecu = payload.new as Receipt;
-        console.log("🔴 Realtime INSERT:", newRecu);
-
-        // Refetch pour mettre à jour la liste
         refetch();
 
-        // Ouvrir automatiquement le drawer avec le nouveau reçu si pas déjà ouvert
         if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
           currentOpenReceiptId.current = newRecu.id;
           setSelectedId(newRecu.id);
@@ -391,24 +346,13 @@ const Recus = () => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
         const updatedRecu = payload.new as Receipt;
         const oldRecu = payload.old as Receipt;
-        console.log("🔵 Realtime UPDATE:", {
-          id: updatedRecu.id,
-          oldStatus: oldRecu.status,
-          newStatus: updatedRecu.status,
-          receipt_number: updatedRecu.receipt_number,
-        });
-
-        // Refetch pour mettre à jour la liste
         refetch();
 
-        // Ouvrir automatiquement le drawer dès qu'un receipt_number est assigné
-        // ou si le statut passe à 'traite'
         const shouldOpen =
-          (updatedRecu.receipt_number && !oldRecu.receipt_number) ||
+          (!!updatedRecu.receipt_number && !oldRecu.receipt_number) ||
           (updatedRecu.status === "traite" && oldRecu.status !== "traite");
 
         if (shouldOpen) {
-          console.log("✅ Ouverture automatique du drawer pour reçu", updatedRecu.id);
           if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
             currentOpenReceiptId.current = updatedRecu.id;
             setSelectedId(updatedRecu.id);
@@ -423,23 +367,17 @@ const Recus = () => {
           }
         }
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
-        refetch();
-      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => refetch())
       .subscribe();
 
     const clientsChannel = supabase
       .channel("clients-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
-        refetchClients();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => refetchClients())
       .subscribe();
 
     const membersChannel = supabase
       .channel("members-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "org_members" }, () => {
-        refetchMembers();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "org_members" }, () => refetchMembers())
       .subscribe();
 
     return () => {
@@ -447,22 +385,19 @@ const Recus = () => {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(membersChannel);
     };
-  }, [refetch, refetchClients, refetchMembers]);
+  }, [refetch]);
 
-  // Mettre à jour la référence quand le drawer s'ouvre/ferme
   useEffect(() => {
-    if (!isDrawerOpen) {
-      currentOpenReceiptId.current = null;
-    } else if (selectedId) {
-      currentOpenReceiptId.current = selectedId;
-    }
+    if (!isDrawerOpen) currentOpenReceiptId.current = null;
+    else if (selectedId) currentOpenReceiptId.current = selectedId;
   }, [isDrawerOpen, selectedId]);
 
   return (
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
-          <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
+        {/* Top actions */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex gap-3 w-full md:w-auto">
             <Button
               variant="outline"
               className="flex-1 md:flex-initial"
@@ -489,7 +424,8 @@ const Recus = () => {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
+        {/* Filters */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
           <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
             <SelectTrigger className="w-full md:w-[240px]">
               <ArrowDownUp className="w-4 h-4 mr-2" />
@@ -507,9 +443,9 @@ const Recus = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les clients</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.name}
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -521,9 +457,9 @@ const Recus = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les membres</SelectItem>
-              {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.name}
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -554,12 +490,12 @@ const Recus = () => {
           </div>
         </div>
 
-        <Card className="bg-card border-border transition-all duration-200">
-          <CardHeader className="transition-all duration-150">
+        {/* List */}
+        <Card className="bg-card border-border">
+          <CardHeader>
             <CardTitle>Liste des reçus</CardTitle>
           </CardHeader>
-
-          <CardContent className="transition-all duration-200">
+          <CardContent>
             {loading ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">Chargement…</div>
             ) : error ? (
@@ -570,8 +506,8 @@ const Recus = () => {
               </div>
             ) : (
               <>
-                {/* Mobile: Cards (avec “petits ronds” de sélection) */}
-                <div className="md:hidden space-y-3 transition-all duration-200">
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-3">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
                     const formattedDate = formatDate(dateValue);
@@ -582,36 +518,25 @@ const Recus = () => {
                       en_cours: "En cours",
                       en_attente: "En attente",
                     };
-
-                    const idStr = String(receipt.id);
-
                     return (
                       <div
                         key={receipt.id}
-                        className="p-4 rounded-lg bg-card/50 border border-border transition-all duration-200 space-y-3"
+                        className="p-4 rounded-lg bg-card/50 border border-border cursor-pointer hover:bg-muted/50 space-y-3"
+                        onClick={() => {
+                          setSelectedId(receipt.id);
+                          setDetail(null);
+                          setDetailError(null);
+                          setIsDrawerOpen(true);
+                        }}
                       >
                         <div className="flex items-start justify-between">
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
+                          <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
                             {receipt.receipt_number && (
                               <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
                             )}
                           </div>
-
-                          {/* petit rond de sélection */}
-                          <Checkbox
-                            checked={selectedIds.includes(idStr)}
-                            onCheckedChange={() => toggleOne(idStr)}
-                            aria-label="Sélectionner ce reçu"
-                          />
+                          <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -639,14 +564,12 @@ const Recus = () => {
                             {receipt.numero_recu && <span>N° {receipt.numero_recu}</span>}
                           </div>
                         )}
-
-                        <div className="text-right text-xs text-muted-foreground">{formattedDate}</div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Desktop: Table */}
+                {/* Desktop table */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -673,106 +596,103 @@ const Recus = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {receipts.map((receipt) => {
-                        const idStr = String(receipt.id);
-                        return (
-                          <tr key={receipt.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                            <td className="py-3 px-4 w-10" onClick={(e) => e.stopPropagation()}>
-                              <Checkbox
-                                checked={selectedIds.includes(idStr)}
-                                onCheckedChange={() => toggleOne(idStr)}
-                              />
-                            </td>
+                      {receipts.map((receipt) => (
+                        <tr key={receipt.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                          <td className="py-3 px-4 w-10" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.includes(String(receipt.id))}
+                              onCheckedChange={() => toggleOne(String(receipt.id))}
+                            />
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              <div className="font-medium">{receipt.enseigne || "—"}</div>
-                              {receipt.receipt_number && (
-                                <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
-                              )}
-                            </td>
+                          <td
+                            className="py-3 px-4 text-sm cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            <div className="font-medium">{receipt.enseigne || "—"}</div>
+                            {receipt.receipt_number && (
+                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
+                            )}
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              {receipt.ville || "—"}
-                            </td>
+                          <td
+                            className="py-3 px-4 text-sm cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {receipt.ville || "—"}
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              {formatCurrency(receipt.montant_ttc)}
-                            </td>
+                          <td
+                            className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {formatCurrency(receipt.montant_ttc)}
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              {formatCurrency(receipt.montant_ht)}
-                            </td>
+                          <td
+                            className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {formatCurrency(receipt.montant_ht)}
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              {formatCurrency(receipt.tva)}
-                            </td>
+                          <td
+                            className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {formatCurrency(receipt.tva)}
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              {receipt.moyen_paiement || "—"}
-                            </td>
+                          <td
+                            className="py-3 px-4 text-sm cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {receipt.moyen_paiement || "—"}
+                          </td>
 
-                            <td
-                              className="py-3 px-4 text-sm cursor-pointer"
-                              onClick={() => {
-                                setSelectedId(receipt.id);
-                                setDetail(null);
-                                setDetailError(null);
-                                setIsDrawerOpen(true);
-                              }}
-                            >
-                              {formatDate(receipt.date_traitement || receipt.created_at)}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                          <td
+                            className="py-3 px-4 text-sm cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {formatDate(receipt.date_traitement || receipt.created_at)}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -781,8 +701,10 @@ const Recus = () => {
           </CardContent>
         </Card>
 
+        {/* Upload dialog */}
         <UploadInstructionsDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
 
+        {/* Drawer detail */}
         <ReceiptDetailDrawer
           open={isDrawerOpen}
           onOpenChange={(open) => {
@@ -800,7 +722,7 @@ const Recus = () => {
           members={members}
         />
 
-        {/* Export Dialog (Sheets / PDF) */}
+        {/* Export Dialog */}
         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -810,14 +732,13 @@ const Recus = () => {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Méthode d'export</Label>
-                <RadioGroup value={exportMethod} onValueChange={(v) => setExportMethod(v as "sheets" | "pdf")}>
+                <RadioGroup value={exportMethod} onValueChange={(v) => setExportMethod(v as any)}>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="sheets" id="sheets" />
                     <Label htmlFor="sheets" className="font-normal cursor-pointer">
                       Google Sheets
                     </Label>
                   </div>
-
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="pdf" id="pdf" />
                     <Label htmlFor="pdf" className="font-normal cursor-pointer">
@@ -829,26 +750,15 @@ const Recus = () => {
 
               {exportMethod === "sheets" && (
                 <div className="space-y-2">
-                  <Label htmlFor="sheet-url">URL Google Sheet *</Label>
+                  <Label htmlFor="sheets-id">ID Spreadsheet (optionnel)</Label>
                   <Input
-                    id="sheet-url"
-                    placeholder="https://docs.google.com/spreadsheets/d/…"
-                    value={sheetUrl}
-                    onChange={(e) => setSheetUrl(e.target.value)}
+                    id="sheets-id"
+                    placeholder="1a2b3c4d..."
+                    value={sheetsSpreadsheetId}
+                    onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
                   />
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="export-email">Email destinataire (optionnel)</Label>
-                <Input
-                  id="export-email"
-                  type="email"
-                  placeholder="email@exemple.fr"
-                  value={exportEmail}
-                  onChange={(e) => setExportEmail(e.target.value)}
-                />
-              </div>
             </div>
 
             <DialogFooter>
