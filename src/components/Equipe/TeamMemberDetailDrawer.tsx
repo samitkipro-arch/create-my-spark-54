@@ -16,7 +16,7 @@ interface TeamMemberDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: {
-    id?: string; // << identifiant de la ligne org_members
+    id?: string; // identifiant de la ligne org_members
     user_id?: string;
     first_name: string;
     last_name: string;
@@ -80,7 +80,6 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
 
   const onSubmit = async (data: MemberFormData) => {
     try {
-      // --- EDIT ---
       if (member?.id || member?.user_id) {
         let query = (supabase as any).from("org_members").update({
           first_name: data.first_name,
@@ -90,7 +89,6 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
           notes: data.notes,
         });
 
-        // Priorité à l'id de ligne (fiable même si user_id est null)
         if (member?.id) {
           query = query.eq("id", member.id);
         } else if (member?.user_id) {
@@ -101,9 +99,7 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         if (error) throw error;
 
         toast.success("Membre modifié avec succès");
-      }
-      // --- CREATE ---
-      else {
+      } else {
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -131,7 +127,6 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         toast.success("Membre ajouté avec succès");
       }
 
-      // Rafraîchir les listes utilisées
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["team-members"] }),
         queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
@@ -142,6 +137,27 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
     } catch (error: any) {
       console.error("Erreur lors de l'enregistrement du membre:", error);
       toast.error("Impossible d'enregistrer le membre");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!member?.id) return;
+    const ok = window.confirm("Supprimer définitivement ce membre ?");
+    if (!ok) return;
+
+    try {
+      const { error } = await (supabase as any).from("org_members").delete().eq("id", member.id);
+      if (error) throw error;
+
+      toast.success("Membre supprimé avec succès");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["team-members"] }),
+        queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
+      ]);
+      onOpenChange(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Impossible de supprimer le membre");
     }
   };
 
@@ -160,11 +176,20 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
               <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">{member?.email || ""}</p>
             </div>
           </div>
-          {member && (
-            <Button size="default" className="shrink-0" type="button" onClick={() => setIsEditing(!isEditing)}>
-              {isEditing ? "Annuler" : "Modifier"}
-            </Button>
-          )}
+
+          {/* Actions header : Modifier + Supprimer (si membre existant) */}
+          <div className="flex items-center gap-2">
+            {member && (
+              <Button size="default" className="shrink-0" type="button" onClick={() => setIsEditing(!isEditing)}>
+                {isEditing ? "Annuler" : "Modifier"}
+              </Button>
+            )}
+            {member?.id && !isEditing && (
+              <Button type="button" variant="destructive" className="shrink-0" onClick={handleDelete}>
+                Supprimer
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -260,37 +285,6 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
             </Button>
             <Button className="flex-1" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-            </Button>
-          </div>
-        )}
-
-        {/* --- BOUTON SUPPRIMER (uniquement pour un membre existant, hors mode édition) --- */}
-        {member?.id && !isEditing && (
-          <div className="pt-4">
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={async () => {
-                try {
-                  const { error } = await (supabase as any).from("org_members").delete().eq("id", member.id);
-
-                  if (error) throw error;
-
-                  toast.success("Membre supprimé avec succès");
-
-                  await Promise.all([
-                    queryClient.invalidateQueries({ queryKey: ["team-members"] }),
-                    queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
-                  ]);
-
-                  onOpenChange(false);
-                } catch (err) {
-                  console.error(err);
-                  toast.error("Impossible de supprimer le membre");
-                }
-              }}
-            >
-              Supprimer le membre
             </Button>
           </div>
         )}
