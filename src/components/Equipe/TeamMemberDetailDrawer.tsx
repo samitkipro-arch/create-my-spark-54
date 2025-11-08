@@ -16,7 +16,7 @@ interface TeamMemberDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: {
-    id?: string; // << ajouté : identifiant de la ligne org_members
+    id?: string; // << identifiant de la ligne org_members
     user_id?: string;
     first_name: string;
     last_name: string;
@@ -260,6 +260,37 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
             </Button>
             <Button className="flex-1" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            </Button>
+          </div>
+        )}
+
+        {/* --- BOUTON SUPPRIMER (uniquement pour un membre existant, hors mode édition) --- */}
+        {member?.id && !isEditing && (
+          <div className="pt-4">
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={async () => {
+                try {
+                  const { error } = await (supabase as any).from("org_members").delete().eq("id", member.id);
+
+                  if (error) throw error;
+
+                  toast.success("Membre supprimé avec succès");
+
+                  await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: ["team-members"] }),
+                    queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
+                  ]);
+
+                  onOpenChange(false);
+                } catch (err) {
+                  console.error(err);
+                  toast.error("Impossible de supprimer le membre");
+                }
+              }}
+            >
+              Supprimer le membre
             </Button>
           </div>
         )}
