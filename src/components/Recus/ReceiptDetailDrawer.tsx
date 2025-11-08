@@ -88,7 +88,9 @@ export const ReceiptDetailDrawer = ({
       if (e1) return null;
       if (!orgMembers?.length) return [];
 
-      const userIds = orgMembers.map((m: any) => m.user_id);
+      const userIds = orgMembers.map((m: any) => m.user_id).filter(Boolean);
+      if (userIds.length === 0) return [];
+
       const { data: profiles, error: e2 } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
@@ -111,7 +113,8 @@ export const ReceiptDetailDrawer = ({
       const { data: orgMembers, error: e1 } = await (supabase as any).from("org_members").select("user_id");
       if (e1) return null;
       if (!orgMembers?.length) return [];
-      const userIds = orgMembers.map((m: any) => m.user_id);
+      const userIds = orgMembers.map((m: any) => m.user_id).filter(Boolean);
+      if (userIds.length === 0) return [];
       const { data: profiles, error: e2 } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
@@ -130,29 +133,35 @@ export const ReceiptDetailDrawer = ({
   // Charge à l’ouverture et à chaque org_id
   const loadMembers = async (orgId?: string) => {
     setMembersLoadNote("");
+
+    // Si le parent a fourni des membres, on respecte (pas de fetchs)
     if (members && members.length > 0) {
       setOrgScopedMembers([]);
       setGenericMembers([]);
       return;
     }
+
     if (!orgId) {
       const gen = await tryGenericMembers();
       setGenericMembers(gen ?? []);
       if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
       return;
     }
+
     const rpc = await tryRpcMembers(orgId);
     if (rpc !== null) {
       setOrgScopedMembers(rpc);
       if (rpc.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
       return;
     }
+
     const join = await tryJoinMembers(orgId);
     if (join !== null) {
       setOrgScopedMembers(join);
       if (join.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
       return;
     }
+
     const gen = await tryGenericMembers();
     setGenericMembers(gen ?? []);
     if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
@@ -166,30 +175,30 @@ export const ReceiptDetailDrawer = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, detail?.org_id, members?.length]);
 
-  // ===== TEMPS RÉEL: org_members (scopé org) + profils =====
+  // ===== TEMPS RÉEL: org_members (scopé org) + profiles =====
   useEffect(() => {
     if (!open) return;
     const orgId = (detail?.org_id as string) || null;
     if (!orgId || members.length > 0) return; // parent override → pas besoin de live
 
     // Abonnement org_members (insert/update/delete) filtré par org_id
-    const chan = (supabase as any)
+    const orgChan = (supabase as any)
       .channel(`recus-drawer-org-members-${orgId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
         async (payload: any) => {
-          // Sur INSERT: on récupère juste le nouveau profil et on fusionne
+          // INSERT rapide: merge du nouveau membre
           if (payload.eventType === "INSERT") {
             const newUserId = payload.new?.user_id as string | undefined;
             if (newUserId) {
-              const { data: prof } = (await (supabase as any)
+              const { data: prof } = await (supabase as any)
                 .from("profiles")
                 .select("user_id, first_name, last_name")
                 .eq("user_id", newUserId)
-                .maybeSingle?.()) ?? { data: null };
+                .maybeSingle();
 
-              const newMember: Member | null = prof
+              const newMember: Member = prof
                 ? {
                     id: prof.user_id,
                     name: `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom",
@@ -197,64 +206,54 @@ export const ReceiptDetailDrawer = ({
                 : { id: newUserId, name: "Membre sans nom" };
 
               setOrgScopedMembers((prev) => {
-                const exists = prev.some((m) => m.id === newMember!.id);
-                return exists ? prev : [...prev, newMember!].sort((a, b) => a.name.localeCompare(b.name));
+                const exists = prev.some((m) => m.id === newMember.id);
+                return exists ? prev : [...prev, newMember].sort((a, b) => a.name.localeCompare(b.name));
               });
               return;
             }
           }
-          // Sur UPDATE/DELETE (ou si on n’a pas l’id) → reload propre
+          // UPDATE/DELETE ou cas non géré → reload propre
           const currentOrg = lastOrgIdRef.current ?? orgId;
           loadMembers(currentOrg || undefined);
         },
       )
       .subscribe();
 
-    // Abonnement aux profils des membres visibles (maj nom)
-    let profilesChan: any | null = null;
-    const attachProfilesChannel = async () => {
-      // On récupère l’ensemble des user_ids courants pour cibler le filtre
-      const curr = orgScopedMembers.length > 0 ? orgScopedMembers : genericMembers;
-      const ids = curr.map((m) => m.id);
-      if (ids.length === 0) return;
+    // Abonnement aux profils pour refléter les changements de noms
+    const profilesChan = (supabase as any)
+      .channel(`recus-drawer-profiles-${orgId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
+        const uid = payload.new?.user_id as string | undefined;
+        if (!uid) return;
+        const name = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
 
-      // ⚠️ Supabase ne supporte pas "IN" côté filtre realtime.
-      // On écoute toutes les updates sur profiles et on filtre côté client.
-      profilesChan = (supabase as any)
-        .channel(`recus-drawer-profiles-${orgId}`)
-        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
-          const uid = payload.new?.user_id as string | undefined;
-          if (!uid) return;
-          if (!ids.includes(uid)) return;
-          const name = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
-          setOrgScopedMembers((prev) => {
-            const idx = prev.findIndex((m) => m.id === uid);
-            if (idx === -1) return prev;
-            const copy = [...prev];
-            copy[idx] = { id: uid, name };
-            return copy;
-          });
-          setGenericMembers((prev) => {
-            const idx = prev.findIndex((m) => m.id === uid);
-            if (idx === -1) return prev;
-            const copy = [...prev];
-            copy[idx] = { id: uid, name };
-            return copy;
-          });
-        })
-        .subscribe();
-    };
-    attachProfilesChannel();
+        setOrgScopedMembers((prev) => {
+          const idx = prev.findIndex((m) => m.id === uid);
+          if (idx === -1) return prev;
+          const copy = [...prev];
+          copy[idx] = { id: uid, name };
+          return copy;
+        });
+        setGenericMembers((prev) => {
+          const idx = prev.findIndex((m) => m.id === uid);
+          if (idx === -1) return prev;
+          const copy = [...prev];
+          copy[idx] = { id: uid, name };
+          return copy;
+        });
+      })
+      .subscribe();
 
     return () => {
       try {
-        chan && (supabase as any).removeChannel?.(chan);
-        profilesChan && (supabase as any).removeChannel?.(profilesChan);
+        (supabase as any).removeChannel?.(orgChan);
+        (supabase as any).removeChannel?.(profilesChan);
       } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, detail?.org_id, members?.length, orgScopedMembers.length, genericMembers.length]);
+  }, [open, detail?.org_id, members?.length]);
 
+  // Liste effective des membres (priorité: props -> orgScoped -> generic)
   const effectiveMembers: Member[] =
     (members && members.length > 0 && members) ||
     (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
@@ -395,13 +394,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     }
   };
 
-  // ---------- UI ----------
-  const MembersSelectNote =
-    effectiveMembers.length === 0 && membersLoadNote ? (
-      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
-    ) : null;
-
-  // Helpers
+  // ---------- UI helpers ----------
   function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
       <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
@@ -452,6 +445,13 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   }
   const EditableInputMobile = (props: any) => <EditableInput {...props} />;
 
+  // Note d’aide au Select (après avoir la liste effective)
+  const MembersSelectNote =
+    effectiveMembers.length === 0 && membersLoadNote ? (
+      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
+    ) : null;
+
+  // ---------- Desktop ----------
   const desktopContent = (
     <div className="relative flex h-full">
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -695,7 +695,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </div>
   );
 
-  // Mobile: mêmes traitements
+  // ---------- Mobile ----------
   const mobileContent = loading ? (
     <div className="flex items-center justify-center h-full">
       <p className="text-muted-foreground">Chargement…</p>
