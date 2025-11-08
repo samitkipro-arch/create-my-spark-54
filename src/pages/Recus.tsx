@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,7 +115,7 @@ const Recus = () => {
       };
 
       if (exportMethod === "sheets" && sheetsSpreadsheetId) {
-        payload.sheet_url = sheetsSpreadsheetId; // ton flow lit sheet_url (ou remappe côté n8n)
+        payload.sheet_url = sheetsSpreadsheetId;
       }
 
       const res = await fetch(N8N_EXPORT_URL, {
@@ -126,7 +126,6 @@ const Recus = () => {
 
       const contentType = res.headers.get("content-type") || "";
 
-      // PDF: le flow répond en binaire (application/pdf) via "Respond to Webhook"
       if (exportMethod === "pdf" && contentType.includes("application/pdf")) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -137,22 +136,18 @@ const Recus = () => {
         return;
       }
 
-      // Sheets / fallback JSON
       let data: any = null;
       try {
         data = await res.json();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
 
       if (!res.ok) {
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
 
       const link = data?.sheet_url || data?.download_url;
-      if (link) {
-        window.open(link, "_blank");
-      } else if (exportMethod === "sheets") {
+      if (link) window.open(link, "_blank");
+      else if (exportMethod === "sheets") {
         toast({ title: "Export Google Sheets", description: "Export déclenché." });
       }
 
@@ -215,6 +210,10 @@ const Recus = () => {
       })) as Member[];
     },
   });
+
+  // Maps pour noms (clients / membres)
+  const clientNameById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients]);
+  const memberNameById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
 
   // Receipts list
   const {
@@ -535,6 +534,8 @@ const Recus = () => {
                       en_attente: "En attente",
                     };
                     const checked = selectedIds.includes(String(receipt.id));
+                    const clientName = receipt.client_id ? clientNameById[receipt.client_id] : null;
+                    const memberName = receipt.processed_by ? memberNameById[receipt.processed_by] : null;
 
                     return (
                       <div
@@ -561,7 +562,6 @@ const Recus = () => {
                         <div className="flex items-start justify-between pr-8">
                           <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
-                            {/* SUPPRIMÉ: affichage "Reçu n°{receipt.receipt_number}" */}
                           </div>
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
@@ -577,20 +577,14 @@ const Recus = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="text-muted-foreground">{receipt.moyen_paiement || "—"}</div>
-                          <div className="inline-flex px-2 py-1 rounded text-xs bg-primary/10 text-primary">
-                            {statusLabels[receipt.status || ""] || receipt.status || "—"}
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="text-muted-foreground">
+                            Client : <span className="text-foreground">{clientName || "—"}</span>
+                          </div>
+                          <div className="text-muted-foreground">
+                            Traité par : <span className="text-foreground">{memberName || "—"}</span>
                           </div>
                         </div>
-
-                        {(receipt.ville || receipt.numero_recu) && (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {receipt.ville && <span>{receipt.ville}</span>}
-                            {receipt.ville && receipt.numero_recu && <span>•</span>}
-                            {receipt.numero_recu && <span>N° {receipt.numero_recu}</span>}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -609,15 +603,15 @@ const Recus = () => {
                             aria-label="Tout sélectionner"
                           />
                         </th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Ville</th>
+                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant HT</th>
                         <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Moyen de paiement
+                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">
+                          Client assigné
                         </th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">Traité par</th>
+                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">
                           Date de traitement
                         </th>
                       </tr>
@@ -632,6 +626,7 @@ const Recus = () => {
                             />
                           </td>
 
+                          {/* Enseigne */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -642,21 +637,9 @@ const Recus = () => {
                             }}
                           >
                             <div className="font-medium">{receipt.enseigne || "—"}</div>
-                            {/* SUPPRIMÉ: affichage "Reçu n°{receipt.receipt_number}" */}
                           </td>
 
-                          <td
-                            className="py-3 px-4 text-sm cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {receipt.ville || "—"}
-                          </td>
-
+                          {/* Montant TTC */}
                           <td
                             className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -669,6 +652,7 @@ const Recus = () => {
                             {formatCurrency(receipt.montant_ttc)}
                           </td>
 
+                          {/* Montant HT */}
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -681,6 +665,7 @@ const Recus = () => {
                             {formatCurrency(receipt.montant_ht)}
                           </td>
 
+                          {/* TVA */}
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -693,6 +678,7 @@ const Recus = () => {
                             {formatCurrency(receipt.tva)}
                           </td>
 
+                          {/* Client assigné */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -702,9 +688,23 @@ const Recus = () => {
                               setIsDrawerOpen(true);
                             }}
                           >
-                            {receipt.moyen_paiement || "—"}
+                            {receipt.client_id ? clientNameById[receipt.client_id] || "—" : "—"}
                           </td>
 
+                          {/* Traité par */}
+                          <td
+                            className="py-3 px-4 text-sm cursor-pointer"
+                            onClick={() => {
+                              setSelectedId(receipt.id);
+                              setDetail(null);
+                              setDetailError(null);
+                              setIsDrawerOpen(true);
+                            }}
+                          >
+                            {receipt.processed_by ? memberNameById[receipt.processed_by] || "—" : "—"}
+                          </td>
+
+                          {/* Date de traitement */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
