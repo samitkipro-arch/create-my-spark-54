@@ -46,14 +46,12 @@ export const ReceiptDetailDrawer = ({
   const openReport = async () => {
     if (!detail?.id) return;
 
-    // 1) ouvrir synchronement
     const win = window.open("", "_blank");
     if (!win) {
       alert("Autorisez les pop-ups pour afficher le rapport.");
       return;
     }
 
-    // petit écran de chargement
     win.document.write(`<!doctype html>
 <html lang="fr"><head><meta charset="utf-8" />
 <title>Rapport d’analyse…</title>
@@ -73,7 +71,6 @@ export const ReceiptDetailDrawer = ({
     setReportLoading(true);
 
     try {
-      // 2) appeler n8n (PROD)
       const res = await fetch(N8N_REPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,13 +78,11 @@ export const ReceiptDetailDrawer = ({
       });
 
       const contentType = res.headers.get("content-type") || "";
-      // n8n peut renvoyer directement du HTML (text/html) OU { html: "..." }
       const payload = contentType.includes("application/json") ? await res.json() : await res.text();
       const html = typeof payload === "string" ? payload : (payload?.html ?? "");
 
       if (!html) throw new Error("Rapport vide");
 
-      // 3) injecter le HTML final dans l’onglet
       win.document.open();
       win.document.write(html);
       win.document.close();
@@ -137,7 +132,7 @@ export const ReceiptDetailDrawer = ({
     if (!isEditing || !detail?.id) return;
     const saveChanges = async () => {
       try {
-        await (supabase as any)
+        const { data, error } = await (supabase as any)
           .from("recus")
           .update({
             enseigne: editedData.enseigne,
@@ -151,7 +146,16 @@ export const ReceiptDetailDrawer = ({
             client_id: editedData.client_id || null,
             processed_by: editedData.processed_by || null,
           })
-          .eq("id", detail.id);
+          .eq("id", detail.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("Autosave SUPABASE error:", error);
+        }
+        if (!data) {
+          console.error("Autosave: aucune ligne mise à jour (peut-être RLS/police qui bloque).");
+        }
       } catch (err) {
         console.error("Erreur lors de la sauvegarde automatique:", err);
       }
@@ -164,11 +168,11 @@ export const ReceiptDetailDrawer = ({
   const tva = detail?.tva ?? 0;
   const ht = typeof ttc === "number" ? Math.max(ttc - (typeof tva === "number" ? tva : 0), 0) : null;
 
-  // -------- MODIF ICI : "Valider" sauvegarde aussi les champs corrigés --------
+  // -------- validate = sauvegarde + status:traite, avec retour strict
   const handleValidate = async () => {
     if (!detail?.id) return;
     try {
-      const { error } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("recus")
         .update({
           status: "traite",
@@ -176,7 +180,6 @@ export const ReceiptDetailDrawer = ({
           numero_recu: editedData.numero_recu,
           montant_ttc: editedData.montant_ttc,
           tva: editedData.tva,
-          // si la colonne existe côté DB, on la renseigne aussi
           montant_ht: editedData.montant_ttc - editedData.tva,
           ville: editedData.ville,
           adresse: editedData.adresse,
@@ -185,24 +188,31 @@ export const ReceiptDetailDrawer = ({
           client_id: editedData.client_id || null,
           processed_by: editedData.processed_by || null,
         })
-        .eq("id", detail.id);
+        .eq("id", detail.id)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error || !data) {
+        console.error("Validation SUPABASE error:", error || "no data returned");
+        alert("La validation a échoué (mise à jour refusée). Regarde la console pour le détail Supabase.");
+        return;
+      }
+
       setIsEditing(false);
       setActiveField(null);
       onOpenChange(false);
     } catch (err) {
       console.error("Erreur lors de la validation:", err);
+      alert("Erreur lors de la validation. Détails en console.");
     }
   };
-  // ---------------------------------------------------------------------------
 
   const handleCorrect = () => setIsEditing(true);
 
   const handleSave = async () => {
     if (!detail?.id) return;
     try {
-      const { error } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("recus")
         .update({
           enseigne: editedData.enseigne,
@@ -216,12 +226,21 @@ export const ReceiptDetailDrawer = ({
           client_id: editedData.client_id || null,
           processed_by: editedData.processed_by || null,
         })
-        .eq("id", detail.id);
-      if (error) throw error;
+        .eq("id", detail.id)
+        .select()
+        .single();
+
+      if (error || !data) {
+        console.error("Save SUPABASE error:", error || "no data returned");
+        alert("Enregistrement refusé (RLS/police ou type invalide). Détails en console.");
+        return;
+      }
+
       setIsEditing(false);
       setActiveField(null);
     } catch (err) {
       console.error("Erreur lors de la sauvegarde:", err);
+      alert("Erreur lors de l’enregistrement. Détails en console.");
     }
   };
 
