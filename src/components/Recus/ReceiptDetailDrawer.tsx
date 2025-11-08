@@ -55,205 +55,163 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // ---------- MEMBRES: chargement robuste + temps réel ----------
-  const [orgScopedMembers, setOrgScopedMembers] = useState<Member[]>([]);
-  const [genericMembers, setGenericMembers] = useState<Member[]>([]);
-  const [membersLoadNote, setMembersLoadNote] = useState<string>("");
-  const lastOrgIdRef = useRef<string | null>(null);
+  // ---------- MEMBRES: chargement scopé org + temps réel ----------
+  const [orgMembers, setOrgMembers] = useState<Member[]>([]);
+  const [membersError, setMembersError] = useState<string>("");
+  const currentOrgIdRef = useRef<string | null>(null);
 
-  const normalize = (arr: Member[]) =>
-    arr.filter(Boolean).reduce<Record<string, Member>>((acc, m) => {
-      if (!m?.id) return acc;
-      const name = (m.name || "Membre sans nom").trim() || "Membre sans nom";
-      acc[m.id] = { id: m.id, name };
-      return acc;
-    }, {});
-
-  const toSortedArray = (mapObj: Record<string, Member>) =>
-    Object.values(mapObj).sort((a, b) => a.name.localeCompare(b.name));
-
-  // RPC sécurisé (si dispo)
-  const tryRpcMembers = async (orgId: string): Promise<Member[] | null> => {
+  // Charger les membres via RPC get_org_members (scopé org uniquement)
+  const loadOrgMembers = async (orgId: string) => {
+    setMembersError("");
     try {
       const { data, error } = await (supabase as any).rpc("get_org_members", { p_org_id: orgId });
-      if (error) return null;
-      if (!data) return [];
-      return (data as any[]).map((r) => ({
-        id: (r.user_id ?? r.id) as string,
+      if (error) {
+        console.error("❌ RPC get_org_members error:", error);
+        setMembersError("Erreur de chargement des membres.");
+        setOrgMembers([]);
+        return;
+      }
+      const loaded = (data as any[] || []).map((r: any) => ({
+        id: r.user_id as string,
         name: (r.name as string) || "Membre sans nom",
       }));
-    } catch {
-      return null;
+      setOrgMembers(loaded);
+      if (loaded.length === 0) {
+        setMembersError("Aucun membre dans cette organisation.");
+      }
+    } catch (err) {
+      console.error("❌ loadOrgMembers exception:", err);
+      setMembersError("Erreur de chargement des membres.");
+      setOrgMembers([]);
     }
   };
 
-  // Fallback join org_members → profiles (scopé org)
-  const tryJoinMembers = async (orgId: string): Promise<Member[] | null> => {
-    try {
-      const { data: orgMembers, error: e1 } = await (supabase as any)
-        .from("org_members")
-        .select("user_id")
-        .eq("org_id", orgId);
-      if (e1) return null;
-      if (!orgMembers?.length) return [];
-
-      const userIds = orgMembers.map((m: any) => m.user_id);
-      const { data: profiles, error: e2 } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      if (e2) return null;
-      if (!profiles?.length) return [];
-
-      return profiles.map((p: any) => ({
-        id: p.user_id as string,
-        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
-      }));
-    } catch {
-      return null;
+  // Charger les membres quand le drawer s'ouvre ou que l'org change
+  useEffect(() => {
+    if (!open) {
+      // Reset quand on ferme
+      setOrgMembers([]);
+      setMembersError("");
+      currentOrgIdRef.current = null;
+      return;
     }
-  };
 
-  // Dernier recours (non filtré org — utile en dev)
-  const tryGenericMembers = async (): Promise<Member[] | null> => {
-    try {
-      const { data: orgMembers, error: e1 } = await (supabase as any).from("org_members").select("user_id");
-      if (e1) return null;
-      if (!orgMembers?.length) return [];
-      const userIds = orgMembers.map((m: any) => m.user_id);
-      const { data: profiles, error: e2 } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      if (e2) return null;
-      if (!profiles?.length) return [];
-      return profiles.map((p: any) => ({
-        id: p.user_id as string,
-        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
-      }));
-    } catch {
-      return null;
-    }
-  };
-
-  const loadMembers = async (orgId?: string) => {
-    setMembersLoadNote("");
+    // Si members est fourni par props (legacy), l'utiliser
     if (members && members.length > 0) {
-      setOrgScopedMembers([]);
-      setGenericMembers([]);
+      setOrgMembers([]);
+      setMembersError("");
       return;
     }
-    if (!orgId) {
-      const gen = await tryGenericMembers();
-      setGenericMembers(toSortedArray(normalize(gen ?? [])));
-      if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
-      return;
-    }
-    const rpc = await tryRpcMembers(orgId);
-    if (rpc !== null) {
-      setOrgScopedMembers(toSortedArray(normalize(rpc)));
-      if (rpc.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
-      return;
-    }
-    const join = await tryJoinMembers(orgId);
-    if (join !== null) {
-      setOrgScopedMembers(toSortedArray(normalize(join)));
-      if (join.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
-      return;
-    }
-    const gen = await tryGenericMembers();
-    setGenericMembers(toSortedArray(normalize(gen ?? [])));
-    if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
-  };
 
+    const orgId = detail?.org_id as string | undefined;
+    if (!orgId) {
+      setOrgMembers([]);
+      setMembersError("Aucune organisation associée.");
+      currentOrgIdRef.current = null;
+      return;
+    }
+
+    // Reload uniquement si l'org a changé
+    if (currentOrgIdRef.current !== orgId) {
+      setOrgMembers([]);
+      setMembersError("");
+      loadOrgMembers(orgId);
+      currentOrgIdRef.current = orgId;
+    }
+  }, [open, detail?.org_id, members]);
+
+  // TEMPS RÉEL: écouter les changements sur org_members et profiles
   useEffect(() => {
     if (!open) return;
     const orgId = detail?.org_id as string | undefined;
-    loadMembers(orgId);
-    lastOrgIdRef.current = orgId ?? null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, detail?.org_id, members?.length]);
+    if (!orgId || (members && members.length > 0)) return;
 
-  // TEMPS RÉEL
-  useEffect(() => {
-    if (!open) return;
-    const orgId = (detail?.org_id as string) || null;
-    if (!orgId || members.length > 0) return;
-
-    const chan = (supabase as any)
-      .channel(`recus-drawer-org-members-${orgId}`)
+    const channelName = `receipt-drawer-members-${orgId}`;
+    
+    // Canal 1: org_members (INSERT, DELETE, UPDATE)
+    const channel = (supabase as any)
+      .channel(channelName)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        { event: "INSERT", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
         async (payload: any) => {
-          // Insert rapide sans tout recharger
-          if (payload.eventType === "INSERT") {
-            const newUserId = payload.new?.user_id as string | undefined;
-            if (newUserId) {
-              const { data: prof } = (await (supabase as any)
-                .from("profiles")
-                .select("user_id, first_name, last_name")
-                .eq("user_id", newUserId)
-                .maybeSingle?.()) ?? { data: null };
+          const newUserId = payload.new?.user_id;
+          if (!newUserId) return;
 
-              const newMember: Member = prof
-                ? {
-                    id: prof.user_id,
-                    name: `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom",
-                  }
-                : { id: newUserId, name: "Membre sans nom" };
+          // Fetch le nom du nouveau membre
+          const { data: prof } = await (supabase as any)
+            .from("profiles")
+            .select("user_id, first_name, last_name")
+            .eq("user_id", newUserId)
+            .maybeSingle();
 
-              setOrgScopedMembers((prev) => {
-                const map = normalize(prev);
-                map[newMember.id] = newMember;
-                return toSortedArray(map);
-              });
-              return;
-            }
+          const newMember: Member = {
+            id: newUserId,
+            name: prof ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom" : "Membre sans nom",
+          };
+
+          setOrgMembers((prev) => {
+            // Éviter les doublons
+            if (prev.some((m) => m.id === newUserId)) return prev;
+            return [...prev, newMember].sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        (payload: any) => {
+          const deletedUserId = payload.old?.user_id;
+          if (!deletedUserId) return;
+          setOrgMembers((prev) => prev.filter((m) => m.id !== deletedUserId));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        () => {
+          // Si update sur org_members (rare), reload pour être sûr
+          if (currentOrgIdRef.current) {
+            loadOrgMembers(currentOrgIdRef.current);
           }
-          // UPDATE/DELETE ⇒ reload propre
-          const currentOrg = lastOrgIdRef.current ?? orgId;
-          loadMembers(currentOrg || undefined);
-        },
+        }
       )
       .subscribe();
 
-    // MAJ noms depuis profiles
-    const profilesChan = (supabase as any)
-      .channel(`recus-drawer-profiles-${orgId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
-        const uid = payload.new?.user_id as string | undefined;
-        if (!uid) return;
-        const newName = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
+    // Canal 2: profiles (UPDATE sur les noms)
+    const profilesChannel = (supabase as any)
+      .channel(`receipt-drawer-profiles-${orgId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload: any) => {
+          const updatedUserId = payload.new?.user_id;
+          if (!updatedUserId) return;
 
-        setOrgScopedMembers((prev) => {
-          if (!prev.some((m) => m.id === uid)) return prev;
-          const map = normalize(prev);
-          map[uid] = { id: uid, name: newName };
-          return toSortedArray(map);
-        });
-        setGenericMembers((prev) => {
-          if (!prev.some((m) => m.id === uid)) return prev;
-          const map = normalize(prev);
-          map[uid] = { id: uid, name: newName };
-          return toSortedArray(map);
-        });
-      })
+          // Vérifier si ce user_id est dans notre liste
+          setOrgMembers((prev) => {
+            const exists = prev.find((m) => m.id === updatedUserId);
+            if (!exists) return prev;
+
+            // Mettre à jour le nom
+            const newName = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
+            return prev
+              .map((m) => (m.id === updatedUserId ? { ...m, name: newName } : m))
+              .sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
+      )
       .subscribe();
 
+    // Cleanup à la fermeture ou changement d'org
     return () => {
-      try {
-        (supabase as any).removeChannel?.(chan);
-        (supabase as any).removeChannel?.(profilesChan);
-      } catch {}
+      (supabase as any).removeChannel(channel);
+      (supabase as any).removeChannel(profilesChannel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, detail?.org_id, members?.length, orgScopedMembers.length, genericMembers.length]);
+  }, [open, detail?.org_id, members]);
 
-  const effectiveMembers: Member[] =
-    (members && members.length > 0 && members) ||
-    (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
-    genericMembers;
+  // Liste effective des membres (props ou state local)
+  const effectiveMembers: Member[] = (members && members.length > 0) ? members : orgMembers;
 
   // ----------------- Sync & save -----------------
   useEffect(() => {
@@ -392,8 +350,8 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
 
   // ---------- UI ----------
   const MembersSelectNote =
-    effectiveMembers.length === 0 && membersLoadNote ? (
-      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
+    effectiveMembers.length === 0 && membersError ? (
+      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersError}</div>
     ) : null;
 
   // Helpers
