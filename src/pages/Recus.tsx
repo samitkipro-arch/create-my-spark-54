@@ -747,6 +747,10 @@ const Recus = () => {
           error={detailError}
           clients={clients}
           members={members}
+          onValidated={(id) => {
+            // Marque cet id pour ignorer le prochain UPDATE realtime (évite la réouverture + toast)
+            ignoreNextUpdateForId.current = id;
+          }}
         />
 
         {/* Export Dialog */}
