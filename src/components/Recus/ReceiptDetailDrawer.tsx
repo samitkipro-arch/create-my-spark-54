@@ -40,8 +40,7 @@ export const ReceiptDetailDrawer = ({
   // --- Ouverture du rapport (état)
   const [reportLoading, setReportLoading] = useState(false);
 
-  // https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse
-  // Idéalement via env : VITE_N8N_REPORT_URL
+  // URL rapport n8n
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
@@ -49,14 +48,12 @@ export const ReceiptDetailDrawer = ({
   const openReport = async () => {
     if (!detail?.id) return;
 
-    // 1) ouvrir synchronement
     const win = window.open("", "_blank");
     if (!win) {
       alert("Autorisez les pop-ups pour afficher le rapport.");
       return;
     }
 
-    // petit écran de chargement
     win.document.write(`<!doctype html>
 <html lang="fr"><head><meta charset="utf-8" />
 <title>Rapport d’analyse…</title>
@@ -76,7 +73,6 @@ export const ReceiptDetailDrawer = ({
     setReportLoading(true);
 
     try {
-      // 2) appeler n8n (PROD)
       const res = await fetch(N8N_REPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,13 +80,11 @@ export const ReceiptDetailDrawer = ({
       });
 
       const contentType = res.headers.get("content-type") || "";
-      // n8n peut renvoyer directement du HTML (text/html) OU { html: "..." }
       const payload = contentType.includes("application/json") ? await res.json() : await res.text();
       const html = typeof payload === "string" ? payload : (payload?.html ?? "");
 
       if (!html) throw new Error("Rapport vide");
 
-      // 3) injecter le HTML final dans l’onglet
       win.document.open();
       win.document.write(html);
       win.document.close();
@@ -116,6 +110,35 @@ export const ReceiptDetailDrawer = ({
     client_id: "",
     processed_by: "",
   });
+
+  // Fallback local pour la liste des membres (si la prop arrive vide)
+  const [fallbackMembers, setFallbackMembers] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    const loadMembersIfEmpty = async () => {
+      if (members && members.length > 0) return;
+      try {
+        const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
+        if (omError || !orgMembers?.length) return;
+
+        const userIds = orgMembers.map((om: any) => om.user_id);
+        const { data: profiles, error: pError } = await (supabase as any)
+          .from("profiles")
+          .select("user_id, first_name, last_name")
+          .in("user_id", userIds);
+        if (pError || !profiles) return;
+
+        setFallbackMembers(
+          profiles.map((p: any) => ({
+            id: p.user_id,
+            name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+          })),
+        );
+      } catch {}
+    };
+    loadMembersIfEmpty();
+  }, [members]);
+
+  const effectiveMembers = members && members.length > 0 ? members : fallbackMembers;
 
   // Sync editedData avec detail
   useEffect(() => {
@@ -170,9 +193,7 @@ export const ReceiptDetailDrawer = ({
   const handleValidate = async () => {
     if (!detail?.id) return;
     try {
-      // >>> IMPORTANT : prévenir le parent AVANT l’UPDATE pour ignorer le prochain event realtime
       onValidated?.(detail.id);
-      // <<<
       const { error } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
       if (error) throw error;
       onOpenChange(false);
@@ -421,9 +442,9 @@ export const ReceiptDetailDrawer = ({
                       <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         <SelectItem value="none">Aucun</SelectItem>
-                        {members.map((member) => (
+                        {effectiveMembers.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
                             {member.name}
                           </SelectItem>
@@ -447,7 +468,7 @@ export const ReceiptDetailDrawer = ({
                       <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         <SelectItem value="none">Aucun</SelectItem>
                         {clients.map((client) => (
                           <SelectItem key={client.id} value={client.id}>
@@ -597,7 +618,7 @@ export const ReceiptDetailDrawer = ({
                   <span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
                 </div>
               ) : (
-                <p className="text-2xl font-bold">{editedData.montant_ttc.toFixed(2)}€</p>
+                <p className="text-2xl font-bold">{formatCurrency(editedData.montant_ttc)}</p>
               )}
             </div>
           </div>
@@ -607,7 +628,7 @@ export const ReceiptDetailDrawer = ({
             <Card>
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground mb-1">Montant HT :</p>
-                <p className="text-lg font-semibold">{(editedData.montant_ttc - editedData.tva).toFixed(2)}€</p>
+                <p className="text-lg font-semibold">{formatCurrency(editedData.montant_ttc - editedData.tva)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -632,7 +653,7 @@ export const ReceiptDetailDrawer = ({
                     <span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
                   </div>
                 ) : (
-                  <p className="text-lg font-semibold">{editedData.tva.toFixed(2)}€</p>
+                  <p className="text-lg font-semibold">{formatCurrency(editedData.tva)}</p>
                 )}
               </CardContent>
             </Card>
@@ -723,9 +744,9 @@ export const ReceiptDetailDrawer = ({
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper">
                     <SelectItem value="none">Aucun</SelectItem>
-                    {members.map((member) => (
+                    {effectiveMembers.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
                         {member.name}
                       </SelectItem>
@@ -747,7 +768,7 @@ export const ReceiptDetailDrawer = ({
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper">
                     <SelectItem value="none">Aucun</SelectItem>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
