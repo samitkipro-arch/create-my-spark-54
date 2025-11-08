@@ -16,7 +16,7 @@ interface TeamMemberDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: {
-    id?: string; // << ajouté : identifiant de la ligne org_members
+    id?: string; // << identifiant de la ligne org_members
     user_id?: string;
     first_name: string;
     last_name: string;
@@ -38,6 +38,7 @@ type MemberFormData = {
 export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMemberDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
+  const [rowId, setRowId] = useState<string | undefined>(member?.id); // << NEW: id résolu pour update
   const queryClient = useQueryClient();
 
   const {
@@ -55,7 +56,9 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
     },
   });
 
+  // (1) Synchronise le formulaire et résout l'id de la ligne à mettre à jour
   useEffect(() => {
+    // reset form fields
     if (member) {
       reset({
         first_name: member.first_name || "",
@@ -65,23 +68,60 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         notes: member.notes || "",
       });
     } else {
-      reset({
-        first_name: "",
-        last_name: "",
-        email: "",
-        phone: "",
-        notes: "",
-      });
+      reset({ first_name: "", last_name: "", email: "", phone: "", notes: "" });
     }
     setIsEditing(!member);
+
+    // resolve row id we will update (avoid accidental insert)
+    setRowId(member?.id); // immediate if provided
+
+    const resolveId = async () => {
+      try {
+        if (!member) return;
+
+        // If no id but we have user_id, fetch row id by user_id
+        if (!member.id && member.user_id) {
+          const { data, error } = await (supabase as any)
+            .from("org_members")
+            .select("id")
+            .eq("user_id", member.user_id)
+            .limit(1)
+            .maybeSingle();
+          if (!error && data?.id) {
+            setRowId(data.id);
+            return;
+          }
+        }
+
+        // As a fallback, try resolving by unique email (if present)
+        if (!member.id && !member.user_id && member.email) {
+          const { data, error } = await (supabase as any)
+            .from("org_members")
+            .select("id")
+            .eq("email", member.email)
+            .limit(1)
+            .maybeSingle();
+          if (!error && data?.id) {
+            setRowId(data.id);
+          }
+        }
+      } catch {
+        // silently ignore — we'll still try user_id path in onSubmit
+      }
+    };
+
+    resolveId();
   }, [member, reset]);
 
   const fullName = member ? `${member.first_name} ${member.last_name}`.trim() : "";
 
   const onSubmit = async (data: MemberFormData) => {
     try {
-      // --- EDIT ---
-      if (member?.id || member?.user_id) {
+      // Decide if this is an UPDATE (existing) or INSERT (new)
+      const hasExisting = !!member && (!!rowId || !!member.user_id);
+
+      if (hasExisting) {
+        // --- UPDATE ---
         let query = (supabase as any).from("org_members").update({
           first_name: data.first_name,
           last_name: data.last_name,
@@ -90,9 +130,9 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
           notes: data.notes,
         });
 
-        // Priorité à l'id de ligne (fiable même si user_id est null)
-        if (member?.id) {
-          query = query.eq("id", member.id);
+        // Prefer the resolved row id; fallback to user_id
+        if (rowId) {
+          query = query.eq("id", rowId);
         } else if (member?.user_id) {
           query = query.eq("user_id", member.user_id);
         }
@@ -101,9 +141,8 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         if (error) throw error;
 
         toast.success("Membre modifié avec succès");
-      }
-      // --- CREATE ---
-      else {
+      } else {
+        // --- CREATE ---
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -114,7 +153,6 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
           .select("org_id")
           .eq("user_id", user.id)
           .single();
-
         if (profileErr) throw profileErr;
         if (!profile?.org_id) throw new Error("Organisation introuvable");
 
@@ -126,12 +164,12 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
           phone: data.phone,
           notes: data.notes,
         });
-
         if (error) throw error;
+
         toast.success("Membre ajouté avec succès");
       }
 
-      // Rafraîchir les listes utilisées
+      // Rafraîchir
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["team-members"] }),
         queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
