@@ -196,7 +196,9 @@ const Recus = () => {
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
       // Récupérer l'org_id de l'utilisateur courant
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return [];
 
       const { data: profile, error: profileError } = await (supabase as any)
@@ -204,17 +206,17 @@ const Recus = () => {
         .select("org_id")
         .eq("user_id", user.id)
         .maybeSingle();
-      
+
       if (profileError || !profile?.org_id) {
         console.error("Error fetching user org_id:", profileError);
         return [];
       }
 
       // Utiliser la RPC pour récupérer les membres de l'org
-      const { data, error } = await (supabase as any).rpc("get_org_members", { 
-        p_org_id: profile.org_id 
+      const { data, error } = await (supabase as any).rpc("get_org_members", {
+        p_org_id: profile.org_id,
       });
-      
+
       if (error) {
         console.error("Error fetching org members:", error);
         return [];
