@@ -22,6 +22,8 @@ interface ReceiptDetailDrawerProps {
   onValidated?: (id: number) => void;
 }
 
+type Member = { id: string; name: string };
+
 export const ReceiptDetailDrawer = ({
   open,
   onOpenChange,
@@ -40,6 +42,224 @@ export const ReceiptDetailDrawer = ({
   // Rapport n8n
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
+
+  // ----------------- Edition -----------------
+  const [editedData, setEditedData] = useState({
+    enseigne: "",
+    numero_recu: "",
+    montant_ttc: 0,
+    tva: 0,
+    ville: "",
+    adresse: "",
+    moyen_paiement: "",
+    categorie: "",
+    client_id: "",
+    processed_by: "",
+  });
+
+  // ---------- MEMBRES: chargement robuste & logs ----------
+  const [orgScopedMembers, setOrgScopedMembers] = useState<Member[]>([]);
+  const [genericMembers, setGenericMembers] = useState<Member[]>([]);
+  const [membersLoadNote, setMembersLoadNote] = useState<string>("");
+
+  // 1) Essai recommandé: RPC securitizer
+  const tryRpcMembers = async (orgId: string): Promise<Member[] | null> => {
+    try {
+      const { data, error } = await (supabase as any).rpc("get_org_members", { p_org_id: orgId });
+      if (error) {
+        console.warn("[Drawer] RPC get_org_members error:", error);
+        return null;
+      }
+      if (!data) return [];
+      const mapped = (data as any[]).map((r) => ({
+        id: (r.user_id ?? r.id) as string,
+        name: (r.name as string) || "Membre sans nom",
+      }));
+      return mapped;
+    } catch (e) {
+      console.warn("[Drawer] RPC get_org_members exception:", e);
+      return null;
+    }
+  };
+
+  // 2) Fallback: org_members -> profiles (filtré org_id)
+  const tryJoinMembers = async (orgId: string): Promise<Member[] | null> => {
+    try {
+      const { data: orgMembers, error: e1 } = await (supabase as any)
+        .from("org_members")
+        .select("user_id")
+        .eq("org_id", orgId);
+
+      if (e1) {
+        console.warn("[Drawer] org_members select error:", e1);
+        return null;
+      }
+      if (!orgMembers?.length) return [];
+
+      const userIds = orgMembers.map((m: any) => m.user_id);
+      const { data: profiles, error: e2 } = await (supabase as any)
+        .from("profiles")
+        .select("user_id, first_name, last_name")
+        .in("user_id", userIds);
+
+      if (e2) {
+        console.warn("[Drawer] profiles select error:", e2);
+        return null;
+      }
+      if (!profiles?.length) return [];
+
+      return profiles.map((p: any) => ({
+        id: p.user_id as string,
+        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+      }));
+    } catch (e) {
+      console.warn("[Drawer] tryJoinMembers exception:", e);
+      return null;
+    }
+  };
+
+  // 3) Dernier recours: générique (peut être bloqué par RLS)
+  const tryGenericMembers = async (): Promise<Member[] | null> => {
+    try {
+      const { data: orgMembers, error: e1 } = await (supabase as any).from("org_members").select("user_id");
+      if (e1) {
+        console.warn("[Drawer] generic org_members error:", e1);
+        return null;
+      }
+      if (!orgMembers?.length) return [];
+
+      const userIds = orgMembers.map((m: any) => m.user_id);
+      const { data: profiles, error: e2 } = await (supabase as any)
+        .from("profiles")
+        .select("user_id, first_name, last_name")
+        .in("user_id", userIds);
+
+      if (e2) {
+        console.warn("[Drawer] generic profiles error:", e2);
+        return null;
+      }
+      if (!profiles?.length) return [];
+
+      return profiles.map((p: any) => ({
+        id: p.user_id as string,
+        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+      }));
+    } catch (e) {
+      console.warn("[Drawer] tryGenericMembers exception:", e);
+      return null;
+    }
+  };
+
+  // Charge à l’ouverture et à chaque reçu (org_id)
+  useEffect(() => {
+    const loadMembers = async () => {
+      setMembersLoadNote("");
+      if (!open) return;
+
+      // Si le parent a déjà injecté des membres, on n’insiste pas
+      if (members && members.length > 0) {
+        setOrgScopedMembers([]);
+        setGenericMembers([]);
+        return;
+      }
+
+      const orgId = detail?.org_id as string | undefined;
+      if (!orgId) {
+        setOrgScopedMembers([]);
+        // on tente un générique (utile en dev)
+        const gen = await tryGenericMembers();
+        setGenericMembers(gen ?? []);
+        if (gen === null) setMembersLoadNote("Accès refusé par RLS pour org_members/profiles (aucun org_id).");
+        return;
+      }
+
+      // 1) RPC (sécurisé, recommandé)
+      const rpc = await tryRpcMembers(orgId);
+      if (rpc !== null) {
+        setOrgScopedMembers(rpc);
+        if (rpc.length === 0) setMembersLoadNote("Aucun membre trouvé via RPC (vérifiez org_members / profiles).");
+        return;
+      }
+
+      // 2) Join fallback
+      const join = await tryJoinMembers(orgId);
+      if (join !== null) {
+        setOrgScopedMembers(join);
+        if (join.length === 0) setMembersLoadNote("Aucun membre dans cette organisation.");
+        return;
+      }
+
+      // 3) Dernier recours
+      const gen = await tryGenericMembers();
+      setGenericMembers(gen ?? []);
+      if (gen === null) setMembersLoadNote("Accès refusé par RLS (org_members/profiles).");
+      else if (gen.length === 0) setMembersLoadNote("Aucun membre visible. Vérifiez les politiques RLS.");
+    };
+
+    loadMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, detail?.org_id, members?.length]);
+
+  const effectiveMembers: Member[] =
+    (members && members.length > 0 && members) ||
+    (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
+    genericMembers;
+
+  // ----------------- Sync & save -----------------
+  useEffect(() => {
+    if (detail) {
+      setEditedData({
+        enseigne: detail?.enseigne ?? "",
+        numero_recu: detail?.numero_recu ?? "",
+        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
+        tva: detail?.tva ?? 0,
+        ville: detail?.ville ?? "",
+        adresse: detail?.adresse ?? "",
+        moyen_paiement: detail?.moyen_paiement ?? "",
+        categorie: detail?.categorie ?? "",
+        client_id: detail?.client_id ?? "",
+        processed_by: detail?.processed_by ?? "",
+      });
+    }
+  }, [detail]);
+
+  useEffect(() => {
+    if (!isEditing || !detail?.id) return;
+    const t = setTimeout(async () => {
+      try {
+        await (supabase as any)
+          .from("recus")
+          .update({
+            enseigne: editedData.enseigne,
+            numero_recu: editedData.numero_recu,
+            montant_ttc: editedData.montant_ttc,
+            tva: editedData.tva,
+            ville: editedData.ville,
+            adresse: editedData.adresse,
+            moyen_paiement: editedData.moyen_paiement,
+            categorie: editedData.categorie,
+            client_id: editedData.client_id || null,
+            processed_by: editedData.processed_by || null,
+          })
+          .eq("id", detail.id);
+      } catch (err) {
+        console.error("Autosave error:", err);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [editedData, isEditing, detail?.id]);
+
+  const handleValidate = async () => {
+    if (!detail?.id) return;
+    try {
+      onValidated?.(detail.id);
+      const { error: e } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
+      if (e) throw e;
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Erreur lors de la validation:", err);
+    }
+  };
 
   const openReport = async () => {
     if (!detail?.id) return;
@@ -75,199 +295,10 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     }
   };
 
-  // --- Edition
-  const [editedData, setEditedData] = useState({
-    enseigne: "",
-    numero_recu: "",
-    montant_ttc: 0,
-    tva: 0,
-    ville: "",
-    adresse: "",
-    moyen_paiement: "",
-    categorie: "",
-    client_id: "",
-    processed_by: "",
-  });
-
-  /**
-   * ================== MEMBRES (100% ORG-SCOPÉ) ==================
-   * On tente dans l'ordre :
-   * 1) `members` passés par le parent (déjà chargés ailleurs)
-   * 2) lecture directe dans `profiles` filtré par `org_id` (le plus fiable si votre table a org_id)
-   * 3) fallback via `org_members` -> ids -> `profiles`
-   * 4) dernier recours: essai générique (peut être bloqué par RLS)
-   */
-  const [orgScopedMembers, setOrgScopedMembers] = useState<Array<{ id: string; name: string }>>([]);
-  const [fallbackMembers, setFallbackMembers] = useState<Array<{ id: string; name: string }>>([]);
-
-  // 2) Essai direct: profiles par org_id (prend l'ID utilisable pour processed_by: user_id si présent, sinon id)
-  useEffect(() => {
-    const loadProfilesByOrg = async () => {
-      if (!open) return;
-      const orgId = detail?.org_id;
-      if (!orgId) {
-        setOrgScopedMembers([]);
-        return;
-      }
-      try {
-        const { data: profs, error } = await (supabase as any)
-          .from("profiles")
-          .select("user_id, id, first_name, last_name, org_id")
-          .eq("org_id", orgId);
-
-        if (error) {
-          console.warn("[Drawer] profiles by org_id error:", error);
-          setOrgScopedMembers([]);
-          return;
-        }
-
-        if (profs && profs.length > 0) {
-          setOrgScopedMembers(
-            profs.map((p: any) => ({
-              // on privilégie user_id pour rester compatible avec processed_by existant
-              id: (p.user_id ?? p.id) as string,
-              name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
-            })),
-          );
-          return;
-        }
-
-        // 3) Fallback via org_members -> profiles si profiles.org_id n'existe pas / est vide
-        const { data: orgMembers, error: e1 } = await (supabase as any)
-          .from("org_members")
-          .select("user_id")
-          .eq("org_id", orgId);
-
-        if (e1 || !orgMembers?.length) {
-          setOrgScopedMembers([]);
-          return;
-        }
-
-        const userIds = orgMembers.map((m: any) => m.user_id);
-        const { data: profs2, error: e2 } = await (supabase as any)
-          .from("profiles")
-          .select("user_id, first_name, last_name")
-          .in("user_id", userIds);
-
-        if (e2 || !profs2?.length) {
-          setOrgScopedMembers([]);
-          return;
-        }
-
-        setOrgScopedMembers(
-          profs2.map((p: any) => ({
-            id: p.user_id as string,
-            name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
-          })),
-        );
-      } catch (e) {
-        console.error("[Drawer] loadProfilesByOrg fatal:", e);
-        setOrgScopedMembers([]);
-      }
-    };
-    loadProfilesByOrg();
-  }, [open, detail?.org_id]);
-
-  // 4) Dernier recours générique (si ni props ni orgScoped n'ont rendu quelque chose)
-  useEffect(() => {
-    const loadGeneric = async () => {
-      if ((members && members.length) || (orgScopedMembers && orgScopedMembers.length)) {
-        setFallbackMembers([]);
-        return;
-      }
-      try {
-        const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
-        if (omError || !orgMembers?.length) return;
-
-        const userIds = orgMembers.map((m: any) => m.user_id);
-        const { data: profiles, error: pError } = await (supabase as any)
-          .from("profiles")
-          .select("user_id, first_name, last_name")
-          .in("user_id", userIds);
-        if (pError || !profiles) return;
-
-        setFallbackMembers(
-          profiles.map((p: any) => ({
-            id: p.user_id,
-            name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
-          })),
-        );
-      } catch (e) {
-        console.error("[Drawer] loadGeneric error:", e);
-        setFallbackMembers([]);
-      }
-    };
-    loadGeneric();
-  }, [members, orgScopedMembers]);
-
-  const effectiveMembers =
-    (members && members.length > 0 && members) ||
-    (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
-    fallbackMembers;
-
-  // Sync editedData
-  useEffect(() => {
-    if (detail) {
-      setEditedData({
-        enseigne: detail?.enseigne ?? "",
-        numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
-        ville: detail?.ville ?? "",
-        adresse: detail?.adresse ?? "",
-        moyen_paiement: detail?.moyen_paiement ?? "",
-        categorie: detail?.categorie ?? "",
-        client_id: detail?.client_id ?? "",
-        processed_by: detail?.processed_by ?? "",
-      });
-    }
-  }, [detail]);
-
-  // Autosave
-  useEffect(() => {
-    if (!isEditing || !detail?.id) return;
-    const t = setTimeout(async () => {
-      try {
-        await (supabase as any)
-          .from("recus")
-          .update({
-            enseigne: editedData.enseigne,
-            numero_recu: editedData.numero_recu,
-            montant_ttc: editedData.montant_ttc,
-            tva: editedData.tva,
-            ville: editedData.ville,
-            adresse: editedData.adresse,
-            moyen_paiement: editedData.moyen_paiement,
-            categorie: editedData.categorie,
-            client_id: editedData.client_id || null,
-            processed_by: editedData.processed_by || null,
-          })
-          .eq("id", detail.id);
-      } catch (err) {
-        console.error("Autosave error:", err);
-      }
-    }, 500);
-    return () => clearTimeout(t);
-  }, [editedData, isEditing, detail?.id]);
-
-  const handleValidate = async () => {
-    if (!detail?.id) return;
-    try {
-      onValidated?.(detail.id);
-      const { error } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
-      if (error) throw error;
-      onOpenChange(false);
-    } catch (err) {
-      console.error("Erreur lors de la validation:", err);
-    }
-  };
-
-  const handleCorrect = () => setIsEditing(true);
-
   const handleSave = async () => {
     if (!detail?.id) return;
     try {
-      const { error } = await (supabase as any)
+      const { error: e } = await (supabase as any)
         .from("recus")
         .update({
           enseigne: editedData.enseigne,
@@ -282,7 +313,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           processed_by: editedData.processed_by || null,
         })
         .eq("id", detail.id);
-      if (error) throw error;
+      if (e) throw e;
       setIsEditing(false);
       setActiveField(null);
     } catch (err) {
@@ -310,6 +341,11 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   };
 
   // ---------- UI ----------
+  const MembersSelectNote =
+    effectiveMembers.length === 0 && membersLoadNote ? (
+      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
+    ) : null;
+
   const desktopContent = (
     <div className="relative flex h-full">
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -374,7 +410,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </div>
               </div>
 
-              {/* Cartes Montant HT / TVA */}
+              {/* Cartes HT / TVA */}
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
@@ -460,55 +496,62 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 {/* Traité par */}
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
-                  {isEditing ? (
-                    <Select
-                      value={editedData.processed_by || "none"}
-                      onValueChange={(value) =>
-                        setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
-                      }
-                    >
-                      <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
-                        <SelectValue placeholder="Sélectionner" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
-                        <SelectItem value="none">Aucun</SelectItem>
-                        {effectiveMembers.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            {m.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
-                  )}
+                  <div className="text-right">
+                    {isEditing ? (
+                      <>
+                        <Select
+                          value={editedData.processed_by || "none"}
+                          onValueChange={(value) =>
+                            setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                            <SelectValue placeholder="Sélectionner" />
+                          </SelectTrigger>
+                          <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                            <SelectItem value="none">Aucun</SelectItem>
+                            {effectiveMembers.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {MembersSelectNote}
+                      </>
+                    ) : (
+                      <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Client assigné */}
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
-                  {isEditing ? (
-                    <Select
-                      value={editedData.client_id || "none"}
-                      onValueChange={(value) =>
-                        setEditedData({ ...editedData, client_id: value === "none" ? "" : value })
-                      }
-                    >
-                      <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
-                        <SelectValue placeholder="Sélectionner" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
-                        <SelectItem value="none">Aucun</SelectItem>
-                        {clients.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
-                  )}
+                  <div className="text-right">
+                    {isEditing ? (
+                      <Select
+                        value={editedData.client_id || "none"}
+                        onValueChange={(value) =>
+                          setEditedData({ ...editedData, client_id: value === "none" ? "" : value })
+                        }
+                      >
+                        <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                          <SelectValue placeholder="Sélectionner" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                          <SelectItem value="none">Aucun</SelectItem>
+                          {clients.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -529,7 +572,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
                         Valider
                       </Button>
-                      <Button variant="outline" className="flex-1 h-10" onClick={handleCorrect}>
+                      <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
                         Corriger
                       </Button>
                     </div>
@@ -546,7 +589,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </div>
   );
 
-  // Mobile
+  // Mobile: mêmes traitements
   const mobileContent = loading ? (
     <div className="flex items-center justify-center h-full">
       <p className="text-muted-foreground">Chargement…</p>
@@ -557,7 +600,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </div>
   ) : detail ? (
     <>
-      {/* Header fixe */}
       <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-start justify-between">
           <div className="flex-1 text-left">
@@ -597,10 +639,9 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         </div>
       </div>
 
-      {/* Contenu scrollable */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {/* Montant TTC */}
+          {/* Montants */}
           <div className="w-full flex items-center justify-center">
             <div className="inline-block text-center">
               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
@@ -628,7 +669,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </div>
           </div>
 
-          {/* Cartes Montant HT / TVA */}
+          {/* HT/TVA */}
           <div className="grid grid-cols-2 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3">
@@ -664,7 +705,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </Card>
           </div>
 
-          {/* Infos détaillées */}
+          {/* Infos */}
           <div className="space-y-2">
             <RowMobile label="Date de traitement">
               <span className="text-xs font-medium">
@@ -707,28 +748,33 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
 
             {/* Traité par */}
             <RowMobile label="Traité par">
-              {isEditing ? (
-                <Select
-                  value={editedData.processed_by || "none"}
-                  onValueChange={(value) =>
-                    setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
-                  }
-                >
-                  <SelectTrigger className="w-[140px] h-7 text-xs">
-                    <SelectValue placeholder="Sélectionner" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
-                    <SelectItem value="none">Aucun</SelectItem>
-                    {effectiveMembers.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <span className="text-xs font-medium">{detail?._processedByName ?? "—"}</span>
-              )}
+              <div className="text-right">
+                {isEditing ? (
+                  <>
+                    <Select
+                      value={editedData.processed_by || "none"}
+                      onValueChange={(value) =>
+                        setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
+                      }
+                    >
+                      <SelectTrigger className="w-[140px] h-7 text-xs">
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                        <SelectItem value="none">Aucun</SelectItem>
+                        {effectiveMembers.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {MembersSelectNote}
+                  </>
+                ) : (
+                  <span className="text-xs font-medium">{detail?._processedByName ?? "—"}</span>
+                )}
+              </div>
             </RowMobile>
 
             {/* Client assigné */}
@@ -758,7 +804,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         </div>
       </div>
 
-      {/* Footer fixe */}
+      {/* Footer */}
       <div className="flex-shrink-0 p-4 border-t border-border bg-card/95">
         {isEditing ? (
           <div className="flex gap-3">
@@ -775,11 +821,10 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
                 Valider
               </Button>
-              <Button variant="outline" className="flex-1 h-10" onClick={handleCorrect}>
+              <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
                 Corriger
               </Button>
             </div>
-
             <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
               Consulter le rapport d'analyse
             </Button>
@@ -838,9 +883,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </Row>
     );
   }
-  function EditableInputMobile(props: any) {
-    return <EditableInput {...props} />;
-  }
+  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
 
   // Rendu
   if (isMobile) {
