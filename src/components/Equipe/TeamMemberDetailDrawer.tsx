@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ type MemberFormData = {
 export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMemberDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const queryClient = useQueryClient();
 
   const {
@@ -73,6 +74,7 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         notes: "",
       });
     }
+    // mode lecture si membre existant, édition si nouveau
     setIsEditing(!member);
   }, [member, reset]);
 
@@ -80,6 +82,7 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
 
   const onSubmit = async (data: MemberFormData) => {
     try {
+      // --- EDIT ---
       if (member?.id || member?.user_id) {
         let query = (supabase as any).from("org_members").update({
           first_name: data.first_name,
@@ -89,20 +92,18 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
           notes: data.notes,
         });
 
-        if (member?.id) {
-          query = query.eq("id", member.id);
-        } else if (member?.user_id) {
-          query = query.eq("user_id", member.user_id);
-        }
+        if (member?.id) query = query.eq("id", member.id);
+        else if (member?.user_id) query = query.eq("user_id", member.user_id);
 
         const { error } = await query;
         if (error) throw error;
 
         toast.success("Membre modifié avec succès");
-      } else {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+      }
+      // --- CREATE ---
+      else {
+        const { data: auth } = await supabase.auth.getUser();
+        const user = auth?.user;
         if (!user) throw new Error("Non authentifié");
 
         const { data: profile, error: profileErr } = await (supabase as any)
@@ -141,25 +142,65 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
   };
 
   const handleDelete = async () => {
-    if (!member?.id) return;
+    if (!member?.id && !member?.user_id) return;
     const ok = window.confirm("Supprimer définitivement ce membre ?");
     if (!ok) return;
 
     try {
-      const { error } = await (supabase as any).from("org_members").delete().eq("id", member.id);
+      setIsDeleting(true);
+
+      let query = (supabase as any).from("org_members").delete();
+      if (member?.id) query = query.eq("id", member.id);
+      else if (member?.user_id) query = query.eq("user_id", member.user_id);
+
+      const { error } = await query;
       if (error) throw error;
 
       toast.success("Membre supprimé avec succès");
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["team-members"] }),
         queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
       ]);
+
       onOpenChange(false);
     } catch (err) {
       console.error(err);
       toast.error("Impossible de supprimer le membre");
+    } finally {
+      setIsDeleting(false);
     }
   };
+
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {member?.id || member?.user_id ? (
+        <>
+          {/* Supprimer à gauche */}
+          <Button
+            type="button"
+            variant="destructive"
+            className="shrink-0"
+            onClick={handleDelete}
+            disabled={isDeleting || isSubmitting}
+          >
+            {isDeleting ? "Suppression..." : "Supprimer"}
+          </Button>
+
+          {/* Modifier / Annuler à droite */}
+          <Button
+            size="default"
+            className="shrink-0"
+            type="button"
+            onClick={() => setIsEditing((v) => !v)}
+            disabled={isDeleting}
+          >
+            {isEditing ? "Annuler" : "Modifier"}
+          </Button>
+        </>
+      ) : null}
+    </div>
+  );
 
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -177,19 +218,8 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
             </div>
           </div>
 
-          {/* Actions header : Modifier + Supprimer (si membre existant) */}
-          <div className="flex items-center gap-2">
-            {member && (
-              <Button size="default" className="shrink-0" type="button" onClick={() => setIsEditing(!isEditing)}>
-                {isEditing ? "Annuler" : "Modifier"}
-              </Button>
-            )}
-            {member?.id && !isEditing && (
-              <Button type="button" variant="destructive" className="shrink-0" onClick={handleDelete}>
-                Supprimer
-              </Button>
-            )}
-          </div>
+          {/* Actions header */}
+          {headerActions}
         </div>
       </div>
 
@@ -280,6 +310,7 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
                   onOpenChange(false);
                 }
               }}
+              disabled={isSubmitting}
             >
               Annuler
             </Button>
