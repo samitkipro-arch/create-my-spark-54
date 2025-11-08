@@ -561,9 +561,7 @@ const Recus = () => {
                         <div className="flex items-start justify-between pr-8">
                           <div>
                             <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
-                            {receipt.receipt_number && (
-                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
-                            )}
+                            {/* SUPPRIMÉ: affichage "Reçu n°{receipt.receipt_number}" */}
                           </div>
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
@@ -644,9 +642,7 @@ const Recus = () => {
                             }}
                           >
                             <div className="font-medium">{receipt.enseigne || "—"}</div>
-                            {receipt.receipt_number && (
-                              <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
-                            )}
+                            {/* SUPPRIMÉ: affichage "Reçu n°{receipt.receipt_number}" */}
                           </td>
 
                           <td
