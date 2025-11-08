@@ -4,14 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ClientDetailDrawer } from "@/components/Clients/ClientDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +25,9 @@ const Clients = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // >>> AJOUT : clé pour forcer le remount du drawer (évite de réutiliser le dernier client)
+  const [drawerKey, setDrawerKey] = useState<string>("new");
+
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -39,7 +35,7 @@ const Clients = () => {
         .from("clients")
         .select("id, name, email, created_at, siret_siren, legal_representative, address, phone, notes")
         .order("created_at", { ascending: false });
-      
+
       if (error) throw error;
       return (data || []) as Client[];
     },
@@ -47,6 +43,13 @@ const Clients = () => {
 
   const handleClientClick = (client: Client) => {
     setSelectedClient(client);
+    setDrawerKey(client.id); // << remonte le drawer pour ce client
+    setDrawerOpen(true);
+  };
+
+  const handleNewClient = () => {
+    setSelectedClient(null);
+    setDrawerKey(`new-${Date.now()}`); // << remonte le drawer en mode "nouveau"
     setDrawerOpen(true);
   };
 
@@ -54,13 +57,7 @@ const Clients = () => {
     <MainLayout>
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
-          <Button
-            className="gap-2 w-full md:w-auto transition-all duration-200"
-            onClick={() => {
-              setSelectedClient(null);
-              setDrawerOpen(true);
-            }}
-          >
+          <Button className="gap-2 w/full md:w-auto transition-all duration-200" onClick={handleNewClient}>
             <Plus className="w-4 h-4" />
             Ajouter un client
           </Button>
@@ -68,34 +65,27 @@ const Clients = () => {
 
         <div className="relative transition-all duration-200">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher"
-            className="pl-10"
-          />
+          <Input placeholder="Rechercher" className="pl-10" />
         </div>
 
         {/* Mobile: Cards */}
         <div className="md:hidden space-y-2.5 transition-all duration-200">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              Chargement…
-            </div>
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">Chargement…</div>
           ) : clients.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               Aucun client n'a encore été ajouté
             </div>
           ) : (
             clients.map((client) => (
-              <Card 
-                key={client.id} 
+              <Card
+                key={client.id}
                 className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg cursor-pointer"
                 onClick={() => handleClientClick(client)}
               >
                 <CardContent className="p-3.5 space-y-2 transition-all duration-150">
                   <div className="font-semibold text-sm">{client.name}</div>
-                  <div className="text-xs text-primary">
-                    {client.email || "—"}
-                  </div>
+                  <div className="text-xs text-primary">{client.email || "—"}</div>
                   <div className="text-[10px] text-muted-foreground">
                     Créé le {new Date(client.created_at).toLocaleDateString("fr-FR")}
                   </div>
@@ -109,9 +99,7 @@ const Clients = () => {
         <Card className="hidden md:block bg-card border-border transition-all duration-200">
           <CardContent className="p-0 transition-all duration-150">
             {isLoading ? (
-              <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-                Chargement…
-              </div>
+              <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">Chargement…</div>
             ) : clients.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
                 Aucun client n'a encore été ajouté
@@ -127,7 +115,7 @@ const Clients = () => {
                 </TableHeader>
                 <TableBody>
                   {clients.map((client) => (
-                    <TableRow 
+                    <TableRow
                       key={client.id}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleClientClick(client)}
@@ -144,18 +132,23 @@ const Clients = () => {
         </Card>
 
         <ClientDetailDrawer
+          key={drawerKey} // << force le remount pour reset le formulaire
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
-          client={selectedClient ? {
-            id: selectedClient.id,
-            name: selectedClient.name,
-            email: selectedClient.email || '',
-            siret_siren: selectedClient.siret_siren || undefined,
-            legal_representative: selectedClient.legal_representative || undefined,
-            address: selectedClient.address || undefined,
-            phone: selectedClient.phone || undefined,
-            notes: selectedClient.notes || undefined
-          } : null}
+          client={
+            selectedClient
+              ? {
+                  id: selectedClient.id,
+                  name: selectedClient.name,
+                  email: selectedClient.email || "",
+                  siret_siren: selectedClient.siret_siren || undefined,
+                  legal_representative: selectedClient.legal_representative || undefined,
+                  address: selectedClient.address || undefined,
+                  phone: selectedClient.phone || undefined,
+                  notes: selectedClient.notes || undefined,
+                }
+              : null
+          }
         />
       </div>
     </MainLayout>
