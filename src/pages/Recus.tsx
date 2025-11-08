@@ -113,6 +113,7 @@ const Recus = () => {
         method: exportMethod, // "sheets" | "pdf"
         receipt_ids: selectedIds, // array of ids (string[])
       };
+
       if (exportMethod === "sheets" && sheetsSpreadsheetId) {
         payload.sheet_url = sheetsSpreadsheetId; // ton flow lit sheet_url (ou remappe côté n8n)
       }
@@ -174,8 +175,13 @@ const Recus = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   const currentOpenReceiptId = useRef<number | null>(null);
   const isDrawerOpenRef = useRef(false);
+
+  // >>> FIX: empêcher la réouverture après "Valider"
+  const ignoreNextUpdateForId = useRef<number | null>(null);
+  // <<<
 
   // Clients
   const { data: clients = [], refetch: refetchClients } = useQuery({
@@ -284,7 +290,9 @@ const Recus = () => {
       try {
         const { data: r, error: e1 } = await (supabase as any).from("recus").select("*").eq("id", selectedId).single();
         if (e1) throw e1;
+
         const receiptData = r as any;
+
         let processedByName: string | null = null;
         let clientName: string | null = null;
 
@@ -299,6 +307,7 @@ const Recus = () => {
             ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim()
             : null;
         }
+
         if (receiptData?.client_id) {
           const { data: c } = await (supabase as any)
             .from("clients")
@@ -308,6 +317,7 @@ const Recus = () => {
           const clientData = c as any;
           clientName = clientData?.name ?? null;
         }
+
         setDetail({ ...receiptData, _processedByName: processedByName, _clientName: clientName });
       } catch (err: any) {
         setDetailError(err?.message || "Erreur lors du chargement du reçu");
@@ -329,6 +339,7 @@ const Recus = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
         const newRecu = payload.new as Receipt;
         refetch();
+
         if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
           currentOpenReceiptId.current = newRecu.id;
           setSelectedId(newRecu.id);
@@ -344,10 +355,21 @@ const Recus = () => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
         const updatedRecu = payload.new as Receipt;
         const oldRecu = payload.old as Receipt;
+
+        // >>> FIX: si on vient de valider localement ce reçu, ignorer CETTE mise à jour
+        if (ignoreNextUpdateForId.current === updatedRecu.id) {
+          ignoreNextUpdateForId.current = null;
+          refetch();
+          return;
+        }
+        // <<<
+
         refetch();
+
         const shouldOpen =
           (!!updatedRecu.receipt_number && !oldRecu.receipt_number) ||
           (updatedRecu.status === "traite" && oldRecu.status !== "traite");
+
         if (shouldOpen) {
           if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
             currentOpenReceiptId.current = updatedRecu.id;
@@ -500,7 +522,7 @@ const Recus = () => {
               </div>
             ) : (
               <>
-                {/* Mobile: Cards + pastille sélection */}
+                {/* Mobile: Cards */}
                 <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
@@ -525,7 +547,7 @@ const Recus = () => {
                           setIsDrawerOpen(true);
                         }}
                       >
-                        {/* pastille sélection en haut à droite */}
+                        {/* pastille sélection */}
                         <div
                           className="absolute right-3 top-3"
                           onClick={(e) => {
@@ -611,6 +633,7 @@ const Recus = () => {
                               onCheckedChange={() => toggleOne(String(receipt.id))}
                             />
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -625,6 +648,7 @@ const Recus = () => {
                               <div className="text-xs text-muted-foreground">Reçu n°{receipt.receipt_number}</div>
                             )}
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -636,6 +660,7 @@ const Recus = () => {
                           >
                             {receipt.ville || "—"}
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -647,6 +672,7 @@ const Recus = () => {
                           >
                             {formatCurrency(receipt.montant_ttc)}
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -658,6 +684,7 @@ const Recus = () => {
                           >
                             {formatCurrency(receipt.montant_ht)}
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -669,6 +696,7 @@ const Recus = () => {
                           >
                             {formatCurrency(receipt.tva)}
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -680,6 +708,7 @@ const Recus = () => {
                           >
                             {receipt.moyen_paiement || "—"}
                           </td>
+
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
