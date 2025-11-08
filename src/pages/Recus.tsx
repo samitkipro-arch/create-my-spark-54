@@ -191,22 +191,38 @@ const Recus = () => {
     },
   });
 
-  // Members (org_members -> profiles)
+  // Members (org_members -> profiles) avec filtre par org
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
-      if (omError) throw omError;
-      if (!orgMembers || orgMembers.length === 0) return [];
-      const userIds = orgMembers.map((om: any) => om.user_id);
-      const { data: profiles, error: pError } = await (supabase as any)
+      // Récupérer l'org_id de l'utilisateur courant
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data: profile, error: profileError } = await (supabase as any)
         .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      if (pError) throw pError;
-      return (profiles || []).map((p: any) => ({
-        id: p.user_id,
-        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+        .select("org_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (profileError || !profile?.org_id) {
+        console.error("Error fetching user org_id:", profileError);
+        return [];
+      }
+
+      // Utiliser la RPC pour récupérer les membres de l'org
+      const { data, error } = await (supabase as any).rpc("get_org_members", { 
+        p_org_id: profile.org_id 
+      });
+      
+      if (error) {
+        console.error("Error fetching org members:", error);
+        return [];
+      }
+
+      return (data || []).map((r: any) => ({
+        id: r.user_id,
+        name: `${r.first_name || ""} ${r.last_name || ""}`.trim() || "Membre sans nom",
       })) as Member[];
     },
   });
