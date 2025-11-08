@@ -38,7 +38,6 @@ type MemberFormData = {
 export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMemberDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
-  const [rowId, setRowId] = useState<string | undefined>(member?.id); // << NEW: id résolu pour update
   const queryClient = useQueryClient();
 
   const {
@@ -56,9 +55,7 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
     },
   });
 
-  // (1) Synchronise le formulaire et résout l'id de la ligne à mettre à jour
   useEffect(() => {
-    // reset form fields
     if (member) {
       reset({
         first_name: member.first_name || "",
@@ -68,81 +65,125 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         notes: member.notes || "",
       });
     } else {
-      reset({ first_name: "", last_name: "", email: "", phone: "", notes: "" });
+      reset({
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        notes: "",
+      });
     }
+    // lecture si membre existant, édition si nouveau
     setIsEditing(!member);
-
-    // resolve row id we will update (avoid accidental insert)
-    setRowId(member?.id); // immediate if provided
-
-    const resolveId = async () => {
-      try {
-        if (!member) return;
-
-        // If no id but we have user_id, fetch row id by user_id
-        if (!member.id && member.user_id) {
-          const { data, error } = await (supabase as any)
-            .from("org_members")
-            .select("id")
-            .eq("user_id", member.user_id)
-            .limit(1)
-            .maybeSingle();
-          if (!error && data?.id) {
-            setRowId(data.id);
-            return;
-          }
-        }
-
-        // As a fallback, try resolving by unique email (if present)
-        if (!member.id && !member.user_id && member.email) {
-          const { data, error } = await (supabase as any)
-            .from("org_members")
-            .select("id")
-            .eq("email", member.email)
-            .limit(1)
-            .maybeSingle();
-          if (!error && data?.id) {
-            setRowId(data.id);
-          }
-        }
-      } catch {
-        // silently ignore — we'll still try user_id path in onSubmit
-      }
-    };
-
-    resolveId();
   }, [member, reset]);
 
   const fullName = member ? `${member.first_name} ${member.last_name}`.trim() : "";
 
+  // --- util: résout l'id de la ligne à partir de user_id ou email si besoin ---
+  const resolveExistingRowId = async (
+    currentMember: TeamMemberDetailDrawerProps["member"],
+    formData: MemberFormData,
+  ): Promise<string | undefined> => {
+    try {
+      // 1) si id fourni -> on le garde
+      if (currentMember?.id) return currentMember.id;
+
+      // 2) sinon rechercher par user_id (si présent)
+      if (currentMember?.user_id) {
+        const { data, error } = await (supabase as any)
+          .from("org_members")
+          .select("id")
+          .eq("user_id", currentMember.user_id)
+          .limit(1)
+          .maybeSingle();
+        if (!error && data?.id) return data.id;
+      }
+
+      // 3) dernier recours: email (priorité à la valeur du formulaire, sinon membre.email)
+      const email = (formData.email || currentMember?.email || "").trim();
+      if (email) {
+        const { data, error } = await (supabase as any)
+          .from("org_members")
+          .select("id")
+          .eq("email", email)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data?.id) return data.id;
+      }
+    } catch {
+      // ignore
+    }
+    return undefined;
+  };
+
   const onSubmit = async (data: MemberFormData) => {
     try {
-      // Decide if this is an UPDATE (existing) or INSERT (new)
-      const hasExisting = !!member && (!!rowId || !!member.user_id);
+      if (member) {
+        // --- EDIT PATH TOUJOURS SI member != null ---
+        const targetId = await resolveExistingRowId(member, data);
 
-      if (hasExisting) {
-        // --- UPDATE ---
-        let query = (supabase as any).from("org_members").update({
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone: data.phone,
-          notes: data.notes,
-        });
+        if (targetId) {
+          // UPDATE ciblé par id résolu
+          const { error } = await (supabase as any)
+            .from("org_members")
+            .update({
+              first_name: data.first_name,
+              last_name: data.last_name,
+              email: data.email,
+              phone: data.phone,
+              notes: data.notes,
+            })
+            .eq("id", targetId);
 
-        // Prefer the resolved row id; fallback to user_id
-        if (rowId) {
-          query = query.eq("id", rowId);
-        } else if (member?.user_id) {
-          query = query.eq("user_id", member.user_id);
+          if (error) throw error;
+          toast.success("Membre modifié avec succès");
+        } else if (member.user_id) {
+          // fallback: si on a au moins un user_id, tenter l'update par user_id
+          const { error } = await (supabase as any)
+            .from("org_members")
+            .update({
+              first_name: data.first_name,
+              last_name: data.last_name,
+              email: data.email,
+              phone: data.phone,
+              notes: data.notes,
+            })
+            .eq("user_id", member.user_id);
+
+          if (error) throw error;
+          toast.success("Membre modifié avec succès");
+        } else {
+          // Aucune ligne trouvée -> on NE DUPLIQUE PAS à l'aveugle.
+          // On convertit explicitement en création seulement si vraiment voulu.
+          // Ici on fait une création contrôlée (même org_id que l'utilisateur courant).
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) throw new Error("Non authentifié");
+
+          const { data: profile, error: profileErr } = await (supabase as any)
+            .from("profiles")
+            .select("org_id")
+            .eq("user_id", user.id)
+            .single();
+          if (profileErr) throw profileErr;
+          if (!profile?.org_id) throw new Error("Organisation introuvable");
+
+          const { error } = await (supabase as any).from("org_members").insert({
+            org_id: profile.org_id,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            email: data.email,
+            phone: data.phone,
+            notes: data.notes,
+          });
+          if (error) throw error;
+
+          toast.success("Membre ajouté avec succès");
         }
-
-        const { error } = await query;
-        if (error) throw error;
-
-        toast.success("Membre modifié avec succès");
       } else {
-        // --- CREATE ---
+        // --- CREATE (aucun member fourni) ---
         const {
           data: { user },
         } = await supabase.auth.getUser();
