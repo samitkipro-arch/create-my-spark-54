@@ -74,7 +74,7 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         notes: "",
       });
     }
-    // mode lecture si membre existant, édition si nouveau
+    // lecture si membre existant, édition si nouveau
     setIsEditing(!member);
   }, [member, reset]);
 
@@ -172,36 +172,6 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
     }
   };
 
-  const headerActions = (
-    <div className="flex items-center gap-2">
-      {member?.id || member?.user_id ? (
-        <>
-          {/* Supprimer à gauche */}
-          <Button
-            type="button"
-            variant="destructive"
-            className="shrink-0"
-            onClick={handleDelete}
-            disabled={isDeleting || isSubmitting}
-          >
-            {isDeleting ? "Suppression..." : "Supprimer"}
-          </Button>
-
-          {/* Modifier / Annuler à droite */}
-          <Button
-            size="default"
-            className="shrink-0"
-            type="button"
-            onClick={() => setIsEditing((v) => !v)}
-            disabled={isDeleting}
-          >
-            {isEditing ? "Annuler" : "Modifier"}
-          </Button>
-        </>
-      ) : null}
-    </div>
-  );
-
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-lg border-b border-border p-6 md:p-8">
@@ -218,8 +188,31 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
             </div>
           </div>
 
-          {/* Actions header */}
-          {headerActions}
+          {/* Actions header: Supprimer (si possible) + Modifier/Annuler (toujours si membre existe) */}
+          {member ? (
+            <div className="flex items-center gap-2">
+              {(member.id || member.user_id) && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="shrink-0"
+                  onClick={handleDelete}
+                  disabled={isDeleting || isSubmitting}
+                >
+                  {isDeleting ? "Suppression..." : "Supprimer"}
+                </Button>
+              )}
+              <Button
+                size="default"
+                className="shrink-0"
+                type="button"
+                onClick={() => setIsEditing((v) => !v)}
+                disabled={isDeleting}
+              >
+                {isEditing ? "Annuler" : "Modifier"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 
