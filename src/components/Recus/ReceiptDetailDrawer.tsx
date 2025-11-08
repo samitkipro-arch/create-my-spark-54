@@ -23,6 +23,10 @@ interface ReceiptDetailDrawerProps {
 
 type Member = { id: string; name: string };
 
+function round2(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 export const ReceiptDetailDrawer = ({
   open,
   onOpenChange,
@@ -41,11 +45,12 @@ export const ReceiptDetailDrawer = ({
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
-  // ----------------- Edition -----------------
+  // ----------------- Edition + recalcul instantané -----------------
   const [editedData, setEditedData] = useState({
     enseigne: "",
     numero_recu: "",
     montant_ttc: 0,
+    montant_ht: 0,
     tva: 0,
     ville: "",
     adresse: "",
@@ -55,12 +60,31 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
+  // recalcul synchronisé TTC = HT + TVA
+  const recalcFrom = (source: "ttc" | "ht" | "tva", next: Partial<typeof editedData>) => {
+    let ttc = "montant_ttc" in next ? Number(next.montant_ttc) : editedData.montant_ttc;
+    let ht = "montant_ht" in next ? Number(next.montant_ht) : editedData.montant_ht;
+    let tva = "tva" in next ? Number(next.tva) : editedData.tva;
+
+    if (source === "ttc") {
+      // TTC change -> on garde TVA, on ajuste HT
+      ht = round2(ttc - tva);
+    } else if (source === "ht") {
+      // HT change -> on garde TTC, on ajuste TVA
+      tva = round2(ttc - ht);
+    } else if (source === "tva") {
+      // TVA change -> on garde TTC, on ajuste HT
+      ht = round2(ttc - tva);
+    }
+
+    return { montant_ttc: ttc, montant_ht: ht, tva };
+  };
+
   // ---------- MEMBRES: chargement scopé org + temps réel ----------
   const [orgMembers, setOrgMembers] = useState<Member[]>([]);
   const [membersError, setMembersError] = useState<string>("");
   const currentOrgIdRef = useRef<string | null>(null);
 
-  // Charger les membres via RPC get_org_members (scopé org uniquement)
   const loadOrgMembers = async (orgId: string) => {
     setMembersError("");
     try {
@@ -71,14 +95,12 @@ export const ReceiptDetailDrawer = ({
         setOrgMembers([]);
         return;
       }
-      const loaded = (data as any[] || []).map((r: any) => ({
+      const loaded = ((data as any[]) || []).map((r: any) => ({
         id: r.user_id as string,
-        name: r.name as string, // La RPC retourne déjà le nom combiné
+        name: r.name as string,
       }));
       setOrgMembers(loaded);
-      if (loaded.length === 0) {
-        setMembersError("Aucun membre dans cette organisation.");
-      }
+      if (loaded.length === 0) setMembersError("Aucun membre dans cette organisation.");
     } catch (err) {
       console.error("❌ loadOrgMembers exception:", err);
       setMembersError("Erreur de chargement des membres.");
@@ -86,17 +108,14 @@ export const ReceiptDetailDrawer = ({
     }
   };
 
-  // Charger les membres quand le drawer s'ouvre ou que l'org change
   useEffect(() => {
     if (!open) {
-      // Reset quand on ferme
       setOrgMembers([]);
       setMembersError("");
       currentOrgIdRef.current = null;
       return;
     }
 
-    // Si members est fourni par props (legacy), l'utiliser
     if (members && members.length > 0) {
       setOrgMembers([]);
       setMembersError("");
@@ -111,7 +130,6 @@ export const ReceiptDetailDrawer = ({
       return;
     }
 
-    // Reload uniquement si l'org a changé
     if (currentOrgIdRef.current !== orgId) {
       setOrgMembers([]);
       setMembersError("");
@@ -120,15 +138,12 @@ export const ReceiptDetailDrawer = ({
     }
   }, [open, detail?.org_id, members]);
 
-  // TEMPS RÉEL: écouter les changements sur org_members et profiles
   useEffect(() => {
     if (!open) return;
     const orgId = detail?.org_id as string | undefined;
     if (!orgId || (members && members.length > 0)) return;
 
     const channelName = `receipt-drawer-members-${orgId}`;
-    
-    // Canal 1: org_members (INSERT, DELETE, UPDATE)
     const channel = (supabase as any)
       .channel(channelName)
       .on(
@@ -137,8 +152,6 @@ export const ReceiptDetailDrawer = ({
         async (payload: any) => {
           const newUserId = payload.new?.user_id;
           if (!newUserId) return;
-
-          // Fetch le nom du nouveau membre
           const { data: prof } = await (supabase as any)
             .from("profiles")
             .select("user_id, first_name, last_name")
@@ -147,15 +160,16 @@ export const ReceiptDetailDrawer = ({
 
           const newMember: Member = {
             id: newUserId,
-            name: prof ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom" : "Membre sans nom",
+            name: prof
+              ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom"
+              : "Membre sans nom",
           };
 
           setOrgMembers((prev) => {
-            // Éviter les doublons
             if (prev.some((m) => m.id === newUserId)) return prev;
             return [...prev, newMember].sort((a, b) => a.name.localeCompare(b.name));
           });
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -164,63 +178,54 @@ export const ReceiptDetailDrawer = ({
           const deletedUserId = payload.old?.user_id;
           if (!deletedUserId) return;
           setOrgMembers((prev) => prev.filter((m) => m.id !== deletedUserId));
-        }
+        },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
         () => {
-          // Si update sur org_members (rare), reload pour être sûr
-          if (currentOrgIdRef.current) {
-            loadOrgMembers(currentOrgIdRef.current);
-          }
-        }
+          if (currentOrgIdRef.current) loadOrgMembers(currentOrgIdRef.current);
+        },
       )
       .subscribe();
 
-    // Canal 2: profiles (UPDATE sur les noms)
     const profilesChannel = (supabase as any)
       .channel(`receipt-drawer-profiles-${orgId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles" },
-        (payload: any) => {
-          const updatedUserId = payload.new?.user_id;
-          if (!updatedUserId) return;
-
-          // Vérifier si ce user_id est dans notre liste
-          setOrgMembers((prev) => {
-            const exists = prev.find((m) => m.id === updatedUserId);
-            if (!exists) return prev;
-
-            // Mettre à jour le nom
-            const newName = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
-            return prev
-              .map((m) => (m.id === updatedUserId ? { ...m, name: newName } : m))
-              .sort((a, b) => a.name.localeCompare(b.name));
-          });
-        }
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
+        const updatedUserId = payload.new?.user_id;
+        if (!updatedUserId) return;
+        setOrgMembers((prev) => {
+          const exists = prev.find((m) => m.id === updatedUserId);
+          if (!exists) return prev;
+          const newName =
+            `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
+          return prev
+            .map((m) => (m.id === updatedUserId ? { ...m, name: newName } : m))
+            .sort((a, b) => a.name.localeCompare(b.name));
+        });
+      })
       .subscribe();
 
-    // Cleanup à la fermeture ou changement d'org
     return () => {
       (supabase as any).removeChannel(channel);
       (supabase as any).removeChannel(profilesChannel);
     };
   }, [open, detail?.org_id, members]);
 
-  // Liste effective des membres (props ou state local)
-  const effectiveMembers: Member[] = (members && members.length > 0) ? members : orgMembers;
+  const effectiveMembers: Member[] = members && members.length > 0 ? members : orgMembers;
 
-  // ----------------- Sync & save -----------------
+  // ----------------- Sync & autosave -----------------
   useEffect(() => {
     if (detail) {
+      const ttc = detail?.montant_ttc ?? detail?.montant ?? 0;
+      const tva = detail?.tva ?? 0;
+      const ht = detail?.montant_ht ?? round2(ttc - tva);
       setEditedData({
         enseigne: detail?.enseigne ?? "",
         numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
+        montant_ttc: ttc,
+        montant_ht: ht,
+        tva,
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
@@ -241,6 +246,7 @@ export const ReceiptDetailDrawer = ({
             enseigne: editedData.enseigne,
             numero_recu: editedData.numero_recu,
             montant_ttc: editedData.montant_ttc,
+            montant_ht: editedData.montant_ht, // <<< autosave HT aussi
             tva: editedData.tva,
             ville: editedData.ville,
             adresse: editedData.adresse,
@@ -312,6 +318,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           enseigne: editedData.enseigne,
           numero_recu: editedData.numero_recu,
           montant_ttc: editedData.montant_ttc,
+          montant_ht: editedData.montant_ht, // <<< save HT aussi
           tva: editedData.tva,
           ville: editedData.ville,
           adresse: editedData.adresse,
@@ -333,11 +340,15 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     setIsEditing(false);
     setActiveField(null);
     if (detail) {
+      const ttc = detail?.montant_ttc ?? detail?.montant ?? 0;
+      const tva = detail?.tva ?? 0;
+      const ht = detail?.montant_ht ?? round2(ttc - tva);
       setEditedData({
         enseigne: detail?.enseigne ?? "",
         numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
+        montant_ttc: ttc,
+        montant_ht: ht,
+        tva,
         ville: detail?.ville ?? "",
         adresse: detail?.adresse ?? "",
         moyen_paiement: detail?.moyen_paiement ?? "",
@@ -354,7 +365,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersError}</div>
     ) : null;
 
-  // Helpers
   function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
       <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
@@ -450,7 +460,12 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                         type="number"
                         step="0.01"
                         value={editedData.montant_ttc}
-                        onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setEditedData((prev) => ({
+                            ...prev,
+                            ...recalcFrom("ttc", { montant_ttc: parseFloat(e.target.value) || 0 }),
+                          }))
+                        }
                         onFocus={() => setActiveField("montant_ttc")}
                         onBlur={() => setActiveField(null)}
                         className={cn(
@@ -469,14 +484,41 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </div>
               </div>
 
-              {/* Cartes HT / TVA */}
+              {/* Cartes HT / TVA (toutes deux synchronisées) */}
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                     <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
-                    <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
-                      {formatCurrency(editedData.montant_ttc - editedData.tva)}
-                    </p>
+                    {isEditing ? (
+                      <div className="inline-flex items-baseline gap-0">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editedData.montant_ht}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev,
+                              ...recalcFrom("ht", { montant_ht: parseFloat(e.target.value) || 0 }),
+                            }))
+                          }
+                          onFocus={() => setActiveField("montant_ht")}
+                          onBlur={() => setActiveField(null)}
+                          className={cn(
+                            "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                            "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                            "cursor-text border-b border-primary",
+                          )}
+                          style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                        />
+                        <span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">
+                          €
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
+                        {formatCurrency(editedData.montant_ht)}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
                 <Card>
@@ -488,7 +530,12 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                           type="number"
                           step="0.01"
                           value={editedData.tva}
-                          onChange={(e) => setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev,
+                              ...recalcFrom("tva", { tva: parseFloat(e.target.value) || 0 }),
+                            }))
+                          }
                           onFocus={() => setActiveField("tva")}
                           onBlur={() => setActiveField(null)}
                           className={cn(
@@ -700,7 +747,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {/* Montants */}
+          {/* Montant TTC */}
           <div className="w-full flex items-center justify-center">
             <div className="inline-block text-center">
               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
@@ -710,7 +757,12 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                     type="number"
                     step="0.01"
                     value={editedData.montant_ttc}
-                    onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setEditedData((prev) => ({
+                        ...prev,
+                        ...recalcFrom("ttc", { montant_ttc: parseFloat(e.target.value) || 0 }),
+                      }))
+                    }
                     onFocus={() => setActiveField("montant_ttc")}
                     onBlur={() => setActiveField(null)}
                     className={cn(
@@ -733,7 +785,32 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             <Card>
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground mb-1">Montant HT :</p>
-                <p className="text-lg font-semibold">{formatCurrency(editedData.montant_ttc - editedData.tva)}</p>
+                {isEditing ? (
+                  <div className="inline-flex items-baseline gap-0">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editedData.montant_ht}
+                      onChange={(e) =>
+                        setEditedData((prev) => ({
+                          ...prev,
+                          ...recalcFrom("ht", { montant_ht: parseFloat(e.target.value) || 0 }),
+                        }))
+                      }
+                      onFocus={() => setActiveField("montant_ht")}
+                      onBlur={() => setActiveField(null)}
+                      className={cn(
+                        "text-lg font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                        "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                        "cursor-text border-b border-primary",
+                      )}
+                      style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                    />
+                    <span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
+                  </div>
+                ) : (
+                  <p className="text-lg font-semibold">{formatCurrency(editedData.montant_ht)}</p>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -745,7 +822,12 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       type="number"
                       step="0.01"
                       value={editedData.tva}
-                      onChange={(e) => setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) =>
+                        setEditedData((prev) => ({
+                          ...prev,
+                          ...recalcFrom("tva", { tva: parseFloat(e.target.value) || 0 }),
+                        }))
+                      }
                       onFocus={() => setActiveField("tva")}
                       onBlur={() => setActiveField(null)}
                       className={cn(
