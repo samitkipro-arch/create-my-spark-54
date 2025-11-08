@@ -1,3 +1,4 @@
+// ReceiptDetailDrawer.tsx
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,7 @@ interface ReceiptDetailDrawerProps {
   error: string | null;
   clients?: Array<{ id: string; name: string }>;
   members?: Array<{ id: string; name: string }>;
+  /** Appelé au moment de la validation pour ignorer la prochaine maj realtime côté parent */
   onValidated?: (id: number) => void;
 }
 
@@ -36,10 +38,11 @@ export const ReceiptDetailDrawer = ({
   const [isEditing, setIsEditing] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
 
-  // Rapport n8n
+  // URL rapport n8n
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
+  // Ouvre un onglet puis remplit le HTML renvoyé par n8n
   const openReport = async () => {
     if (!detail?.id) return;
     const win = window.open("", "_blank");
@@ -88,55 +91,39 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     processed_by: "",
   });
 
-  // ===== FIX MEMBRES =====
-  // 1) Fallback global si la prop `members` arrive vide
+  /**
+   * ===== CHARGEMENT FIABLE DES MEMBRES PAR ORG (org_id) =====
+   * Priorité: props `members` (venues du parent) > orgScopedMembers (par org_id du reçu) > fallbackMembers (essai générique)
+   */
+  const [orgScopedMembers, setOrgScopedMembers] = useState<Array<{ id: string; name: string }>>([]);
   const [fallbackMembers, setFallbackMembers] = useState<Array<{ id: string; name: string }>>([]);
 
-  useEffect(() => {
-    const loadIfEmpty = async () => {
-      if (members && members.length > 0) return;
-      try {
-        const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
-        if (omError || !orgMembers?.length) return;
-        const userIds = orgMembers.map((om: any) => om.user_id);
-        const { data: profiles, error: pError } = await (supabase as any)
-          .from("profiles")
-          .select("user_id, first_name, last_name")
-          .in("user_id", userIds);
-        if (pError || !profiles) return;
-        setFallbackMembers(
-          profiles.map((p: any) => ({
-            id: p.user_id,
-            name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
-          })),
-        );
-      } catch {}
-    };
-    loadIfEmpty();
-  }, [members]);
-
-  // 2) Chargement SCOPÉ à l’org du reçu quand le drawer s’ouvre (plus fiable avec RLS)
-  const [orgScopedMembers, setOrgScopedMembers] = useState<Array<{ id: string; name: string }>>([]);
+  // Charge les membres liés à l'org du reçu quand le drawer s'ouvre (compatibles RLS)
   useEffect(() => {
     const loadByOrg = async () => {
       if (!open) return;
       const orgId = detail?.org_id;
-      if (!orgId) return; // si pas d’org dans le reçu, on garde les autres sources
+      if (!orgId) {
+        setOrgScopedMembers([]);
+        return;
+      }
       try {
         const { data: orgMembers, error: omError } = await (supabase as any)
           .from("org_members")
           .select("user_id")
           .eq("org_id", orgId);
+
         if (omError || !orgMembers?.length) {
           setOrgScopedMembers([]);
           return;
         }
 
-        const userIds = orgMembers.map((om: any) => om.user_id);
+        const userIds = orgMembers.map((m: any) => m.user_id);
         const { data: profiles, error: pError } = await (supabase as any)
           .from("profiles")
           .select("user_id, first_name, last_name")
           .in("user_id", userIds);
+
         if (pError || !profiles) {
           setOrgScopedMembers([]);
           return;
@@ -149,20 +136,51 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           })),
         );
       } catch (e) {
-        console.error("loadByOrg members error:", e);
+        console.error("[Drawer] loadByOrg error:", e);
         setOrgScopedMembers([]);
       }
     };
     loadByOrg();
   }, [open, detail?.org_id]);
 
-  // Priorité: prop -> orgScoped -> fallback
+  // Si aucune prop et aucun orgScoped, tenter un fallback générique (peut être bloqué par RLS)
+  useEffect(() => {
+    const loadFallback = async () => {
+      if ((members && members.length) || (orgScopedMembers && orgScopedMembers.length)) {
+        setFallbackMembers([]);
+        return;
+      }
+      try {
+        const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
+        if (omError || !orgMembers?.length) return;
+
+        const userIds = orgMembers.map((m: any) => m.user_id);
+        const { data: profiles, error: pError } = await (supabase as any)
+          .from("profiles")
+          .select("user_id, first_name, last_name")
+          .in("user_id", userIds);
+        if (pError || !profiles) return;
+
+        setFallbackMembers(
+          profiles.map((p: any) => ({
+            id: p.user_id,
+            name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+          })),
+        );
+      } catch (e) {
+        console.error("[Drawer] loadFallback error:", e);
+        setFallbackMembers([]);
+      }
+    };
+    loadFallback();
+  }, [members, orgScopedMembers]);
+
   const effectiveMembers =
     (members && members.length > 0 && members) ||
     (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
     fallbackMembers;
 
-  // Sync editedData
+  // Sync editedData depuis le détail
   useEffect(() => {
     if (detail) {
       setEditedData({
@@ -180,7 +198,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     }
   }, [detail]);
 
-  // Autosave
+  // Sauvegarde auto pendant l’édition
   useEffect(() => {
     if (!isEditing || !detail?.id) return;
     const t = setTimeout(async () => {
@@ -266,7 +284,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     }
   };
 
-  // ---------- UI (inchangé sauf SelectContent) ----------
+  // ---------- UI ----------
   const desktopContent = (
     <div className="relative flex h-full">
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -302,7 +320,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </SheetHeader>
 
             <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
-              {/* Montants */}
+              {/* Montant TTC */}
               <div className="w-full flex items-center justify-center">
                 <div className="inline-block text-center">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
@@ -316,10 +334,11 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                         onFocus={() => setActiveField("montant_ttc")}
                         onBlur={() => setActiveField(null)}
                         className={cn(
-                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none p-0",
+                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                           "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                           "cursor-text border-b-2 border-primary",
                         )}
+                        style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                       />
                     </div>
                   ) : (
@@ -330,6 +349,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </div>
               </div>
 
+              {/* Cartes Montant HT / TVA */}
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
@@ -352,12 +372,15 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                           onFocus={() => setActiveField("tva")}
                           onBlur={() => setActiveField(null)}
                           className={cn(
-                            "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block p-0",
+                            "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                             "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "cursor-text border-b border-primary",
                           )}
+                          style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                         />
-                        <span className="text-lg md:text-2xl font-semibold -ml-[2px]">€</span>
+                        <span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">
+                          €
+                        </span>
                       </div>
                     ) : (
                       <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
@@ -368,7 +391,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </Card>
               </div>
 
-              {/* Infos */}
+              {/* Infos détaillées */}
               <div className="space-y-2 md:space-y-4">
                 <Row label="Date de traitement">
                   <span className="text-xs md:text-sm font-medium">
@@ -409,7 +432,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   setActiveField={setActiveField}
                 />
 
-                {/* --- Traité par --- */}
+                {/* Traité par */}
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
                   {isEditing ? (
@@ -436,7 +459,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   )}
                 </div>
 
-                {/* --- Client assigné --- */}
+                {/* Client assigné */}
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
                   {isEditing ? (
@@ -498,7 +521,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </div>
   );
 
-  // Mobile (identiques changements: forceMount + z-index + effectiveMembers)
+  // Mobile
   const mobileContent = loading ? (
     <div className="flex items-center justify-center h-full">
       <p className="text-muted-foreground">Chargement…</p>
@@ -509,6 +532,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </div>
   ) : detail ? (
     <>
+      {/* Header fixe */}
       <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-start justify-between">
           <div className="flex-1 text-left">
@@ -526,6 +550,21 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 )}
               />
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Reçu n°{" "}
+              <input
+                type="text"
+                value={editedData.numero_recu || "—"}
+                onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
+                onFocus={() => setActiveField("numero_recu")}
+                onBlur={() => setActiveField(null)}
+                disabled={!isEditing}
+                className={cn(
+                  "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+                )}
+              />
+            </p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="shrink-0">
             <X className="h-5 w-5" />
@@ -533,9 +572,10 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         </div>
       </div>
 
+      {/* Contenu scrollable */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {/* Montants */}
+          {/* Montant TTC */}
           <div className="w-full flex items-center justify-center">
             <div className="inline-block text-center">
               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
@@ -549,12 +589,13 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                     onFocus={() => setActiveField("montant_ttc")}
                     onBlur={() => setActiveField(null)}
                     className={cn(
-                      "text-2xl font-bold text-center bg-transparent border-none p-0",
+                      "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                       "cursor-text border-b-2 border-primary",
                     )}
+                    style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                   />
-                  <span className="text-2xl font-bold -ml-[2px]">€</span>
+                  <span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
                 </div>
               ) : (
                 <p className="text-2xl font-bold">{formatCurrency(editedData.montant_ttc)}</p>
@@ -562,6 +603,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </div>
           </div>
 
+          {/* Cartes Montant HT / TVA */}
           <div className="grid grid-cols-2 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3">
@@ -582,12 +624,13 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       onFocus={() => setActiveField("tva")}
                       onBlur={() => setActiveField(null)}
                       className={cn(
-                        "text-lg font-semibold text-left bg-transparent border-none p-0",
+                        "text-lg font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                         "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                         "cursor-text border-b border-primary",
                       )}
+                      style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                     />
-                    <span className="text-lg font-semibold -ml-[2px]">€</span>
+                    <span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
                   </div>
                 ) : (
                   <p className="text-lg font-semibold">{formatCurrency(editedData.tva)}</p>
@@ -596,7 +639,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </Card>
           </div>
 
-          {/* Infos */}
+          {/* Infos détaillées */}
           <div className="space-y-2">
             <RowMobile label="Date de traitement">
               <span className="text-xs font-medium">
@@ -609,7 +652,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               field="moyen_paiement"
               isEditing={isEditing}
               value={editedData.moyen_paiement}
-              onChange={(v) => setEditedData({ ...editedData, moyen_paiement: v })}
+              onChange={(v: string) => setEditedData({ ...editedData, moyen_paiement: v })}
               setActiveField={setActiveField}
             />
             <EditableInputMobile
@@ -617,7 +660,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               field="ville"
               isEditing={isEditing}
               value={editedData.ville}
-              onChange={(v) => setEditedData({ ...editedData, ville: v })}
+              onChange={(v: string) => setEditedData({ ...editedData, ville: v })}
               setActiveField={setActiveField}
             />
             <EditableInputMobile
@@ -625,7 +668,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               field="adresse"
               isEditing={isEditing}
               value={editedData.adresse}
-              onChange={(v) => setEditedData({ ...editedData, adresse: v })}
+              onChange={(v: string) => setEditedData({ ...editedData, adresse: v })}
               setActiveField={setActiveField}
             />
             <EditableInputMobile
@@ -633,7 +676,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               field="categorie"
               isEditing={isEditing}
               value={editedData.categorie}
-              onChange={(v) => setEditedData({ ...editedData, categorie: v })}
+              onChange={(v: string) => setEditedData({ ...editedData, categorie: v })}
               setActiveField={setActiveField}
             />
 
@@ -690,6 +733,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         </div>
       </div>
 
+      {/* Footer fixe */}
       <div className="flex-shrink-0 p-4 border-t border-border bg-card/95">
         {isEditing ? (
           <div className="flex gap-3">
@@ -710,6 +754,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 Corriger
               </Button>
             </div>
+
             <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
               Consulter le rapport d'analyse
             </Button>
@@ -719,7 +764,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </>
   ) : null;
 
-  // Helpers de rendu de lignes éditables (pour alléger le JSX)
+  // Helpers
   function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
       <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
@@ -772,10 +817,19 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     return <EditableInput {...props} />;
   }
 
+  // Rendu: Drawer mobile / Sheet desktop
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="mx-4 mb-8 h-[75vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 flex flex-col overflow-hidden">
+        <DrawerContent
+          className="
+            mx-4 mb-8 h-[75vh] rounded-2xl 
+            bg-card/95 backdrop-blur-lg 
+            shadow-[0_10px_40px_rgba(0,0,0,0.4)]
+            border border-border/50
+            flex flex-col overflow-hidden
+          "
+        >
           {mobileContent}
         </DrawerContent>
       </Drawer>
