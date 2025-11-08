@@ -16,6 +16,7 @@ interface TeamMemberDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: {
+    id?: string; // << ajouté: id de la ligne org_members (pour les membres sans user_id)
     user_id?: string;
     first_name: string;
     last_name: string;
@@ -32,25 +33,26 @@ type MemberFormData = {
   email: string;
   phone: string;
   notes: string;
-}
+};
 
-export const TeamMemberDetailDrawer = ({
-  open,
-  onOpenChange,
-  member,
-}: TeamMemberDetailDrawerProps) => {
+export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMemberDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
-  
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<MemberFormData>({
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<MemberFormData>({
     defaultValues: {
       first_name: member?.first_name || "",
       last_name: member?.last_name || "",
       email: member?.email || "",
       phone: member?.phone || "",
       notes: member?.notes || "",
-    }
+    },
   });
 
   useEffect(() => {
@@ -78,7 +80,11 @@ export const TeamMemberDetailDrawer = ({
 
   const onSubmit = async (data: MemberFormData) => {
     try {
-      if (member?.user_id) {
+      // UPDATE si on a un identifiant fiable (user_id OU id de la ligne)
+      if (member?.user_id || member?.id) {
+        const identCol = member.user_id ? "user_id" : "id";
+        const identVal = member.user_id ?? member.id;
+
         const { error } = await (supabase as any)
           .from("org_members")
           .update({
@@ -88,12 +94,15 @@ export const TeamMemberDetailDrawer = ({
             phone: data.phone,
             notes: data.notes,
           })
-          .eq("user_id", member.user_id);
+          .eq(identCol, identVal);
 
         if (error) throw error;
         toast.success("Membre modifié avec succès");
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
+        // Sinon INSERT (nouveau membre)
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) throw new Error("Non authentifié");
 
         const { data: profile } = await (supabase as any)
@@ -104,16 +113,14 @@ export const TeamMemberDetailDrawer = ({
 
         if (!profile?.org_id) throw new Error("Organisation introuvable");
 
-        const { error } = await (supabase as any)
-          .from("org_members")
-          .insert({
-            org_id: profile.org_id,
-            first_name: data.first_name,
-            last_name: data.last_name,
-            email: data.email,
-            phone: data.phone,
-            notes: data.notes,
-          });
+        const { error } = await (supabase as any).from("org_members").insert({
+          org_id: profile.org_id,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone: data.phone,
+          notes: data.notes,
+        });
 
         if (error) throw error;
         toast.success("Membre ajouté avec succès");
@@ -123,8 +130,8 @@ export const TeamMemberDetailDrawer = ({
       setIsEditing(false);
       onOpenChange(false);
     } catch (error: any) {
-      console.error("Erreur lors de l'ajout du membre:", error);
-      toast.error("Impossible d'ajouter le membre");
+      console.error("Erreur lors de l'ajout/modification du membre:", error);
+      toast.error("Impossible d'enregistrer le membre");
     }
   };
 
@@ -139,12 +146,8 @@ export const TeamMemberDetailDrawer = ({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <SheetTitle className="text-xl md:text-3xl font-bold">
-                {fullName || "Nouveau membre"}
-              </SheetTitle>
-              <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">
-                {member?.email || ""}
-              </p>
+              <SheetTitle className="text-xl md:text-3xl font-bold">{fullName || "Nouveau membre"}</SheetTitle>
+              <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">{member?.email || ""}</p>
             </div>
           </div>
           {member && (
@@ -157,7 +160,6 @@ export const TeamMemberDetailDrawer = ({
 
       <div className="p-6 md:p-8 space-y-6 md:space-y-8">
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
-          {/* Prénom */}
           <div className="space-y-3">
             <Label htmlFor="first-name" className="text-base md:text-lg font-semibold text-foreground">
               Prénom
@@ -171,7 +173,6 @@ export const TeamMemberDetailDrawer = ({
             />
           </div>
 
-          {/* Nom */}
           <div className="space-y-3">
             <Label htmlFor="last-name" className="text-base md:text-lg font-semibold text-foreground">
               Nom
@@ -187,7 +188,6 @@ export const TeamMemberDetailDrawer = ({
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
-          {/* E-mail */}
           <div className="space-y-3">
             <Label htmlFor="email" className="text-base md:text-lg font-semibold text-foreground">
               E-mail de contact
@@ -202,7 +202,6 @@ export const TeamMemberDetailDrawer = ({
             />
           </div>
 
-          {/* Téléphone */}
           <div className="space-y-3">
             <Label htmlFor="phone" className="text-base md:text-lg font-semibold text-foreground">
               Téléphone (optionnel)
@@ -218,7 +217,6 @@ export const TeamMemberDetailDrawer = ({
           </div>
         </div>
 
-        {/* Commentaire */}
         <div className="space-y-3">
           <Label htmlFor="notes" className="text-base md:text-lg font-semibold text-foreground">
             Commentaire / Note interne
@@ -233,12 +231,11 @@ export const TeamMemberDetailDrawer = ({
           />
         </div>
 
-        {/* Actions */}
         {isEditing && (
           <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
-            <Button 
-              variant="outline" 
-              className="flex-1" 
+            <Button
+              variant="outline"
+              className="flex-1"
               type="button"
               onClick={() => {
                 if (member) {
@@ -264,9 +261,7 @@ export const TeamMemberDetailDrawer = ({
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent className="mx-4 mb-6 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-x-hidden">
-          <div className="overflow-y-auto overflow-x-hidden h-full">
-            {content}
-          </div>
+          <div className="overflow-y-auto overflow-x-hidden h-full">{content}</div>
         </DrawerContent>
       </Drawer>
     );
