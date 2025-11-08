@@ -1,4 +1,3 @@
-// ReceiptDetailDrawer.tsx
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +5,7 @@ import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
@@ -57,43 +56,36 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // ---------- MEMBRES: chargement robuste & logs ----------
+  // ---------- MEMBRES: chargement robuste ----------
   const [orgScopedMembers, setOrgScopedMembers] = useState<Member[]>([]);
   const [genericMembers, setGenericMembers] = useState<Member[]>([]);
   const [membersLoadNote, setMembersLoadNote] = useState<string>("");
 
-  // 1) Essai recommandé: RPC securitizer
+  const lastOrgIdRef = useRef<string | null>(null);
+
+  // RPC sécurisé (si dispo)
   const tryRpcMembers = async (orgId: string): Promise<Member[] | null> => {
     try {
       const { data, error } = await (supabase as any).rpc("get_org_members", { p_org_id: orgId });
-      if (error) {
-        console.warn("[Drawer] RPC get_org_members error:", error);
-        return null;
-      }
+      if (error) return null;
       if (!data) return [];
-      const mapped = (data as any[]).map((r) => ({
+      return (data as any[]).map((r) => ({
         id: (r.user_id ?? r.id) as string,
         name: (r.name as string) || "Membre sans nom",
       }));
-      return mapped;
-    } catch (e) {
-      console.warn("[Drawer] RPC get_org_members exception:", e);
+    } catch {
       return null;
     }
   };
 
-  // 2) Fallback: org_members -> profiles (filtré org_id)
+  // Fallback join org_members → profiles (scopé org)
   const tryJoinMembers = async (orgId: string): Promise<Member[] | null> => {
     try {
       const { data: orgMembers, error: e1 } = await (supabase as any)
         .from("org_members")
         .select("user_id")
         .eq("org_id", orgId);
-
-      if (e1) {
-        console.warn("[Drawer] org_members select error:", e1);
-        return null;
-      }
+      if (e1) return null;
       if (!orgMembers?.length) return [];
 
       const userIds = orgMembers.map((m: any) => m.user_id);
@@ -101,104 +93,167 @@ export const ReceiptDetailDrawer = ({
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", userIds);
-
-      if (e2) {
-        console.warn("[Drawer] profiles select error:", e2);
-        return null;
-      }
+      if (e2) return null;
       if (!profiles?.length) return [];
 
       return profiles.map((p: any) => ({
         id: p.user_id as string,
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
       }));
-    } catch (e) {
-      console.warn("[Drawer] tryJoinMembers exception:", e);
+    } catch {
       return null;
     }
   };
 
-  // 3) Dernier recours: générique (peut être bloqué par RLS)
+  // Dernier recours (non filtré org — utile en dev)
   const tryGenericMembers = async (): Promise<Member[] | null> => {
     try {
       const { data: orgMembers, error: e1 } = await (supabase as any).from("org_members").select("user_id");
-      if (e1) {
-        console.warn("[Drawer] generic org_members error:", e1);
-        return null;
-      }
+      if (e1) return null;
       if (!orgMembers?.length) return [];
-
       const userIds = orgMembers.map((m: any) => m.user_id);
       const { data: profiles, error: e2 } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", userIds);
-
-      if (e2) {
-        console.warn("[Drawer] generic profiles error:", e2);
-        return null;
-      }
+      if (e2) return null;
       if (!profiles?.length) return [];
-
       return profiles.map((p: any) => ({
         id: p.user_id as string,
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
       }));
-    } catch (e) {
-      console.warn("[Drawer] tryGenericMembers exception:", e);
+    } catch {
       return null;
     }
   };
 
-  // Charge à l’ouverture et à chaque reçu (org_id)
-  useEffect(() => {
-    const loadMembers = async () => {
-      setMembersLoadNote("");
-      if (!open) return;
-
-      // Si le parent a déjà injecté des membres, on n’insiste pas
-      if (members && members.length > 0) {
-        setOrgScopedMembers([]);
-        setGenericMembers([]);
-        return;
-      }
-
-      const orgId = detail?.org_id as string | undefined;
-      if (!orgId) {
-        setOrgScopedMembers([]);
-        // on tente un générique (utile en dev)
-        const gen = await tryGenericMembers();
-        setGenericMembers(gen ?? []);
-        if (gen === null) setMembersLoadNote("Accès refusé par RLS pour org_members/profiles (aucun org_id).");
-        return;
-      }
-
-      // 1) RPC (sécurisé, recommandé)
-      const rpc = await tryRpcMembers(orgId);
-      if (rpc !== null) {
-        setOrgScopedMembers(rpc);
-        if (rpc.length === 0) setMembersLoadNote("Aucun membre trouvé via RPC (vérifiez org_members / profiles).");
-        return;
-      }
-
-      // 2) Join fallback
-      const join = await tryJoinMembers(orgId);
-      if (join !== null) {
-        setOrgScopedMembers(join);
-        if (join.length === 0) setMembersLoadNote("Aucun membre dans cette organisation.");
-        return;
-      }
-
-      // 3) Dernier recours
+  // Charge à l’ouverture et à chaque org_id
+  const loadMembers = async (orgId?: string) => {
+    setMembersLoadNote("");
+    if (members && members.length > 0) {
+      setOrgScopedMembers([]);
+      setGenericMembers([]);
+      return;
+    }
+    if (!orgId) {
       const gen = await tryGenericMembers();
       setGenericMembers(gen ?? []);
-      if (gen === null) setMembersLoadNote("Accès refusé par RLS (org_members/profiles).");
-      else if (gen.length === 0) setMembersLoadNote("Aucun membre visible. Vérifiez les politiques RLS.");
-    };
+      if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
+      return;
+    }
+    const rpc = await tryRpcMembers(orgId);
+    if (rpc !== null) {
+      setOrgScopedMembers(rpc);
+      if (rpc.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
+      return;
+    }
+    const join = await tryJoinMembers(orgId);
+    if (join !== null) {
+      setOrgScopedMembers(join);
+      if (join.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
+      return;
+    }
+    const gen = await tryGenericMembers();
+    setGenericMembers(gen ?? []);
+    if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
+  };
 
-    loadMembers();
+  useEffect(() => {
+    if (!open) return;
+    const orgId = detail?.org_id as string | undefined;
+    loadMembers(orgId);
+    lastOrgIdRef.current = orgId ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, detail?.org_id, members?.length]);
+
+  // ===== TEMPS RÉEL: org_members (scopé org) + profils =====
+  useEffect(() => {
+    if (!open) return;
+    const orgId = (detail?.org_id as string) || null;
+    if (!orgId || members.length > 0) return; // parent override → pas besoin de live
+
+    // Abonnement org_members (insert/update/delete) filtré par org_id
+    const chan = (supabase as any)
+      .channel(`recus-drawer-org-members-${orgId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        async (payload: any) => {
+          // Sur INSERT: on récupère juste le nouveau profil et on fusionne
+          if (payload.eventType === "INSERT") {
+            const newUserId = payload.new?.user_id as string | undefined;
+            if (newUserId) {
+              const { data: prof } = (await (supabase as any)
+                .from("profiles")
+                .select("user_id, first_name, last_name")
+                .eq("user_id", newUserId)
+                .maybeSingle?.()) ?? { data: null };
+
+              const newMember: Member | null = prof
+                ? {
+                    id: prof.user_id,
+                    name: `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom",
+                  }
+                : { id: newUserId, name: "Membre sans nom" };
+
+              setOrgScopedMembers((prev) => {
+                const exists = prev.some((m) => m.id === newMember!.id);
+                return exists ? prev : [...prev, newMember!].sort((a, b) => a.name.localeCompare(b.name));
+              });
+              return;
+            }
+          }
+          // Sur UPDATE/DELETE (ou si on n’a pas l’id) → reload propre
+          const currentOrg = lastOrgIdRef.current ?? orgId;
+          loadMembers(currentOrg || undefined);
+        },
+      )
+      .subscribe();
+
+    // Abonnement aux profils des membres visibles (maj nom)
+    let profilesChan: any | null = null;
+    const attachProfilesChannel = async () => {
+      // On récupère l’ensemble des user_ids courants pour cibler le filtre
+      const curr = orgScopedMembers.length > 0 ? orgScopedMembers : genericMembers;
+      const ids = curr.map((m) => m.id);
+      if (ids.length === 0) return;
+
+      // ⚠️ Supabase ne supporte pas "IN" côté filtre realtime.
+      // On écoute toutes les updates sur profiles et on filtre côté client.
+      profilesChan = (supabase as any)
+        .channel(`recus-drawer-profiles-${orgId}`)
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
+          const uid = payload.new?.user_id as string | undefined;
+          if (!uid) return;
+          if (!ids.includes(uid)) return;
+          const name = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
+          setOrgScopedMembers((prev) => {
+            const idx = prev.findIndex((m) => m.id === uid);
+            if (idx === -1) return prev;
+            const copy = [...prev];
+            copy[idx] = { id: uid, name };
+            return copy;
+          });
+          setGenericMembers((prev) => {
+            const idx = prev.findIndex((m) => m.id === uid);
+            if (idx === -1) return prev;
+            const copy = [...prev];
+            copy[idx] = { id: uid, name };
+            return copy;
+          });
+        })
+        .subscribe();
+    };
+    attachProfilesChannel();
+
+    return () => {
+      try {
+        chan && (supabase as any).removeChannel?.(chan);
+        profilesChan && (supabase as any).removeChannel?.(profilesChan);
+      } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, detail?.org_id, members?.length, orgScopedMembers.length, genericMembers.length]);
 
   const effectiveMembers: Member[] =
     (members && members.length > 0 && members) ||
@@ -339,57 +394,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       });
     }
   };
-
-  // Helpers
-  function Row({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-        <span className="text-xs md:text-sm text-muted-foreground">{label} :</span>
-        {children}
-      </div>
-    );
-  }
-  function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div className="flex justify-between items-center py-1.5 border-b border-border">
-        <span className="text-xs text-muted-foreground">{label} :</span>
-        {children}
-      </div>
-    );
-  }
-  function EditableInput({
-    label,
-    field,
-    value,
-    onChange,
-    isEditing,
-    setActiveField,
-  }: {
-    label: string;
-    field: string;
-    value: string;
-    onChange: (v: string) => void;
-    isEditing: boolean;
-    setActiveField: (f: string | null) => void;
-  }) {
-    return (
-      <Row label={label}>
-        <input
-          type="text"
-          value={value || "—"}
-          onChange={(e) => isEditing && onChange(e.target.value)}
-          onFocus={() => setActiveField(field)}
-          onBlur={() => setActiveField(null)}
-          disabled={!isEditing}
-          className={cn(
-            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-          )}
-        />
-      </Row>
-    );
-  }
-  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
 
   // ---------- UI ----------
   const MembersSelectNote =
@@ -884,6 +888,57 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </div>
     </>
   ) : null;
+
+  // Helpers
+  function Row({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+        <span className="text-xs md:text-sm text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 border-b border-border">
+        <span className="text-xs text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function EditableInput({
+    label,
+    field,
+    value,
+    onChange,
+    isEditing,
+    setActiveField,
+  }: {
+    label: string;
+    field: string;
+    value: string;
+    onChange: (v: string) => void;
+    isEditing: boolean;
+    setActiveField: (f: string | null) => void;
+  }) {
+    return (
+      <Row label={label}>
+        <input
+          type="text"
+          value={value || "—"}
+          onChange={(e) => isEditing && onChange(e.target.value)}
+          onFocus={() => setActiveField(field)}
+          onBlur={() => setActiveField(null)}
+          disabled={!isEditing}
+          className={cn(
+            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+          )}
+        />
+      </Row>
+    );
+  }
+  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
 
   // Rendu
   if (isMobile) {
