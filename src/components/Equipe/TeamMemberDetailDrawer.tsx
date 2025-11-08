@@ -16,7 +16,7 @@ interface TeamMemberDetailDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: {
-    id?: string; // << ajouté: id de la ligne org_members (pour les membres sans user_id)
+    id?: string; // << ajouté : identifiant de la ligne org_members
     user_id?: string;
     first_name: string;
     last_name: string;
@@ -80,37 +80,42 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
 
   const onSubmit = async (data: MemberFormData) => {
     try {
-      // UPDATE si on a un identifiant fiable (user_id OU id de la ligne)
-      if (member?.user_id || member?.id) {
-        const identCol = member.user_id ? "user_id" : "id";
-        const identVal = member.user_id ?? member.id;
+      // --- EDIT ---
+      if (member?.id || member?.user_id) {
+        let query = (supabase as any).from("org_members").update({
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone: data.phone,
+          notes: data.notes,
+        });
 
-        const { error } = await (supabase as any)
-          .from("org_members")
-          .update({
-            first_name: data.first_name,
-            last_name: data.last_name,
-            email: data.email,
-            phone: data.phone,
-            notes: data.notes,
-          })
-          .eq(identCol, identVal);
+        // Priorité à l'id de ligne (fiable même si user_id est null)
+        if (member?.id) {
+          query = query.eq("id", member.id);
+        } else if (member?.user_id) {
+          query = query.eq("user_id", member.user_id);
+        }
 
+        const { error } = await query;
         if (error) throw error;
+
         toast.success("Membre modifié avec succès");
-      } else {
-        // Sinon INSERT (nouveau membre)
+      }
+      // --- CREATE ---
+      else {
         const {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) throw new Error("Non authentifié");
 
-        const { data: profile } = await (supabase as any)
+        const { data: profile, error: profileErr } = await (supabase as any)
           .from("profiles")
           .select("org_id")
           .eq("user_id", user.id)
           .single();
 
+        if (profileErr) throw profileErr;
         if (!profile?.org_id) throw new Error("Organisation introuvable");
 
         const { error } = await (supabase as any).from("org_members").insert({
@@ -126,11 +131,16 @@ export const TeamMemberDetailDrawer = ({ open, onOpenChange, member }: TeamMembe
         toast.success("Membre ajouté avec succès");
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["team-members"] });
+      // Rafraîchir les listes utilisées
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["team-members"] }),
+        queryClient.invalidateQueries({ queryKey: ["team-members-for-filter"] }),
+      ]);
+
       setIsEditing(false);
       onOpenChange(false);
     } catch (error: any) {
-      console.error("Erreur lors de l'ajout/modification du membre:", error);
+      console.error("Erreur lors de l'enregistrement du membre:", error);
       toast.error("Impossible d'enregistrer le membre");
     }
   };
