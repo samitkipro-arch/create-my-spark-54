@@ -75,49 +75,21 @@ const Dashboard = () => {
     },
   });
 
-  // >>> FIX: Load members (même orgId, RLS-safe) pour le filtre
+  // >>> MODIF UNIQUE : charger les membres directement depuis org_members (comme la page Équipe)
   const { data: members = [] } = useQuery({
-    queryKey: ["org-members-with-profiles"],
+    queryKey: ["org-members-for-filter"],
     queryFn: async () => {
-      // Récupère l’org_id du user courant
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth?.user?.id;
-      if (!userId) return [];
-
-      const { data: meProfile, error: meErr } = await (supabase as any)
-        .from("profiles")
-        .select("org_id")
-        .eq("user_id", userId)
-        .single();
-      if (meErr || !meProfile?.org_id) return [];
-
-      const orgId = meProfile.org_id;
-
-      // 1) membres actifs de cette org
-      const { data: orgMembers, error: omError } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("org_members")
-        .select("user_id")
-        .eq("org_id", orgId) // << filtre org
-        .eq("is_active", true);
-
-      if (omError) throw omError;
-      if (!orgMembers || orgMembers.length === 0) return [];
-
-      const userIds = orgMembers.map((om: any) => om.user_id);
-
-      // 2) profils des mêmes users dans la même org (RLS friendly)
-      const { data: profiles, error: pError } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name, email, org_id")
-        .in("user_id", userIds)
-        .eq("org_id", orgId) // << filtre org
+        .select("user_id, first_name, last_name, email, is_active")
+        .eq("is_active", true)
         .order("first_name");
 
-      if (pError) throw pError;
+      if (error) throw error;
 
-      return (profiles || []).map((p: any) => ({
-        id: p.user_id,
-        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.email || "Membre sans nom",
+      return (data || []).map((m: any) => ({
+        id: m.user_id,
+        name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       })) as any[];
     },
   });
@@ -283,7 +255,7 @@ const Dashboard = () => {
             </SelectContent>
           </Select>
 
-          {/* >>> FIX: assurer une valeur par défaut "all" */}
+          {/* valeur par défaut "all" conservée */}
           <Select value={storedMemberId ?? "all"} onValueChange={setMemberId}>
             <SelectTrigger className="w-full md:w-[250px]">
               <SelectValue placeholder="Tous les membres" />
