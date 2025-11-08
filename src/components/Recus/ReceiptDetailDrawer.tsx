@@ -340,6 +340,57 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     }
   };
 
+  // Helpers
+  function Row({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+        <span className="text-xs md:text-sm text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 border-b border-border">
+        <span className="text-xs text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function EditableInput({
+    label,
+    field,
+    value,
+    onChange,
+    isEditing,
+    setActiveField,
+  }: {
+    label: string;
+    field: string;
+    value: string;
+    onChange: (v: string) => void;
+    isEditing: boolean;
+    setActiveField: (f: string | null) => void;
+  }) {
+    return (
+      <Row label={label}>
+        <input
+          type="text"
+          value={value || "—"}
+          onChange={(e) => isEditing && onChange(e.target.value)}
+          onFocus={() => setActiveField(field)}
+          onBlur={() => setActiveField(null)}
+          disabled={!isEditing}
+          className={cn(
+            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+          )}
+        />
+      </Row>
+    );
+  }
+  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
+
   // ---------- UI ----------
   const MembersSelectNote =
     effectiveMembers.length === 0 && membersLoadNote ? (
@@ -833,57 +884,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </div>
     </>
   ) : null;
-
-  // Helpers
-  function Row({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-        <span className="text-xs md:text-sm text-muted-foreground">{label} :</span>
-        {children}
-      </div>
-    );
-  }
-  function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div className="flex justify-between items-center py-1.5 border-b border-border">
-        <span className="text-xs text-muted-foreground">{label} :</span>
-        {children}
-      </div>
-    );
-  }
-  function EditableInput({
-    label,
-    field,
-    value,
-    onChange,
-    isEditing,
-    setActiveField,
-  }: {
-    label: string;
-    field: string;
-    value: string;
-    onChange: (v: string) => void;
-    isEditing: boolean;
-    setActiveField: (f: string | null) => void;
-  }) {
-    return (
-      <Row label={label}>
-        <input
-          type="text"
-          value={value || "—"}
-          onChange={(e) => isEditing && onChange(e.target.value)}
-          onFocus={() => setActiveField(field)}
-          onBlur={() => setActiveField(null)}
-          disabled={!isEditing}
-          className={cn(
-            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-          )}
-        />
-      </Row>
-    );
-  }
-  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
 
   // Rendu
   if (isMobile) {
