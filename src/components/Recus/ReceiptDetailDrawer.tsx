@@ -422,7 +422,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
-                      <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
+                      <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
                         <SelectItem value="none">Aucun</SelectItem>
                         {effectiveMembers.map((m) => (
                           <SelectItem key={m.id} value={m.id}>
@@ -449,7 +449,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
-                      <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
+                      <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
                         <SelectItem value="none">Aucun</SelectItem>
                         {clients.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
@@ -649,7 +649,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
-                  <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
+                  <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
                     <SelectItem value="none">Aucun</SelectItem>
                     {effectiveMembers.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
@@ -673,7 +673,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
-                  <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
+                  <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
                     <SelectItem value="none">Aucun</SelectItem>
                     {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
