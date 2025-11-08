@@ -40,8 +40,7 @@ export const ReceiptDetailDrawer = ({
   // https://samilzr.app.n8n.cloud/webhook-test/test-simple
   // Idéalement via env : VITE_N8N_REPORT_URL
   const N8N_REPORT_URL =
-  (import.meta as any).env?.VITE_N8N_REPORT_URL ??
-  "https://samilzr.app.n8n.cloud/webhook-test/test-simple";
+    (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook-test/test-simple";
 
   // --- Ouvrir le rapport : ouvre l’onglet AVANT le fetch (anti pop-up block)
   const openReport = async () => {
@@ -165,16 +164,38 @@ export const ReceiptDetailDrawer = ({
   const tva = detail?.tva ?? 0;
   const ht = typeof ttc === "number" ? Math.max(ttc - (typeof tva === "number" ? tva : 0), 0) : null;
 
+  // -------- MODIF ICI : "Valider" sauvegarde aussi les champs corrigés --------
   const handleValidate = async () => {
     if (!detail?.id) return;
     try {
-      const { error } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
+      const { error } = await (supabase as any)
+        .from("recus")
+        .update({
+          status: "traite",
+          enseigne: editedData.enseigne,
+          numero_recu: editedData.numero_recu,
+          montant_ttc: editedData.montant_ttc,
+          tva: editedData.tva,
+          // si la colonne existe côté DB, on la renseigne aussi
+          montant_ht: editedData.montant_ttc - editedData.tva,
+          ville: editedData.ville,
+          adresse: editedData.adresse,
+          moyen_paiement: editedData.moyen_paiement,
+          categorie: editedData.categorie,
+          client_id: editedData.client_id || null,
+          processed_by: editedData.processed_by || null,
+        })
+        .eq("id", detail.id);
+
       if (error) throw error;
+      setIsEditing(false);
+      setActiveField(null);
       onOpenChange(false);
     } catch (err) {
       console.error("Erreur lors de la validation:", err);
     }
   };
+  // ---------------------------------------------------------------------------
 
   const handleCorrect = () => setIsEditing(true);
 
@@ -249,7 +270,7 @@ export const ReceiptDetailDrawer = ({
                       disabled={!isEditing}
                       className={cn(
                         "text-lg md:text-2xl font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
-                        isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                        isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                       )}
                     />
                   </div>
@@ -268,15 +289,13 @@ export const ReceiptDetailDrawer = ({
                         type="number"
                         step="0.01"
                         value={editedData.montant_ttc}
-                        onChange={(e) =>
-                          setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })
-                        }
+                        onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
                         onFocus={() => setActiveField("montant_ttc")}
                         onBlur={() => setActiveField(null)}
                         className={cn(
                           "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                           "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                          "cursor-text border-b-2 border-primary"
+                          "cursor-text border-b-2 border-primary",
                         )}
                         style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                       />
@@ -316,7 +335,7 @@ export const ReceiptDetailDrawer = ({
                           className={cn(
                             "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                             "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                            "cursor-text border-b border-primary"
+                            "cursor-text border-b border-primary",
                           )}
                           style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                         />
@@ -353,7 +372,7 @@ export const ReceiptDetailDrawer = ({
                     disabled={!isEditing}
                     className={cn(
                       "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                     )}
                   />
                 </div>
@@ -369,7 +388,7 @@ export const ReceiptDetailDrawer = ({
                     disabled={!isEditing}
                     className={cn(
                       "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                     )}
                   />
                 </div>
@@ -385,7 +404,7 @@ export const ReceiptDetailDrawer = ({
                     disabled={!isEditing}
                     className={cn(
                       "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                     )}
                   />
                 </div>
@@ -401,7 +420,7 @@ export const ReceiptDetailDrawer = ({
                     disabled={!isEditing}
                     className={cn(
                       "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                     )}
                   />
                 </div>
@@ -542,7 +561,7 @@ export const ReceiptDetailDrawer = ({
                 disabled={!isEditing}
                 className={cn(
                   "text-lg font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                 )}
               />
             </div>
@@ -557,7 +576,7 @@ export const ReceiptDetailDrawer = ({
                 disabled={!isEditing}
                 className={cn(
                   "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                 )}
               />
             </p>
@@ -587,7 +606,7 @@ export const ReceiptDetailDrawer = ({
                     className={cn(
                       "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                      "cursor-text border-b-2 border-primary"
+                      "cursor-text border-b-2 border-primary",
                     )}
                     style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                   />
@@ -622,7 +641,7 @@ export const ReceiptDetailDrawer = ({
                       className={cn(
                         "text-lg font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
                         "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                        "cursor-text border-b border-primary"
+                        "cursor-text border-b border-primary",
                       )}
                       style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                     />
@@ -655,7 +674,7 @@ export const ReceiptDetailDrawer = ({
                 disabled={!isEditing}
                 className={cn(
                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                 )}
               />
             </div>
@@ -671,7 +690,7 @@ export const ReceiptDetailDrawer = ({
                 disabled={!isEditing}
                 className={cn(
                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                 )}
               />
             </div>
@@ -687,7 +706,7 @@ export const ReceiptDetailDrawer = ({
                 disabled={!isEditing}
                 className={cn(
                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                 )}
               />
             </div>
@@ -703,7 +722,7 @@ export const ReceiptDetailDrawer = ({
                 disabled={!isEditing}
                 className={cn(
                   "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default"
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
                 )}
               />
             </div>
@@ -739,9 +758,7 @@ export const ReceiptDetailDrawer = ({
               {isEditing ? (
                 <Select
                   value={editedData.client_id || "none"}
-                  onValueChange={(value) =>
-                    setEditedData({ ...editedData, client_id: value === "none" ? "" : value })
-                  }
+                  onValueChange={(value) => setEditedData({ ...editedData, client_id: value === "none" ? "" : value })}
                 >
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
@@ -821,10 +838,12 @@ export const ReceiptDetailDrawer = ({
   // Desktop: Sheet
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="h-full w-full max-w-[520px] bg-card border-l border-border overflow-y-auto p-0">
+      <SheetContent
+        side="right"
+        className="h-full w-full max-w-[520px] bg-card border-l border-border overflow-y-auto p-0"
+      >
         {desktopContent}
       </SheetContent>
     </Sheet>
   );
 };
-
