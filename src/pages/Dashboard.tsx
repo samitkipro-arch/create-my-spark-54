@@ -75,16 +75,33 @@ const Dashboard = () => {
     },
   });
 
-  // >>> MODIF UNIQUE : charger les membres directement depuis org_members (comme la page Équipe)
+  // Load members for filter — direct depuis org_members (comme Équipe)
   const { data: members = [] } = useQuery({
-    queryKey: ["org-members-for-filter"],
+    queryKey: ["org-members-simple"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("org_members")
-        .select("user_id, first_name, last_name, email, is_active")
-        .eq("is_active", true)
-        .order("first_name");
+      // Optionnel : récupérer org_id pour être explicite (utile si RLS n’est pas encore strict)
+      const { data: auth } = await supabase.auth.getUser();
+      const me = auth?.user;
+      let orgId: string | null = null;
 
+      if (me?.id) {
+        const { data: meProfile } = await (supabase as any)
+          .from("profiles")
+          .select("org_id")
+          .eq("user_id", me.id)
+          .single();
+        orgId = meProfile?.org_id ?? null;
+      }
+
+      let query = (supabase as any)
+        .from("org_members")
+        .select("user_id, first_name, last_name, email, is_active, org_id")
+        .eq("is_active", true)
+        .order("first_name", { ascending: true });
+
+      if (orgId) query = query.eq("org_id", orgId);
+
+      const { data, error } = await query;
       if (error) throw error;
 
       return (data || []).map((m: any) => ({
@@ -255,7 +272,6 @@ const Dashboard = () => {
             </SelectContent>
           </Select>
 
-          {/* valeur par défaut "all" conservée */}
           <Select value={storedMemberId ?? "all"} onValueChange={setMemberId}>
             <SelectTrigger className="w-full md:w-[250px]">
               <SelectValue placeholder="Tous les membres" />
@@ -295,14 +311,10 @@ const Dashboard = () => {
             </p>
           </CardHeader>
           <CardContent>
-            {isLoadingReceipts ? (
-              <Skeleton className="h-64 w-full" />
-            ) : chart.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                Aucune donnée disponible
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 240 : 300}>
+            <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 240 : 300}>
+              {isLoadingReceipts || chart.length === 0 ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
                 <LineChart
                   data={chart}
                   margin={{
@@ -386,8 +398,8 @@ const Dashboard = () => {
                     }}
                   />
                 </LineChart>
-              </ResponsiveContainer>
-            )}
+              )}
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
