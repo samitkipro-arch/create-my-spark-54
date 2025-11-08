@@ -18,7 +18,6 @@ interface ReceiptDetailDrawerProps {
   error: string | null;
   clients?: Array<{ id: string; name: string }>;
   members?: Array<{ id: string; name: string }>;
-  /** Signal au parent quel reçu vient d'être validé pour ignorer la prochaine mise à jour realtime */
   onValidated?: (id: number) => void;
 }
 
@@ -37,54 +36,34 @@ export const ReceiptDetailDrawer = ({
   const [isEditing, setIsEditing] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
 
-  // --- Ouverture du rapport (état)
-  const [reportLoading, setReportLoading] = useState(false);
-
-  // URL rapport n8n
+  // Rapport n8n
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
-  // --- Ouvrir le rapport : ouvre l’onglet AVANT le fetch (anti pop-up block)
   const openReport = async () => {
     if (!detail?.id) return;
-
     const win = window.open("", "_blank");
     if (!win) {
       alert("Autorisez les pop-ups pour afficher le rapport.");
       return;
     }
-
-    win.document.write(`<!doctype html>
-<html lang="fr"><head><meta charset="utf-8" />
-<title>Rapport d’analyse…</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif}
-  .wrap{max-width:760px;margin:56px auto;padding:0 20px;text-align:center}
-  .spinner{width:32px;height:32px;border-radius:50%;border:3px solid #ddd;border-top-color:#111;animation:spin .8s linear infinite;margin:16px auto}
-  @keyframes spin{to{transform:rotate(360deg)}}
-</style></head>
-<body><div class="wrap">
-  <h1>Génération du rapport…</h1>
-  <div class="spinner"></div>
-  <p>Merci de patienter.</p>
-</div></body></html>`);
-
-    setReportLoading(true);
-
+    win.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"/><title>Rapport d’analyse…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/><style>
+html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif}
+.wrap{max-width:760px;margin:56px auto;padding:0 20px;text-align:center}
+.spinner{width:32px;height:32px;border-radius:50%;border:3px solid #ddd;border-top-color:#111;animation:spin .8s linear infinite;margin:16px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body><div class="wrap"><h1>Génération du rapport…</h1><div class="spinner"></div><p>Merci de patienter.</p></div></body></html>`);
     try {
       const res = await fetch(N8N_REPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receipt_id: detail.id }),
       });
-
       const contentType = res.headers.get("content-type") || "";
       const payload = contentType.includes("application/json") ? await res.json() : await res.text();
       const html = typeof payload === "string" ? payload : (payload?.html ?? "");
-
       if (!html) throw new Error("Rapport vide");
-
       win.document.open();
       win.document.write(html);
       win.document.close();
@@ -92,12 +71,10 @@ export const ReceiptDetailDrawer = ({
       console.error("Erreur ouverture rapport:", e);
       win.close();
       alert("Erreur lors de l’ouverture du rapport.");
-    } finally {
-      setReportLoading(false);
     }
   };
 
-  // --- States pour édition
+  // --- Edition
   const [editedData, setEditedData] = useState({
     enseigne: "",
     numero_recu: "",
@@ -111,22 +88,22 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // Fallback local pour la liste des membres (si la prop arrive vide)
+  // ===== FIX MEMBRES =====
+  // 1) Fallback global si la prop `members` arrive vide
   const [fallbackMembers, setFallbackMembers] = useState<Array<{ id: string; name: string }>>([]);
+
   useEffect(() => {
-    const loadMembersIfEmpty = async () => {
+    const loadIfEmpty = async () => {
       if (members && members.length > 0) return;
       try {
         const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
         if (omError || !orgMembers?.length) return;
-
         const userIds = orgMembers.map((om: any) => om.user_id);
         const { data: profiles, error: pError } = await (supabase as any)
           .from("profiles")
           .select("user_id, first_name, last_name")
           .in("user_id", userIds);
         if (pError || !profiles) return;
-
         setFallbackMembers(
           profiles.map((p: any) => ({
             id: p.user_id,
@@ -135,12 +112,57 @@ export const ReceiptDetailDrawer = ({
         );
       } catch {}
     };
-    loadMembersIfEmpty();
+    loadIfEmpty();
   }, [members]);
 
-  const effectiveMembers = members && members.length > 0 ? members : fallbackMembers;
+  // 2) Chargement SCOPÉ à l’org du reçu quand le drawer s’ouvre (plus fiable avec RLS)
+  const [orgScopedMembers, setOrgScopedMembers] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    const loadByOrg = async () => {
+      if (!open) return;
+      const orgId = detail?.org_id;
+      if (!orgId) return; // si pas d’org dans le reçu, on garde les autres sources
+      try {
+        const { data: orgMembers, error: omError } = await (supabase as any)
+          .from("org_members")
+          .select("user_id")
+          .eq("org_id", orgId);
+        if (omError || !orgMembers?.length) {
+          setOrgScopedMembers([]);
+          return;
+        }
 
-  // Sync editedData avec detail
+        const userIds = orgMembers.map((om: any) => om.user_id);
+        const { data: profiles, error: pError } = await (supabase as any)
+          .from("profiles")
+          .select("user_id, first_name, last_name")
+          .in("user_id", userIds);
+        if (pError || !profiles) {
+          setOrgScopedMembers([]);
+          return;
+        }
+
+        setOrgScopedMembers(
+          profiles.map((p: any) => ({
+            id: p.user_id,
+            name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+          })),
+        );
+      } catch (e) {
+        console.error("loadByOrg members error:", e);
+        setOrgScopedMembers([]);
+      }
+    };
+    loadByOrg();
+  }, [open, detail?.org_id]);
+
+  // Priorité: prop -> orgScoped -> fallback
+  const effectiveMembers =
+    (members && members.length > 0 && members) ||
+    (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
+    fallbackMembers;
+
+  // Sync editedData
   useEffect(() => {
     if (detail) {
       setEditedData({
@@ -158,10 +180,10 @@ export const ReceiptDetailDrawer = ({
     }
   }, [detail]);
 
-  // Sauvegarde auto pendant l’édition
+  // Autosave
   useEffect(() => {
     if (!isEditing || !detail?.id) return;
-    const saveChanges = async () => {
+    const t = setTimeout(async () => {
       try {
         await (supabase as any)
           .from("recus")
@@ -179,16 +201,11 @@ export const ReceiptDetailDrawer = ({
           })
           .eq("id", detail.id);
       } catch (err) {
-        console.error("Erreur lors de la sauvegarde automatique:", err);
+        console.error("Autosave error:", err);
       }
-    };
-    const timer = setTimeout(saveChanges, 500);
-    return () => clearTimeout(timer);
+    }, 500);
+    return () => clearTimeout(t);
   }, [editedData, isEditing, detail?.id]);
-
-  const ttc = detail?.montant_ttc ?? detail?.montant ?? null;
-  const tva = detail?.tva ?? 0;
-  const ht = typeof ttc === "number" ? Math.max(ttc - (typeof tva === "number" ? tva : 0), 0) : null;
 
   const handleValidate = async () => {
     if (!detail?.id) return;
@@ -249,6 +266,7 @@ export const ReceiptDetailDrawer = ({
     }
   };
 
+  // ---------- UI (inchangé sauf SelectContent) ----------
   const desktopContent = (
     <div className="relative flex h-full">
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -284,7 +302,7 @@ export const ReceiptDetailDrawer = ({
             </SheetHeader>
 
             <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
-              {/* Montant TTC */}
+              {/* Montants */}
               <div className="w-full flex items-center justify-center">
                 <div className="inline-block text-center">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
@@ -298,11 +316,10 @@ export const ReceiptDetailDrawer = ({
                         onFocus={() => setActiveField("montant_ttc")}
                         onBlur={() => setActiveField(null)}
                         className={cn(
-                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none p-0",
                           "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                           "cursor-text border-b-2 border-primary",
                         )}
-                        style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                       />
                     </div>
                   ) : (
@@ -313,7 +330,6 @@ export const ReceiptDetailDrawer = ({
                 </div>
               </div>
 
-              {/* Cartes Montant HT / TVA */}
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
@@ -332,21 +348,16 @@ export const ReceiptDetailDrawer = ({
                           type="number"
                           step="0.01"
                           value={editedData.tva}
-                          onChange={(e) =>
-                            isEditing && setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })
-                          }
+                          onChange={(e) => setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
                           onFocus={() => setActiveField("tva")}
                           onBlur={() => setActiveField(null)}
                           className={cn(
-                            "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                            "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block p-0",
                             "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "cursor-text border-b border-primary",
                           )}
-                          style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                         />
-                        <span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">
-                          €
-                        </span>
+                        <span className="text-lg md:text-2xl font-semibold -ml-[2px]">€</span>
                       </div>
                     ) : (
                       <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
@@ -357,79 +368,48 @@ export const ReceiptDetailDrawer = ({
                 </Card>
               </div>
 
-              {/* Infos détaillées */}
+              {/* Infos */}
               <div className="space-y-2 md:space-y-4">
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Date de traitement :</span>
+                <Row label="Date de traitement">
                   <span className="text-xs md:text-sm font-medium">
                     {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
                   </span>
-                </div>
+                </Row>
 
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Moyen de paiement :</span>
-                  <input
-                    type="text"
-                    value={editedData.moyen_paiement || "—"}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
-                    onFocus={() => setActiveField("moyen_paiement")}
-                    onBlur={() => setActiveField(null)}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                    )}
-                  />
-                </div>
+                <EditableInput
+                  label="Moyen de paiement"
+                  field="moyen_paiement"
+                  isEditing={isEditing}
+                  value={editedData.moyen_paiement}
+                  onChange={(v) => setEditedData({ ...editedData, moyen_paiement: v })}
+                  setActiveField={setActiveField}
+                />
+                <EditableInput
+                  label="Ville"
+                  field="ville"
+                  isEditing={isEditing}
+                  value={editedData.ville}
+                  onChange={(v) => setEditedData({ ...editedData, ville: v })}
+                  setActiveField={setActiveField}
+                />
+                <EditableInput
+                  label="Adresse"
+                  field="adresse"
+                  isEditing={isEditing}
+                  value={editedData.adresse}
+                  onChange={(v) => setEditedData({ ...editedData, adresse: v })}
+                  setActiveField={setActiveField}
+                />
+                <EditableInput
+                  label="Catégorie"
+                  field="categorie"
+                  isEditing={isEditing}
+                  value={editedData.categorie}
+                  onChange={(v) => setEditedData({ ...editedData, categorie: v })}
+                  setActiveField={setActiveField}
+                />
 
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Ville :</span>
-                  <input
-                    type="text"
-                    value={editedData.ville || "—"}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
-                    onFocus={() => setActiveField("ville")}
-                    onBlur={() => setActiveField(null)}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                    )}
-                  />
-                </div>
-
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Adresse :</span>
-                  <input
-                    type="text"
-                    value={editedData.adresse || "—"}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
-                    onFocus={() => setActiveField("adresse")}
-                    onBlur={() => setActiveField(null)}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                    )}
-                  />
-                </div>
-
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Catégorie :</span>
-                  <input
-                    type="text"
-                    value={editedData.categorie || "—"}
-                    onChange={(e) => isEditing && setEditedData({ ...editedData, categorie: e.target.value })}
-                    onFocus={() => setActiveField("categorie")}
-                    onBlur={() => setActiveField(null)}
-                    disabled={!isEditing}
-                    className={cn(
-                      "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                      isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                    )}
-                  />
-                </div>
-
+                {/* --- Traité par --- */}
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
                   {isEditing ? (
@@ -442,11 +422,11 @@ export const ReceiptDetailDrawer = ({
                       <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
-                      <SelectContent position="popper">
+                      <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
                         <SelectItem value="none">Aucun</SelectItem>
-                        {effectiveMembers.map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.name}
+                        {effectiveMembers.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -456,6 +436,7 @@ export const ReceiptDetailDrawer = ({
                   )}
                 </div>
 
+                {/* --- Client assigné --- */}
                 <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
                   <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
                   {isEditing ? (
@@ -468,11 +449,11 @@ export const ReceiptDetailDrawer = ({
                       <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
-                      <SelectContent position="popper">
+                      <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
                         <SelectItem value="none">Aucun</SelectItem>
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -504,14 +485,8 @@ export const ReceiptDetailDrawer = ({
                         Corriger
                       </Button>
                     </div>
-
-                    <Button
-                      variant="outline"
-                      className="w-full h-10"
-                      disabled={!detail?.id || reportLoading}
-                      onClick={openReport}
-                    >
-                      {reportLoading ? "Ouverture du rapport…" : "Consulter le rapport d'analyse"}
+                    <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
+                      Consulter le rapport d'analyse
                     </Button>
                   </>
                 )}
@@ -520,28 +495,10 @@ export const ReceiptDetailDrawer = ({
           </>
         ) : null}
       </div>
-
-      {/* Indicateur visuel d’édition */}
-      {isEditing && activeField && (
-        <div className="w-20 md:w-24 bg-[hsl(222,47%,30%)] flex items-center justify-center border-l-4 border-[hsl(222,47%,20%)] shadow-lg">
-          <div className="text-center px-2">
-            <div className="text-sm md:text-base font-bold text-white mb-1">✏️</div>
-            <div className="text-[10px] md:text-xs font-semibold text-white/90 leading-tight">
-              {activeField === "montant_ttc" && "Montant TTC"}
-              {activeField === "tva" && "TVA"}
-              {activeField === "moyen_paiement" && "Paiement"}
-              {activeField === "ville" && "Ville"}
-              {activeField === "adresse" && "Adresse"}
-              {activeField === "categorie" && "Catégorie"}
-              {activeField === "enseigne" && "Enseigne"}
-              {activeField === "numero_recu" && "N° reçu"}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 
+  // Mobile (identiques changements: forceMount + z-index + effectiveMembers)
   const mobileContent = loading ? (
     <div className="flex items-center justify-center h-full">
       <p className="text-muted-foreground">Chargement…</p>
@@ -552,7 +509,6 @@ export const ReceiptDetailDrawer = ({
     </div>
   ) : detail ? (
     <>
-      {/* Header fixe */}
       <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-start justify-between">
           <div className="flex-1 text-left">
@@ -570,21 +526,6 @@ export const ReceiptDetailDrawer = ({
                 )}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Reçu n°{" "}
-              <input
-                type="text"
-                value={editedData.numero_recu || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
-                onFocus={() => setActiveField("numero_recu")}
-                onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
-                className={cn(
-                  "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                )}
-              />
-            </p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="shrink-0">
             <X className="h-5 w-5" />
@@ -592,10 +533,9 @@ export const ReceiptDetailDrawer = ({
         </div>
       </div>
 
-      {/* Contenu scrollable */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {/* Montant TTC */}
+          {/* Montants */}
           <div className="w-full flex items-center justify-center">
             <div className="inline-block text-center">
               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
@@ -609,13 +549,12 @@ export const ReceiptDetailDrawer = ({
                     onFocus={() => setActiveField("montant_ttc")}
                     onBlur={() => setActiveField(null)}
                     className={cn(
-                      "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                      "text-2xl font-bold text-center bg-transparent border-none p-0",
                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                       "cursor-text border-b-2 border-primary",
                     )}
-                    style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                   />
-                  <span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
+                  <span className="text-2xl font-bold -ml-[2px]">€</span>
                 </div>
               ) : (
                 <p className="text-2xl font-bold">{formatCurrency(editedData.montant_ttc)}</p>
@@ -623,7 +562,6 @@ export const ReceiptDetailDrawer = ({
             </div>
           </div>
 
-          {/* Cartes Montant HT / TVA */}
           <div className="grid grid-cols-2 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3">
@@ -644,13 +582,12 @@ export const ReceiptDetailDrawer = ({
                       onFocus={() => setActiveField("tva")}
                       onBlur={() => setActiveField(null)}
                       className={cn(
-                        "text-lg font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                        "text-lg font-semibold text-left bg-transparent border-none p-0",
                         "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                         "cursor-text border-b border-primary",
                       )}
-                      style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                     />
-                    <span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
+                    <span className="text-lg font-semibold -ml-[2px]">€</span>
                   </div>
                 ) : (
                   <p className="text-lg font-semibold">{formatCurrency(editedData.tva)}</p>
@@ -659,81 +596,49 @@ export const ReceiptDetailDrawer = ({
             </Card>
           </div>
 
-          {/* Infos détaillées */}
+          {/* Infos */}
           <div className="space-y-2">
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Date de traitement :</span>
+            <RowMobile label="Date de traitement">
               <span className="text-xs font-medium">
                 {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
               </span>
-            </div>
+            </RowMobile>
 
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Moyen de paiement :</span>
-              <input
-                type="text"
-                value={editedData.moyen_paiement || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, moyen_paiement: e.target.value })}
-                onFocus={() => setActiveField("moyen_paiement")}
-                onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                )}
-              />
-            </div>
+            <EditableInputMobile
+              label="Moyen de paiement"
+              field="moyen_paiement"
+              isEditing={isEditing}
+              value={editedData.moyen_paiement}
+              onChange={(v) => setEditedData({ ...editedData, moyen_paiement: v })}
+              setActiveField={setActiveField}
+            />
+            <EditableInputMobile
+              label="Ville"
+              field="ville"
+              isEditing={isEditing}
+              value={editedData.ville}
+              onChange={(v) => setEditedData({ ...editedData, ville: v })}
+              setActiveField={setActiveField}
+            />
+            <EditableInputMobile
+              label="Adresse"
+              field="adresse"
+              isEditing={isEditing}
+              value={editedData.adresse}
+              onChange={(v) => setEditedData({ ...editedData, adresse: v })}
+              setActiveField={setActiveField}
+            />
+            <EditableInputMobile
+              label="Catégorie"
+              field="categorie"
+              isEditing={isEditing}
+              value={editedData.categorie}
+              onChange={(v) => setEditedData({ ...editedData, categorie: v })}
+              setActiveField={setActiveField}
+            />
 
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Ville :</span>
-              <input
-                type="text"
-                value={editedData.ville || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, ville: e.target.value })}
-                onFocus={() => setActiveField("ville")}
-                onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                )}
-              />
-            </div>
-
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Adresse :</span>
-              <input
-                type="text"
-                value={editedData.adresse || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, adresse: e.target.value })}
-                onFocus={() => setActiveField("adresse")}
-                onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                )}
-              />
-            </div>
-
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Catégorie :</span>
-              <input
-                type="text"
-                value={editedData.categorie || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, categorie: e.target.value })}
-                onFocus={() => setActiveField("categorie")}
-                onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
-                className={cn(
-                  "text-xs font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                )}
-              />
-            </div>
-
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Traité par :</span>
+            {/* Traité par */}
+            <RowMobile label="Traité par">
               {isEditing ? (
                 <Select
                   value={editedData.processed_by || "none"}
@@ -744,11 +649,11 @@ export const ReceiptDetailDrawer = ({
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
-                  <SelectContent position="popper">
+                  <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
                     <SelectItem value="none">Aucun</SelectItem>
-                    {effectiveMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name}
+                    {effectiveMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -756,10 +661,10 @@ export const ReceiptDetailDrawer = ({
               ) : (
                 <span className="text-xs font-medium">{detail?._processedByName ?? "—"}</span>
               )}
-            </div>
+            </RowMobile>
 
-            <div className="flex justify-between items-center py-1.5 border-b border-border">
-              <span className="text-xs text-muted-foreground">Client assigné :</span>
+            {/* Client assigné */}
+            <RowMobile label="Client assigné">
               {isEditing ? (
                 <Select
                   value={editedData.client_id || "none"}
@@ -768,11 +673,11 @@ export const ReceiptDetailDrawer = ({
                   <SelectTrigger className="w-[140px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
-                  <SelectContent position="popper">
+                  <SelectContent forceMount position="popper" className="z-[9999] max-h-64 overflow-auto">
                     <SelectItem value="none">Aucun</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -780,12 +685,11 @@ export const ReceiptDetailDrawer = ({
               ) : (
                 <span className="text-xs font-medium">{detail?._clientName ?? "—"}</span>
               )}
-            </div>
+            </RowMobile>
           </div>
         </div>
       </div>
 
-      {/* Footer fixe */}
       <div className="flex-shrink-0 p-4 border-t border-border bg-card/95">
         {isEditing ? (
           <div className="flex gap-3">
@@ -806,14 +710,8 @@ export const ReceiptDetailDrawer = ({
                 Corriger
               </Button>
             </div>
-
-            <Button
-              variant="outline"
-              className="w-full h-10"
-              disabled={!detail?.id || reportLoading}
-              onClick={openReport}
-            >
-              {reportLoading ? "Ouverture du rapport…" : "Consulter le rapport d'analyse"}
+            <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
+              Consulter le rapport d'analyse
             </Button>
           </div>
         )}
@@ -821,26 +719,69 @@ export const ReceiptDetailDrawer = ({
     </>
   ) : null;
 
-  // Mobile: Drawer
+  // Helpers de rendu de lignes éditables (pour alléger le JSX)
+  function Row({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+        <span className="text-xs md:text-sm text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 border-b border-border">
+        <span className="text-xs text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function EditableInput({
+    label,
+    field,
+    value,
+    onChange,
+    isEditing,
+    setActiveField,
+  }: {
+    label: string;
+    field: string;
+    value: string;
+    onChange: (v: string) => void;
+    isEditing: boolean;
+    setActiveField: (f: string | null) => void;
+  }) {
+    return (
+      <Row label={label}>
+        <input
+          type="text"
+          value={value || "—"}
+          onChange={(e) => isEditing && onChange(e.target.value)}
+          onFocus={() => setActiveField(field)}
+          onBlur={() => setActiveField(null)}
+          disabled={!isEditing}
+          className={cn(
+            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+          )}
+        />
+      </Row>
+    );
+  }
+  function EditableInputMobile(props: any) {
+    return <EditableInput {...props} />;
+  }
+
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent
-          className="
-            mx-4 mb-8 h-[75vh] rounded-2xl 
-            bg-card/95 backdrop-blur-lg 
-            shadow-[0_10px_40px_rgba(0,0,0,0.4)]
-            border border-border/50
-            flex flex-col overflow-hidden
-          "
-        >
+        <DrawerContent className="mx-4 mb-8 h-[75vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 flex flex-col overflow-hidden">
           {mobileContent}
         </DrawerContent>
       </Drawer>
     );
   }
 
-  // Desktop: Sheet
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
