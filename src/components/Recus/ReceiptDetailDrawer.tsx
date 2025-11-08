@@ -18,6 +18,8 @@ interface ReceiptDetailDrawerProps {
   error: string | null;
   clients?: Array<{ id: string; name: string }>;
   members?: Array<{ id: string; name: string }>;
+  /** Signal au parent quel reçu vient d'être validé pour ignorer la prochaine mise à jour realtime */
+  onValidated?: (id: number) => void;
 }
 
 export const ReceiptDetailDrawer = ({
@@ -28,6 +30,7 @@ export const ReceiptDetailDrawer = ({
   error,
   clients = [],
   members = [],
+  onValidated,
 }: ReceiptDetailDrawerProps) => {
   const isMobile = useIsMobile();
 
@@ -167,6 +170,9 @@ export const ReceiptDetailDrawer = ({
   const handleValidate = async () => {
     if (!detail?.id) return;
     try {
+      // >>> IMPORTANT : prévenir le parent AVANT l’UPDATE pour ignorer le prochain event realtime
+      onValidated?.(detail.id);
+      // <<<
       const { error } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
       if (error) throw error;
       onOpenChange(false);
