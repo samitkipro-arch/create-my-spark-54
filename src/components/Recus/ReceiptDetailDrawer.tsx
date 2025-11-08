@@ -19,7 +19,6 @@ interface ReceiptDetailDrawerProps {
   error: string | null;
   clients?: Array<{ id: string; name: string }>;
   members?: Array<{ id: string; name: string }>;
-  /** Appelé au moment de la validation pour ignorer la prochaine maj realtime côté parent */
   onValidated?: (id: number) => void;
 }
 
@@ -38,11 +37,10 @@ export const ReceiptDetailDrawer = ({
   const [isEditing, setIsEditing] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
 
-  // URL rapport n8n
+  // Rapport n8n
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
-  // Ouvre un onglet puis remplit le HTML renvoyé par n8n
   const openReport = async () => {
     if (!detail?.id) return;
     const win = window.open("", "_blank");
@@ -92,15 +90,19 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   });
 
   /**
-   * ===== CHARGEMENT FIABLE DES MEMBRES PAR ORG (org_id) =====
-   * Priorité: props `members` (venues du parent) > orgScopedMembers (par org_id du reçu) > fallbackMembers (essai générique)
+   * ================== MEMBRES (100% ORG-SCOPÉ) ==================
+   * On tente dans l'ordre :
+   * 1) `members` passés par le parent (déjà chargés ailleurs)
+   * 2) lecture directe dans `profiles` filtré par `org_id` (le plus fiable si votre table a org_id)
+   * 3) fallback via `org_members` -> ids -> `profiles`
+   * 4) dernier recours: essai générique (peut être bloqué par RLS)
    */
   const [orgScopedMembers, setOrgScopedMembers] = useState<Array<{ id: string; name: string }>>([]);
   const [fallbackMembers, setFallbackMembers] = useState<Array<{ id: string; name: string }>>([]);
 
-  // Charge les membres liés à l'org du reçu quand le drawer s'ouvre (compatibles RLS)
+  // 2) Essai direct: profiles par org_id (prend l'ID utilisable pour processed_by: user_id si présent, sinon id)
   useEffect(() => {
-    const loadByOrg = async () => {
+    const loadProfilesByOrg = async () => {
       if (!open) return;
       const orgId = detail?.org_id;
       if (!orgId) {
@@ -108,44 +110,67 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         return;
       }
       try {
-        const { data: orgMembers, error: omError } = await (supabase as any)
+        const { data: profs, error } = await (supabase as any)
+          .from("profiles")
+          .select("user_id, id, first_name, last_name, org_id")
+          .eq("org_id", orgId);
+
+        if (error) {
+          console.warn("[Drawer] profiles by org_id error:", error);
+          setOrgScopedMembers([]);
+          return;
+        }
+
+        if (profs && profs.length > 0) {
+          setOrgScopedMembers(
+            profs.map((p: any) => ({
+              // on privilégie user_id pour rester compatible avec processed_by existant
+              id: (p.user_id ?? p.id) as string,
+              name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+            })),
+          );
+          return;
+        }
+
+        // 3) Fallback via org_members -> profiles si profiles.org_id n'existe pas / est vide
+        const { data: orgMembers, error: e1 } = await (supabase as any)
           .from("org_members")
           .select("user_id")
           .eq("org_id", orgId);
 
-        if (omError || !orgMembers?.length) {
+        if (e1 || !orgMembers?.length) {
           setOrgScopedMembers([]);
           return;
         }
 
         const userIds = orgMembers.map((m: any) => m.user_id);
-        const { data: profiles, error: pError } = await (supabase as any)
+        const { data: profs2, error: e2 } = await (supabase as any)
           .from("profiles")
           .select("user_id, first_name, last_name")
           .in("user_id", userIds);
 
-        if (pError || !profiles) {
+        if (e2 || !profs2?.length) {
           setOrgScopedMembers([]);
           return;
         }
 
         setOrgScopedMembers(
-          profiles.map((p: any) => ({
-            id: p.user_id,
+          profs2.map((p: any) => ({
+            id: p.user_id as string,
             name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
           })),
         );
       } catch (e) {
-        console.error("[Drawer] loadByOrg error:", e);
+        console.error("[Drawer] loadProfilesByOrg fatal:", e);
         setOrgScopedMembers([]);
       }
     };
-    loadByOrg();
+    loadProfilesByOrg();
   }, [open, detail?.org_id]);
 
-  // Si aucune prop et aucun orgScoped, tenter un fallback générique (peut être bloqué par RLS)
+  // 4) Dernier recours générique (si ni props ni orgScoped n'ont rendu quelque chose)
   useEffect(() => {
-    const loadFallback = async () => {
+    const loadGeneric = async () => {
       if ((members && members.length) || (orgScopedMembers && orgScopedMembers.length)) {
         setFallbackMembers([]);
         return;
@@ -168,11 +193,11 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           })),
         );
       } catch (e) {
-        console.error("[Drawer] loadFallback error:", e);
+        console.error("[Drawer] loadGeneric error:", e);
         setFallbackMembers([]);
       }
     };
-    loadFallback();
+    loadGeneric();
   }, [members, orgScopedMembers]);
 
   const effectiveMembers =
@@ -180,7 +205,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
     fallbackMembers;
 
-  // Sync editedData depuis le détail
+  // Sync editedData
   useEffect(() => {
     if (detail) {
       setEditedData({
@@ -198,7 +223,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     }
   }, [detail]);
 
-  // Sauvegarde auto pendant l’édition
+  // Autosave
   useEffect(() => {
     if (!isEditing || !detail?.id) return;
     const t = setTimeout(async () => {
@@ -817,19 +842,11 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     return <EditableInput {...props} />;
   }
 
-  // Rendu: Drawer mobile / Sheet desktop
+  // Rendu
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent
-          className="
-            mx-4 mb-8 h-[75vh] rounded-2xl 
-            bg-card/95 backdrop-blur-lg 
-            shadow-[0_10px_40px_rgba(0,0,0,0.4)]
-            border border-border/50
-            flex flex-col overflow-hidden
-          "
-        >
+        <DrawerContent className="mx-4 mb-8 h-[75vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 flex flex-col overflow-hidden">
           {mobileContent}
         </DrawerContent>
       </Drawer>
