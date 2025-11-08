@@ -220,9 +220,10 @@ const Recus = () => {
         return [];
       }
 
+      // La RPC retourne déjà le champ 'name' combiné
       return (data || []).map((r: any) => ({
         id: r.user_id,
-        name: `${r.first_name || ""} ${r.last_name || ""}`.trim() || "Membre sans nom",
+        name: r.name,
       })) as Member[];
     },
   });

@@ -73,7 +73,7 @@ export const ReceiptDetailDrawer = ({
       }
       const loaded = (data as any[] || []).map((r: any) => ({
         id: r.user_id as string,
-        name: `${r.first_name || ""} ${r.last_name || ""}`.trim() || "Membre sans nom",
+        name: r.name as string, // La RPC retourne déjà le nom combiné
       }));
       setOrgMembers(loaded);
       if (loaded.length === 0) {
