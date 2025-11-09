@@ -541,13 +541,23 @@ const Recus = () => {
                       >
                         {/* pastille sélection */}
                         <div
-                          className="absolute right-3 top-3"
+                          className="absolute right-3 top-3 z-10"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleOne(String(receipt.id));
                           }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          role="button"
+                          aria-label="Sélectionner le reçu"
                         >
-                          <Checkbox checked={checked} onCheckedChange={() => toggleOne(String(receipt.id))} />
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleOne(String(receipt.id))}
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
                         </div>
 
                         <div className="flex items-start justify-between pr-8">
@@ -569,7 +579,7 @@ const Recus = () => {
                           </div>
                         </div>
 
-                        {/* Ligne basse : uniquement Client (Traité par retiré) */}
+                        {/* Ligne basse : uniquement Client */}
                         <div className="flex items-center justify-between text-xs">
                           <div className="text-muted-foreground">
                             Client : <span className="text-foreground">{clientName || "—"}</span>
