@@ -34,14 +34,14 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
           {/* Bouton 'Choisir un client' */}
           <Select value={clientId} onValueChange={setClientId}>
             <SelectTrigger
-              className="appearance-none relative h-11 md:h-12 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium pl-5 pr-12 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A]"
+              className="relative h-11 md:h-12 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium pl-5 pr-12 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A] [&>svg]:hidden"
               style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             >
               <div className="w-full text-center">
                 <SelectValue placeholder="Choisir un client" className="text-[#0D1B2A]" />
               </div>
 
-              {/* Chevron toujours visible à droite */}
+              {/* Chevron manuel à droite */}
               <ChevronDown
                 className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 w-4 h-4 opacity-80 pointer-events-none text-[#0D1B2A]"
                 aria-hidden="true"
