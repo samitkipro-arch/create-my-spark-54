@@ -518,7 +518,7 @@ const Recus = () => {
               </div>
             ) : (
               <>
-                {/* Mobile: Cards */}
+                {/* Mobile: Cards (TTC + TVA, pas de "Traité par") */}
                 <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
@@ -539,7 +539,7 @@ const Recus = () => {
                           setIsDrawerOpen(true);
                         }}
                       >
-                        {/* pastille sélection */}
+                        {/* pastille sélection (cliquable sans ouvrir le drawer) */}
                         <div
                           className="absolute right-3 top-3 z-10"
                           onClick={(e) => {
@@ -567,7 +567,6 @@ const Recus = () => {
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
 
-                        {/* TTC + TVA (HT retiré) */}
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
                             <span className="text-muted-foreground text-xs">TTC: </span>
@@ -579,7 +578,6 @@ const Recus = () => {
                           </div>
                         </div>
 
-                        {/* Ligne basse : uniquement Client */}
                         <div className="flex items-center justify-between text-xs">
                           <div className="text-muted-foreground">
                             Client : <span className="text-foreground">{clientName || "—"}</span>
@@ -590,7 +588,7 @@ const Recus = () => {
                   })}
                 </div>
 
-                {/* Desktop: Table */}
+                {/* Desktop: Table (inchangé) */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
