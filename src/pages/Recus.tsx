@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowDownUp, Plus, Search, Link2 } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
+import CreateClientLinkDialog from "@/components/Recus/CreateClientLinkDialog"; // ← AJOUT
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
@@ -53,6 +54,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 const Recus = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isClientLinkOpen, setIsClientLinkOpen] = useState(false); // ← AJOUT
 
   // Global filters
   const {
@@ -437,9 +439,7 @@ const Recus = () => {
             {/* === Nouveau bouton : Créer un lien client === */}
             <Button
               className="gap-2 flex-1 md:flex-initial"
-              onClick={() => {
-                // action à brancher plus tard (modal/flow de création)
-              }}
+              onClick={() => setIsClientLinkOpen(true)} // ← AJOUT
             >
               <Link2 className="w-4 h-4" />
               <span className="hidden sm:inline">Créer un lien client</span>
@@ -746,6 +746,10 @@ const Recus = () => {
             ignoreNextUpdateForId.current = id;
           }}
         />
+
+        {/* === Fenêtre "Créer un lien client" (UI only) === */}
+        <CreateClientLinkDialog open={isClientLinkOpen} onOpenChange={setIsClientLinkOpen} clients={clients} />
+        {/* =============================================== */}
 
         {/* Export Dialog */}
         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
