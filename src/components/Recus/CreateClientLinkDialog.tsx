@@ -18,7 +18,7 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-[560px] md:max-w-[580px] rounded-2xl md:rounded-3xl py-7 md:py-8 px-5 md:px-7 bg-[#0B1220] text-white border-none">
+      <DialogContent className="w-[92vw] max-w-[520px] rounded-2xl md:rounded-3xl py-7 md:py-8 px-5 md:px-7 bg-[#0B1220] text-white border-none">
         {/* Texte d'intro */}
         <div className="text-center space-y-2 mb-5">
           <p className="font-semibold leading-snug text-[15px] md:text-[16px] text-white">
@@ -34,7 +34,7 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
           {/* Bouton 'Choisir un client' */}
           <Select value={clientId} onValueChange={setClientId}>
             <SelectTrigger
-              className="relative h-12 md:h-14 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium pl-5 pr-12 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A]"
+              className="appearance-none relative h-11 md:h-12 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium pl-5 pr-12 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A]"
               style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             >
               <div className="w-full text-center">
@@ -60,7 +60,7 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
           {/* Bouton 'Créer un lien' */}
           <Button
             type="button"
-            className="w-full h-12 md:h-14 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium gap-2 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A]"
+            className="w-full h-11 md:h-12 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium gap-2 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A]"
             style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             onClick={() => {
               // (Action à brancher plus tard — génération du lien)
