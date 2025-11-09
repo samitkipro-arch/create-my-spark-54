@@ -45,7 +45,7 @@ export const ReceiptDetailDrawer = ({
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
-  // ----------------- Edition + recalcul instantané -----------------
+  // --- Edition + recalcul instantané (TTC pilote, HT & TVA suivent le taux constant) ---
   const [editedData, setEditedData] = useState({
     enseigne: "",
     numero_recu: "",
@@ -60,21 +60,39 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // recalcul synchronisé TTC = HT + TVA
+  // Taux de TVA "gelé" pendant la correction (dérivé des valeurs initiales)
+  const baseVatRateRef = useRef(0); // ex: 0.20 pour 20%
+
   const recalcFrom = (source: "ttc" | "ht" | "tva", next: Partial<typeof editedData>) => {
     let ttc = "montant_ttc" in next ? Number(next.montant_ttc) : editedData.montant_ttc;
     let ht = "montant_ht" in next ? Number(next.montant_ht) : editedData.montant_ht;
     let tva = "tva" in next ? Number(next.tva) : editedData.tva;
 
+    const r = Math.max(0, Math.min(1, baseVatRateRef.current || 0)); // clamp [0,1]
+
     if (source === "ttc") {
-      // TTC change -> on garde TVA, on ajuste HT
-      ht = round2(ttc - tva);
+      if (r > 0) {
+        ht = round2(ttc / (1 + r));
+        tva = round2(ttc - ht);
+      } else {
+        // Pas de taux détectable → garder TVA telle quelle et ajuster HT
+        ht = round2(ttc - tva);
+      }
     } else if (source === "ht") {
-      // HT change -> on garde TTC, on ajuste TVA
-      tva = round2(ttc - ht);
+      if (r > 0) {
+        tva = round2(ht * r);
+        ttc = round2(ht + tva);
+      } else {
+        tva = round2(ttc - ht);
+      }
     } else if (source === "tva") {
-      // TVA change -> on garde TTC, on ajuste HT
-      ht = round2(ttc - tva);
+      if (r > 0) {
+        // si l’utilisateur modifie TVA, on recalcule HT en respectant le taux (inverse)
+        ht = r > 0 ? round2(tva / r) : ht;
+        ttc = round2(ht + tva);
+      } else {
+        ht = round2(ttc - tva);
+      }
     }
 
     return { montant_ttc: ttc, montant_ht: ht, tva };
@@ -115,13 +133,11 @@ export const ReceiptDetailDrawer = ({
       currentOrgIdRef.current = null;
       return;
     }
-
     if (members && members.length > 0) {
       setOrgMembers([]);
       setMembersError("");
       return;
     }
-
     const orgId = detail?.org_id as string | undefined;
     if (!orgId) {
       setOrgMembers([]);
@@ -129,7 +145,6 @@ export const ReceiptDetailDrawer = ({
       currentOrgIdRef.current = null;
       return;
     }
-
     if (currentOrgIdRef.current !== orgId) {
       setOrgMembers([]);
       setMembersError("");
@@ -216,26 +231,33 @@ export const ReceiptDetailDrawer = ({
 
   // ----------------- Sync & autosave -----------------
   useEffect(() => {
-    if (detail) {
-      const ttc = detail?.montant_ttc ?? detail?.montant ?? 0;
-      const tva = detail?.tva ?? 0;
-      const ht = detail?.montant_ht ?? round2(ttc - tva);
-      setEditedData({
-        enseigne: detail?.enseigne ?? "",
-        numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: ttc,
-        montant_ht: ht,
-        tva,
-        ville: detail?.ville ?? "",
-        adresse: detail?.adresse ?? "",
-        moyen_paiement: detail?.moyen_paiement ?? "",
-        categorie: detail?.categorie ?? "",
-        client_id: detail?.client_id ?? "",
-        processed_by: detail?.processed_by ?? "",
-      });
-    }
+    if (!detail) return;
+
+    const ttc = detail?.montant_ttc ?? detail?.montant ?? 0;
+    // Si HT manquant, le reconstituer
+    const htFromDetail = detail?.montant_ht ?? (detail?.tva != null ? round2(ttc - detail.tva) : 0);
+    const tvaFromDetail = detail?.tva ?? round2(ttc - htFromDetail);
+
+    // Taux initial = TVA / HT (si possible)
+    const baseRate = htFromDetail > 0 ? tvaFromDetail / htFromDetail : 0;
+    baseVatRateRef.current = Math.max(0, Math.min(1, baseRate)); // clamp
+
+    setEditedData({
+      enseigne: detail?.enseigne ?? "",
+      numero_recu: detail?.numero_recu ?? "",
+      montant_ttc: round2(ttc),
+      montant_ht: round2(htFromDetail),
+      tva: round2(tvaFromDetail),
+      ville: detail?.ville ?? "",
+      adresse: detail?.adresse ?? "",
+      moyen_paiement: detail?.moyen_paiement ?? "",
+      categorie: detail?.categorie ?? "",
+      client_id: detail?.client_id ?? "",
+      processed_by: detail?.processed_by ?? "",
+    });
   }, [detail]);
 
+  // autosave (TTC/HT/TVA inclus)
   useEffect(() => {
     if (!isEditing || !detail?.id) return;
     const t = setTimeout(async () => {
@@ -246,7 +268,7 @@ export const ReceiptDetailDrawer = ({
             enseigne: editedData.enseigne,
             numero_recu: editedData.numero_recu,
             montant_ttc: editedData.montant_ttc,
-            montant_ht: editedData.montant_ht, // <<< autosave HT aussi
+            montant_ht: editedData.montant_ht,
             tva: editedData.tva,
             ville: editedData.ville,
             adresse: editedData.adresse,
@@ -318,7 +340,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           enseigne: editedData.enseigne,
           numero_recu: editedData.numero_recu,
           montant_ttc: editedData.montant_ttc,
-          montant_ht: editedData.montant_ht, // <<< save HT aussi
+          montant_ht: editedData.montant_ht,
           tva: editedData.tva,
           ville: editedData.ville,
           adresse: editedData.adresse,
@@ -339,24 +361,28 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   const handleCancel = () => {
     setIsEditing(false);
     setActiveField(null);
-    if (detail) {
-      const ttc = detail?.montant_ttc ?? detail?.montant ?? 0;
-      const tva = detail?.tva ?? 0;
-      const ht = detail?.montant_ht ?? round2(ttc - tva);
-      setEditedData({
-        enseigne: detail?.enseigne ?? "",
-        numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: ttc,
-        montant_ht: ht,
-        tva,
-        ville: detail?.ville ?? "",
-        adresse: detail?.adresse ?? "",
-        moyen_paiement: detail?.moyen_paiement ?? "",
-        categorie: detail?.categorie ?? "",
-        client_id: detail?.client_id ?? "",
-        processed_by: detail?.processed_by ?? "",
-      });
-    }
+    if (!detail) return;
+
+    const ttc = detail?.montant_ttc ?? detail?.montant ?? 0;
+    const ht = detail?.montant_ht ?? (detail?.tva != null ? round2(ttc - detail.tva) : 0);
+    const tva = detail?.tva ?? round2(ttc - ht);
+
+    // reset taux aussi
+    baseVatRateRef.current = ht > 0 ? tva / ht : 0;
+
+    setEditedData({
+      enseigne: detail?.enseigne ?? "",
+      numero_recu: detail?.numero_recu ?? "",
+      montant_ttc: round2(ttc),
+      montant_ht: round2(ht),
+      tva: round2(tva),
+      ville: detail?.ville ?? "",
+      adresse: detail?.adresse ?? "",
+      moyen_paiement: detail?.moyen_paiement ?? "",
+      categorie: detail?.categorie ?? "",
+      client_id: detail?.client_id ?? "",
+      processed_by: detail?.processed_by ?? "",
+    });
   };
 
   // ---------- UI ----------
@@ -450,7 +476,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </SheetHeader>
 
             <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
-              {/* Montant TTC */}
+              {/* Montant TTC (pilote) */}
               <div className="w-full flex items-center justify-center">
                 <div className="inline-block text-center">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
@@ -484,7 +510,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </div>
               </div>
 
-              {/* Cartes HT / TVA (toutes deux synchronisées) */}
+              {/* Cartes HT / TVA (synchronisées au taux) */}
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
@@ -646,6 +672,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                           <SelectValue placeholder="Sélectionner" />
                         </SelectTrigger>
                         <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                          {/** Option "Aucun" pour remettre à null */}
                           <SelectItem value="none">Aucun</SelectItem>
                           {clients.map((c) => (
                             <SelectItem key={c.id} value={c.id}>
@@ -747,7 +774,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {/* Montant TTC */}
+          {/* Montant TTC (pilote) */}
           <div className="w-full flex items-center justify-center">
             <div className="inline-block text-center">
               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
@@ -780,7 +807,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </div>
           </div>
 
-          {/* HT/TVA */}
+          {/* HT/TVA synchronisés */}
           <div className="grid grid-cols-2 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3">
