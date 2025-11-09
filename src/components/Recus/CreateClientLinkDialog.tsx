@@ -62,7 +62,7 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
             }}
           >
             <Link2 className="w-4 h-4 text-[#0D1B2A]" />
-            Crée un lien +
+            Crée un lien
           </Button>
         </div>
       </DialogContent>
