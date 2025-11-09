@@ -1,866 +1,904 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { MainLayout } from "@/components/Layout/MainLayout";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ArrowDownUp, Plus, Search } from "lucide-react";
-import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
-import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
-import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent } from "@/components/ui/card";
+import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useGlobalFilters } from "@/stores/useGlobalFilters";
-import { useQuery } from "@tanstack/react-query";
-import { toast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency, formatDateTime } from "@/lib/formatters";
 
-type Receipt = {
-  id: number;
-  created_at: string | null;
-  date_traitement?: string | null;
-  date_recu?: string | null;
-  numero_recu?: string | null;
-  receipt_number?: number | null;
-  enseigne?: string | null;
-  adresse?: string | null;
-  ville?: string | null;
-  montant_ht?: number | null;
-  montant_ttc?: number | null;
-  tva?: number | null;
-  moyen_paiement?: string | null;
-  status?: string | null;
-  client_id?: string | null;
-  processed_by?: string | null;
-  category_id?: string | null;
-  org_id?: string | null;
-};
-
-type Client = { id: string; name: string };
-type Member = { id: string; name: string };
-
-// --- debounce helper ---
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
+interface ReceiptDetailDrawerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  detail: any;
+  loading: boolean;
+  error: string | null;
+  clients?: Array<{ id: string; name: string }>;
+  members?: Array<{ id: string; name: string }>;
+  onValidated?: (id: number) => void;
 }
 
-const Recus = () => {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+type Member = { id: string; name: string };
 
-  // Global filters
-  const {
-    dateRange: storedDateRange,
-    clientId: storedClientId,
-    memberId: storedMemberId,
-    setClientId,
-    setMemberId,
-  } = useGlobalFilters();
+// --- helpers ---
+const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
 
-  // Local filters
-  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-  const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
-  const [searchQuery, setSearchQuery] = useState("");
+/**
+ * Infère le taux de TVA à partir des valeurs actuelles du reçu.
+ * Si impossible, fallback à 20% (0.2).
+ */
+function inferVatRate(detail: any): number {
+  const ht = Number(detail?.montant_ht) || 0;
+  const tva = Number(detail?.tva) || 0;
+  if (ht > 0 && tva >= 0) {
+    const r = tva / ht;
+    if (Number.isFinite(r) && r >= 0 && r <= 1) return r; // protège contre des valeurs aberrantes
+  }
+  return 0.2;
+}
 
-  // Export selection
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exportMethod, setExportMethod] = useState<"sheets" | "pdf" | "">("");
-  const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
-  const [exportLoading, setExportLoading] = useState(false);
+export const ReceiptDetailDrawer = ({
+  open,
+  onOpenChange,
+  detail,
+  loading,
+  error,
+  clients = [],
+  members = [],
+  onValidated,
+}: ReceiptDetailDrawerProps) => {
+  const isMobile = useIsMobile();
 
-  // PDF modal state
-  const [pdfModalOpen, setPdfModalOpen] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [activeField, setActiveField] = useState<string | null>(null);
 
-  // n8n webhook (PROD)
-  const N8N_EXPORT_URL =
-    (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/export-receipt";
+  // Taux de TVA utilisé pour recalculer automatiquement TVA & HT pendant l'édition
+  const [vatRate, setVatRate] = useState<number>(0.2);
 
-  const debouncedQuery = useDebounce(searchQuery, 400);
+  const N8N_REPORT_URL =
+    (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
-  // Selection helpers
-  const toggleOne = (id: string) =>
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
-  const resetExportUI = () => {
-    setSelectedIds([]);
-    setExportOpen(false);
-    setExportMethod("");
-    setSheetsSpreadsheetId("");
+  // ----------------- Edition -----------------
+  const [editedData, setEditedData] = useState({
+    enseigne: "",
+    numero_recu: "",
+    montant_ttc: 0,
+    tva: 0, // TVA est calculée automatiquement à partir du TTC + vatRate
+    ville: "",
+    adresse: "",
+    moyen_paiement: "",
+    categorie: "",
+    client_id: "",
+    processed_by: "",
+  });
+
+  // ---------- MEMBRES: chargement scopé org + temps réel ----------
+  const [orgMembers, setOrgMembers] = useState<Member[]>([]);
+  const [membersError, setMembersError] = useState<string>("");
+  const currentOrgIdRef = useRef<string | null>(null);
+
+  const loadOrgMembers = async (orgId: string) => {
+    setMembersError("");
+    try {
+      const { data, error } = await (supabase as any).rpc("get_org_members", { p_org_id: orgId });
+      if (error) {
+        console.error("❌ RPC get_org_members error:", error);
+        setMembersError("Erreur de chargement des membres.");
+        setOrgMembers([]);
+        return;
+      }
+      const loaded = ((data as any[]) || []).map((r: any) => ({
+        id: r.user_id as string,
+        name: r.name as string,
+      }));
+      setOrgMembers(loaded);
+      if (loaded.length === 0) {
+        setMembersError("Aucun membre dans cette organisation.");
+      }
+    } catch (err) {
+      console.error("❌ loadOrgMembers exception:", err);
+      setMembersError("Erreur de chargement des membres.");
+      setOrgMembers([]);
+    }
   };
 
-  // Submit export
-  const handleExportSubmit = async () => {
-    if (!exportMethod || selectedIds.length === 0) {
-      toast({
-        title: "Sélection incomplète",
-        description: "Choisissez une méthode et des reçus.",
-        variant: "destructive",
-      });
+  // Charger les membres quand le drawer s'ouvre ou que l'org change
+  useEffect(() => {
+    if (!open) {
+      setOrgMembers([]);
+      setMembersError("");
+      currentOrgIdRef.current = null;
       return;
     }
 
-    setExportLoading(true);
-    try {
-      const payload: any = {
-        method: exportMethod, // "sheets" | "pdf"
-        receipt_ids: selectedIds, // array of ids (string[])
-      };
-
-      if (exportMethod === "sheets" && sheetsSpreadsheetId) {
-        payload.sheet_url = sheetsSpreadsheetId;
-      }
-
-      const res = await fetch(N8N_EXPORT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const contentType = res.headers.get("content-type") || "";
-
-      if (exportMethod === "pdf" && contentType.includes("application/pdf")) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        setPdfUrl(url);
-        setPdfModalOpen(true);
-        resetExportUI();
-        setExportLoading(false);
-        return;
-      }
-
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {}
-
-      if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-
-      const link = data?.sheet_url || data?.download_url;
-      if (link) window.open(link, "_blank");
-      else if (exportMethod === "sheets") {
-        toast({ title: "Export Google Sheets", description: "Export déclenché." });
-      }
-
-      resetExportUI();
-    } catch (err: any) {
-      console.error("Export error:", err);
-      toast({
-        title: "Erreur d’export",
-        description: "Une erreur est survenue lors de l’export.",
-        variant: "destructive",
-      });
-    } finally {
-      setExportLoading(false);
+    if (members && members.length > 0) {
+      setOrgMembers([]);
+      setMembersError("");
+      return;
     }
-  };
 
-  // Drawer détail
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<any | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const orgId = detail?.org_id as string | undefined;
+    if (!orgId) {
+      setOrgMembers([]);
+      setMembersError("Aucune organisation associée.");
+      currentOrgIdRef.current = null;
+      return;
+    }
 
-  const currentOpenReceiptId = useRef<number | null>(null);
-  const isDrawerOpenRef = useRef(false);
+    if (currentOrgIdRef.current !== orgId) {
+      setOrgMembers([]);
+      setMembersError("");
+      loadOrgMembers(orgId);
+      currentOrgIdRef.current = orgId;
+    }
+  }, [open, detail?.org_id, members]);
 
-  // >>> FIX: empêcher la réouverture après "Valider"
-  const ignoreNextUpdateForId = useRef<number | null>(null);
-  // <<<
-
-  // Clients
-  const { data: clients = [], refetch: refetchClients } = useQuery({
-    queryKey: ["clients"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("clients")
-        .select("id, name")
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return (data || []) as Client[];
-    },
-  });
-
-  // Members (org_members -> profiles) avec filtre par org
-  const { data: members = [], refetch: refetchMembers } = useQuery({
-    queryKey: ["members-with-profiles"],
-    queryFn: async () => {
-      // Récupérer l'org_id de l'utilisateur courant
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return [];
-
-      const { data: profile, error: profileError } = await (supabase as any)
-        .from("profiles")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (profileError || !profile?.org_id) {
-        console.error("Error fetching user org_id:", profileError);
-        return [];
-      }
-
-      // Utiliser la RPC pour récupérer les membres de l'org
-      const { data, error } = await (supabase as any).rpc("get_org_members", {
-        p_org_id: profile.org_id,
-      });
-
-      if (error) {
-        console.error("Error fetching org members:", error);
-        return [];
-      }
-
-      // La RPC retourne déjà le champ 'name' combiné
-      return (data || []).map((r: any) => ({
-        id: r.user_id,
-        name: r.name,
-      })) as Member[];
-    },
-  });
-
-  // Maps pour noms (clients / membres)
-  const clientNameById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients]);
-  const memberNameById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
-
-  // Receipts list
-  const {
-    data: receipts = [],
-    isLoading: loading,
-    error: queryError,
-    refetch,
-  } = useQuery({
-    queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("recus")
-        .select(
-          "id, created_at, date_traitement, date_recu, numero_recu, receipt_number, enseigne, adresse, ville, montant_ht, montant_ttc, tva, moyen_paiement, status, client_id, processed_by, category_id, org_id",
-        );
-
-      if (storedDateRange.from && storedDateRange.to) {
-        query = query.gte("date_traitement", storedDateRange.from);
-        query = query.lte("date_traitement", storedDateRange.to);
-      }
-      if (storedClientId && storedClientId !== "all") {
-        query = query.eq("client_id", storedClientId);
-      }
-      if (storedMemberId && storedMemberId !== "all") {
-        query = query.eq("processed_by", storedMemberId);
-      }
-      if (selectedStatus && selectedStatus !== "all") {
-        query = query.eq("status", selectedStatus);
-      }
-      if (debouncedQuery) {
-        const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
-        query = query.or(`numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`);
-      }
-
-      query = query.order("date_traitement", { ascending: sortOrder === "asc", nullsFirst: false });
-      query = query.order("created_at", { ascending: sortOrder === "asc" });
-      query = query.limit(100);
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        created_at: r.created_at ?? null,
-        date_traitement: r.date_traitement ?? null,
-        date_recu: r.date_recu ?? null,
-        numero_recu: r.numero_recu ?? null,
-        receipt_number: r.receipt_number ?? null,
-        enseigne: r.enseigne ?? null,
-        adresse: r.adresse ?? null,
-        ville: r.ville ?? null,
-        montant_ht: r.montant_ht ?? null,
-        montant_ttc: r.montant_ttc ?? null,
-        tva: r.tva ?? null,
-        moyen_paiement: r.moyen_paiement ?? null,
-        status: r.status ?? null,
-        client_id: r.client_id ?? null,
-        processed_by: r.processed_by ?? null,
-        category_id: r.category_id ?? null,
-        org_id: r.org_id ?? null,
-      })) as Receipt[];
-    },
-  });
-
-  const error = queryError ? (queryError as any).message : null;
-
-  // Drawer detail fetch
+  // TEMPS RÉEL: membres + profils
   useEffect(() => {
-    if (!selectedId || !isDrawerOpen) return;
-    (async () => {
-      setDetailLoading(true);
-      setDetailError(null);
-      try {
-        const { data: r, error: e1 } = await (supabase as any).from("recus").select("*").eq("id", selectedId).single();
-        if (e1) throw e1;
+    if (!open) return;
+    const orgId = detail?.org_id as string | undefined;
+    if (!orgId || (members && members.length > 0)) return;
 
-        const receiptData = r as any;
+    const channelName = `receipt-drawer-members-${orgId}`;
+    const channel = (supabase as any)
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        async (payload: any) => {
+          const newUserId = payload.new?.user_id;
+          if (!newUserId) return;
 
-        let processedByName: string | null = null;
-        let clientName: string | null = null;
-
-        if (receiptData?.processed_by) {
-          const { data: p } = await (supabase as any)
+          const { data: prof } = await (supabase as any)
             .from("profiles")
-            .select("first_name, last_name")
-            .eq("user_id", receiptData.processed_by)
+            .select("user_id, first_name, last_name")
+            .eq("user_id", newUserId)
             .maybeSingle();
-          const profileData = p as any;
-          processedByName = profileData
-            ? `${profileData.first_name ?? ""} ${profileData.last_name ?? ""}`.trim()
-            : null;
-        }
 
-        if (receiptData?.client_id) {
-          const { data: c } = await (supabase as any)
-            .from("clients")
-            .select("name")
-            .eq("id", receiptData.client_id)
-            .maybeSingle();
-          const clientData = c as any;
-          clientName = clientData?.name ?? null;
-        }
+          const newMember: Member = {
+            id: newUserId,
+            name: prof
+              ? `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom"
+              : "Membre sans nom",
+          };
 
-        setDetail({ ...receiptData, _processedByName: processedByName, _clientName: clientName });
-      } catch (err: any) {
-        setDetailError(err?.message || "Erreur lors du chargement du reçu");
-        setDetail(null);
-      } finally {
-        setDetailLoading(false);
-      }
-    })();
-  }, [selectedId, isDrawerOpen]);
-
-  useEffect(() => {
-    isDrawerOpenRef.current = isDrawerOpen;
-  }, [isDrawerOpen]);
-
-  // Realtime
-  useEffect(() => {
-    const recusChannel = supabase
-      .channel("recus-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, (payload) => {
-        const newRecu = payload.new as Receipt;
-        refetch();
-
-        if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== newRecu.id) {
-          currentOpenReceiptId.current = newRecu.id;
-          setSelectedId(newRecu.id);
-          setDetail(null);
-          setDetailError(null);
-          setIsDrawerOpen(true);
-          toast({
-            title: "Nouveau reçu analysé !",
-            description: `${newRecu.enseigne || "Reçu"} - ${formatCurrency(newRecu.montant_ttc)}`,
+          setOrgMembers((prev) => {
+            if (prev.some((m) => m.id === newUserId)) return prev;
+            return [...prev, newMember].sort((a, b) => a.name.localeCompare(b.name));
           });
-        }
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "recus" }, (payload) => {
-        const updatedRecu = payload.new as Receipt;
-        const oldRecu = payload.old as Receipt;
-
-        // >>> FIX: si on vient de valider localement ce reçu, ignorer CETTE mise à jour
-        if (ignoreNextUpdateForId.current === updatedRecu.id) {
-          ignoreNextUpdateForId.current = null;
-          refetch();
-          return;
-        }
-        // <<<
-
-        refetch();
-
-        const shouldOpen =
-          (!!updatedRecu.receipt_number && !oldRecu.receipt_number) ||
-          (updatedRecu.status === "traite" && oldRecu.status !== "traite");
-
-        if (shouldOpen) {
-          if (!isDrawerOpenRef.current || currentOpenReceiptId.current !== updatedRecu.id) {
-            currentOpenReceiptId.current = updatedRecu.id;
-            setSelectedId(updatedRecu.id);
-            setDetail(null);
-            setDetailError(null);
-            setIsDrawerOpen(true);
-            toast({
-              title: "Reçu validé !",
-              description: `${updatedRecu.enseigne || "Reçu"} n°${updatedRecu.receipt_number || "—"}`,
-            });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        (payload: any) => {
+          const deletedUserId = payload.old?.user_id;
+          if (!deletedUserId) return;
+          setOrgMembers((prev) => prev.filter((m) => m.id !== deletedUserId));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+        () => {
+          if (currentOrgIdRef.current) {
+            loadOrgMembers(currentOrgIdRef.current);
           }
-        }
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "recus" }, () => {
-        refetch();
-      })
+        },
+      )
       .subscribe();
 
-    const clientsChannel = supabase
-      .channel("clients-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => refetchClients())
-      .subscribe();
+    const profilesChannel = (supabase as any)
+      .channel(`receipt-drawer-profiles-${orgId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
+        const updatedUserId = payload.new?.user_id;
+        if (!updatedUserId) return;
 
-    const membersChannel = supabase
-      .channel("members-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "org_members" }, () => refetchMembers())
+        setOrgMembers((prev) => {
+          const exists = prev.find((m) => m.id === updatedUserId);
+          if (!exists) return prev;
+          const newName =
+            `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
+          return prev
+            .map((m) => (m.id === updatedUserId ? { ...m, name: newName } : m))
+            .sort((a, b) => a.name.localeCompare(b.name));
+        });
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(recusChannel);
-      supabase.removeChannel(clientsChannel);
-      supabase.removeChannel(membersChannel);
+      (supabase as any).removeChannel(channel);
+      (supabase as any).removeChannel(profilesChannel);
     };
-  }, [refetch, refetchClients, refetchMembers]);
+  }, [open, detail?.org_id, members]);
 
+  const effectiveMembers: Member[] = members && members.length > 0 ? members : orgMembers;
+
+  // ----------------- Sync & TVA auto -----------------
+  // Quand on charge un reçu, on synchronise les champs et on infère le taux de TVA.
   useEffect(() => {
-    if (!isDrawerOpen) currentOpenReceiptId.current = null;
-    else if (selectedId) currentOpenReceiptId.current = selectedId;
-  }, [isDrawerOpen, selectedId]);
+    if (detail) {
+      const rate = inferVatRate(detail);
+      setVatRate(rate);
 
-  return (
-    <MainLayout>
-      <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
-          <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            <Button
-              variant="outline"
-              className="flex-1 md:flex-initial"
-              onClick={() => {
-                if (selectedIds.length === 0) {
-                  toast({
-                    title: "Aucun reçu sélectionné",
-                    description: "Sélectionnez au moins un reçu.",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                setExportOpen(true);
-              }}
-            >
-              {selectedIds.length > 0 ? `Exporter (${selectedIds.length})` : "Exporter"}
-            </Button>
+      setEditedData({
+        enseigne: detail?.enseigne ?? "",
+        numero_recu: detail?.numero_recu ?? "",
+        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
+        tva: Number.isFinite(detail?.tva)
+          ? Number(detail.tva)
+          : round2((Number(detail?.montant_ttc) || 0) - (Number(detail?.montant_ht) || 0)),
+        ville: detail?.ville ?? "",
+        adresse: detail?.adresse ?? "",
+        moyen_paiement: detail?.moyen_paiement ?? "",
+        categorie: detail?.categorie ?? "",
+        client_id: detail?.client_id ?? "",
+        processed_by: detail?.processed_by ?? "",
+      });
+    }
+  }, [detail]);
 
-            <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsDialogOpen(true)}>
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Ajouter un reçu</span>
-              <span className="sm:hidden">Ajouter</span>
-            </Button>
+  // TVA suit TTC en temps réel pendant l’édition (TVA non éditable)
+  useEffect(() => {
+    if (!isEditing) return;
+    setEditedData((prev) => {
+      const ttc = Number(prev.montant_ttc) || 0;
+      const ht = ttc / (1 + vatRate);
+      const newTva = ttc - ht; // évite les erreurs d’arrondi croisés
+      if (round2(newTva) === round2(prev.tva)) return prev;
+      return { ...prev, tva: round2(newTva) };
+    });
+  }, [editedData.montant_ttc, vatRate, isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Autosave
+  useEffect(() => {
+    if (!isEditing || !detail?.id) return;
+    const t = setTimeout(async () => {
+      try {
+        await (supabase as any)
+          .from("recus")
+          .update({
+            enseigne: editedData.enseigne,
+            numero_recu: editedData.numero_recu,
+            montant_ttc: editedData.montant_ttc,
+            tva: editedData.tva, // TVA recalculée sauvegardée
+            ville: editedData.ville,
+            adresse: editedData.adresse,
+            moyen_paiement: editedData.moyen_paiement,
+            categorie: editedData.categorie,
+            client_id: editedData.client_id || null,
+            processed_by: editedData.processed_by || null,
+          })
+          .eq("id", detail.id);
+      } catch (err) {
+        console.error("Autosave error:", err);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [editedData, isEditing, detail?.id]);
+
+  const handleValidate = async () => {
+    if (!detail?.id) return;
+    try {
+      onValidated?.(detail.id);
+      const { error: e } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
+      if (e) throw e;
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Erreur lors de la validation:", err);
+    }
+  };
+
+  const openReport = async () => {
+    if (!detail?.id) return;
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Autorisez les pop-ups pour afficher le rapport.");
+      return;
+    }
+    win.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"/><title>Rapport d’analyse…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/><style>
+html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif}
+.wrap{max-width:760px;margin:56px auto;padding:0 20px;text-align:center}
+.spinner{width:32px;height:32px;border-radius:50%;border:3px solid #ddd;border-top-color:#111;animation:spin .8s linear infinite;margin:16px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body><div class="wrap"><h1>Génération du rapport…</h1><div class="spinner"></div><p>Merci de patienter.</p></div></body></html>`);
+    try {
+      const res = await fetch(N8N_REPORT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt_id: detail.id }),
+      });
+      const contentType = res.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json") ? await res.json() : await res.text();
+      const html = typeof payload === "string" ? payload : (payload?.html ?? "");
+      if (!html) throw new Error("Rapport vide");
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } catch (e) {
+      console.error("Erreur ouverture rapport:", e);
+      win.close();
+      alert("Erreur lors de l’ouverture du rapport.");
+    }
+  };
+
+  const handleSave = async () => {
+    if (!detail?.id) return;
+    try {
+      const { error: e } = await (supabase as any)
+        .from("recus")
+        .update({
+          enseigne: editedData.enseigne,
+          numero_recu: editedData.numero_recu,
+          montant_ttc: editedData.montant_ttc,
+          tva: editedData.tva,
+          ville: editedData.ville,
+          adresse: editedData.adresse,
+          moyen_paiement: editedData.moyen_paiement,
+          categorie: editedData.categorie,
+          client_id: editedData.client_id || null,
+          processed_by: editedData.processed_by || null,
+        })
+        .eq("id", detail.id);
+      if (e) throw e;
+      setIsEditing(false);
+      setActiveField(null);
+    } catch (err) {
+      console.error("Erreur lors de la sauvegarde:", err);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setActiveField(null);
+    if (detail) {
+      // Reset aux valeurs serveur
+      const rate = inferVatRate(detail);
+      setVatRate(rate);
+      setEditedData({
+        enseigne: detail?.enseigne ?? "",
+        numero_recu: detail?.numero_recu ?? "",
+        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
+        tva: Number.isFinite(detail?.tva)
+          ? Number(detail.tva)
+          : round2((Number(detail?.montant_ttc) || 0) - (Number(detail?.montant_ht) || 0)),
+        ville: detail?.ville ?? "",
+        adresse: detail?.adresse ?? "",
+        moyen_paiement: detail?.moyen_paiement ?? "",
+        categorie: detail?.categorie ?? "",
+        client_id: detail?.client_id ?? "",
+        processed_by: detail?.processed_by ?? "",
+      });
+    }
+  };
+
+  // ---------- UI ----------
+  const MembersSelectNote =
+    effectiveMembers.length === 0 && membersError ? (
+      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersError}</div>
+    ) : null;
+
+  function Row({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+        <span className="text-xs md:text-sm text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+  function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="flex justify-between items-center py-1.5 border-b border-border">
+        <span className="text-xs text-muted-foreground">{label} :</span>
+        {children}
+      </div>
+    );
+  }
+
+  function EditableInput({
+    label,
+    field,
+    value,
+    onChange,
+    isEditing,
+    setActiveField,
+  }: {
+    label: string;
+    field: string;
+    value: string;
+    onChange: (v: string) => void;
+    isEditing: boolean;
+    setActiveField: (f: string | null) => void;
+  }) {
+    return (
+      <Row label={label}>
+        <input
+          type="text"
+          value={value || "—"}
+          onChange={(e) => isEditing && onChange(e.target.value)}
+          onFocus={() => setActiveField(field)}
+          onBlur={() => setActiveField(null)}
+          disabled={!isEditing}
+          className={cn(
+            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
+            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+          )}
+        />
+      </Row>
+    );
+  }
+  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
+
+  const desktopContent = (
+    <div className="relative flex h-full">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">Chargement…</p>
           </div>
-        </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-destructive text-sm">{error}</p>
+          </div>
+        ) : detail ? (
+          <>
+            <SheetHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1 text-left">
+                  <div className="flex items-baseline gap-2">
+                    <input
+                      type="text"
+                      value={editedData.enseigne || "—"}
+                      onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
+                      onFocus={() => setActiveField("enseigne")}
+                      onBlur={() => setActiveField(null)}
+                      disabled={!isEditing}
+                      className={cn(
+                        "text-lg md:text-2xl font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
+                        isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+            </SheetHeader>
 
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-200">
-          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
-            <SelectTrigger className="w-full md:w-[240px]">
-              <ArrowDownUp className="w-4 h-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="desc">Du plus récent au plus ancien</SelectItem>
-              <SelectItem value="asc">Du plus ancien au plus récent</SelectItem>
-            </SelectContent>
-          </Select>
+            <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
+              {/* Montant TTC (seul champ éditable côté montants) */}
+              <div className="w-full flex items-center justify-center">
+                <div className="inline-block text-center">
+                  <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
+                  {isEditing ? (
+                    <div className="inline-flex items-baseline gap-0">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editedData.montant_ttc}
+                        onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                        onFocus={() => setActiveField("montant_ttc")}
+                        onBlur={() => setActiveField(null)}
+                        className={cn(
+                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                          "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                          "cursor-text border-b-2 border-primary",
+                        )}
+                        style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-2xl md:text-4xl font-bold whitespace-nowrap tabular-nums">
+                      {formatCurrency(editedData.montant_ttc)}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-          <Select value={storedClientId} onValueChange={setClientId}>
-            <SelectTrigger className="w-full md:w-[220px]">
-              <SelectValue placeholder="Tous les clients" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les clients</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              {/* Cartes HT / TVA : non éditables, suivent TTC */}
+              <div className="grid grid-cols-2 gap-3 md:gap-4">
+                <Card>
+                  <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
+                    <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
+                    <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
+                      {formatCurrency(round2(editedData.montant_ttc - editedData.tva))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
+                    <p className="text-xs md:text-sm text-muted-foreground mb-1">TVA :</p>
+                    <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
+                      {formatCurrency(editedData.tva)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
 
-          <Select value={storedMemberId || "all"} onValueChange={setMemberId}>
-            <SelectTrigger className="w-full md:w-[220px]">
-              <SelectValue placeholder="Tous les membres" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les membres</SelectItem>
-              {members.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              {/* Infos détaillées */}
+              <div className="space-y-2 md:space-y-4">
+                <Row label="Date de traitement">
+                  <span className="text-xs md:text-sm font-medium">
+                    {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
+                  </span>
+                </Row>
 
-          <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as typeof selectedStatus)}>
-            <SelectTrigger className="w-full md:w-[160px]">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les statuts</SelectItem>
-              <SelectItem value="traite">Traité</SelectItem>
-              <SelectItem value="en_cours">En cours</SelectItem>
-              <SelectItem value="en_attente">En attente</SelectItem>
-            </SelectContent>
-          </Select>
+                <EditableInput
+                  label="Moyen de paiement"
+                  field="moyen_paiement"
+                  isEditing={isEditing}
+                  value={editedData.moyen_paiement}
+                  onChange={(v) => setEditedData({ ...editedData, moyen_paiement: v })}
+                  setActiveField={setActiveField}
+                />
+                <EditableInput
+                  label="Ville"
+                  field="ville"
+                  isEditing={isEditing}
+                  value={editedData.ville}
+                  onChange={(v) => setEditedData({ ...editedData, ville: v })}
+                  setActiveField={setActiveField}
+                />
+                <EditableInput
+                  label="Adresse"
+                  field="adresse"
+                  isEditing={isEditing}
+                  value={editedData.adresse}
+                  onChange={(v) => setEditedData({ ...editedData, adresse: v })}
+                  setActiveField={setActiveField}
+                />
+                <EditableInput
+                  label="Catégorie"
+                  field="categorie"
+                  isEditing={isEditing}
+                  value={editedData.categorie}
+                  onChange={(v) => setEditedData({ ...editedData, categorie: v })}
+                  setActiveField={setActiveField}
+                />
 
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher par client, numéro ou adresse"
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                {/* Traité par */}
+                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
+                  <div className="text-right">
+                    {isEditing ? (
+                      <>
+                        <Select
+                          value={editedData.processed_by || "none"}
+                          onValueChange={(value) =>
+                            setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                            <SelectValue placeholder="Sélectionner" />
+                          </SelectTrigger>
+                          <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                            <SelectItem value="none">Aucun</SelectItem>
+                            {effectiveMembers.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {MembersSelectNote}
+                      </>
+                    ) : (
+                      <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Client assigné */}
+                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
+                  <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
+                  <div className="text-right">
+                    {isEditing ? (
+                      <Select
+                        value={editedData.client_id || "none"}
+                        onValueChange={(value) =>
+                          setEditedData({ ...editedData, client_id: value === "none" ? "" : value })
+                        }
+                      >
+                        <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                          <SelectValue placeholder="Sélectionner" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                          <SelectItem value="none">Aucun</SelectItem>
+                          {clients.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Boutons */}
+              <div className="space-y-3 pt-4 md:pt-6">
+                {isEditing ? (
+                  <div className="flex gap-3">
+                    <Button variant="default" className="flex-1 h-10" onClick={handleSave}>
+                      Enregistrer
+                    </Button>
+                    <Button variant="outline" className="flex-1 h-10" onClick={handleCancel}>
+                      Annuler
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-3">
+                      <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
+                        Valider
+                      </Button>
+                      <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
+                        Corriger
+                      </Button>
+                    </div>
+                    <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
+                      Consulter le rapport d'analyse
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  // Mobile
+  const mobileContent = loading ? (
+    <div className="flex items-center justify-center h-full">
+      <p className="text-muted-foreground">Chargement…</p>
+    </div>
+  ) : error ? (
+    <div className="flex items-center justify-center h-full">
+      <p className="text-destructive text-sm">{error}</p>
+    </div>
+  ) : detail ? (
+    <>
+      <div className="flex-shrink-0 p-4 border-b border-border">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 text-left">
+            <div className="flex items-baseline gap-2">
+              <input
+                type="text"
+                value={editedData.enseigne || "—"}
+                onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
+                onFocus={() => setActiveField("enseigne")}
+                onBlur={() => setActiveField(null)}
+                disabled={!isEditing}
+                className={cn(
+                  "text-lg font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+                )}
               />
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Reçu n°{" "}
+              <input
+                type="text"
+                value={editedData.numero_recu || "—"}
+                onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
+                onFocus={() => setActiveField("numero_recu")}
+                onBlur={() => setActiveField(null)}
+                disabled={!isEditing}
+                className={cn(
+                  "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
+                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+                )}
+              />
+            </p>
           </div>
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="shrink-0">
+            <X className="h-5 w-5" />
+          </Button>
         </div>
+      </div>
 
-        <Card className="bg-card border-border transition-all duration-200">
-          <CardHeader className="transition-all duration-150">
-            <CardTitle>Liste des reçus</CardTitle>
-          </CardHeader>
-          <CardContent className="transition-all duration-200">
-            {loading ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground">Chargement…</div>
-            ) : error ? (
-              <div className="flex items-center justify-center py-16 text-sm text-destructive">{error}</div>
-            ) : receipts.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-muted-foreground">
-                Aucun reçu n'a encore été traité
-              </div>
-            ) : (
-              <>
-                {/* Mobile: Cards */}
-                <div className="md:hidden space-y-3 transition-all duration-200">
-                  {receipts.map((receipt) => {
-                    const dateValue = receipt.date_traitement || receipt.created_at;
-                    const formattedDate = formatDate(dateValue);
-                    const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
-                    const formattedMontantHT = formatCurrency(receipt.montant_ht);
-                    const statusLabels: Record<string, string> = {
-                      traite: "Validé",
-                      en_cours: "En cours",
-                      en_attente: "En attente",
-                    };
-                    const checked = selectedIds.includes(String(receipt.id));
-                    const clientName = receipt.client_id ? clientNameById[receipt.client_id] : null;
-                    const memberName = receipt.processed_by ? memberNameById[receipt.processed_by] : null;
-
-                    return (
-                      <div
-                        key={receipt.id}
-                        className="relative p-4 rounded-lg bg-card/50 border border-border hover:bg-muted/50 transition-all duration-200 space-y-3"
-                        onClick={() => {
-                          setSelectedId(receipt.id);
-                          setDetail(null);
-                          setDetailError(null);
-                          setIsDrawerOpen(true);
-                        }}
-                      >
-                        {/* pastille sélection */}
-                        <div
-                          className="absolute right-3 top-3"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleOne(String(receipt.id));
-                          }}
-                        >
-                          <Checkbox checked={checked} onCheckedChange={() => toggleOne(String(receipt.id))} />
-                        </div>
-
-                        <div className="flex items-start justify-between pr-8">
-                          <div>
-                            <div className="font-semibold text-base">{receipt.enseigne || "—"}</div>
-                          </div>
-                          <div className="text-sm text-muted-foreground">{formattedDate}</div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="text-muted-foreground text-xs">TTC: </span>
-                            <span className="font-semibold whitespace-nowrap tabular-nums">{formattedMontantTTC}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-muted-foreground text-xs">HT: </span>
-                            <span className="whitespace-nowrap tabular-nums">{formattedMontantHT}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="text-muted-foreground">
-                            Client : <span className="text-foreground">{clientName || "—"}</span>
-                          </div>
-                          <div className="text-muted-foreground">
-                            Traité par : <span className="text-foreground">{memberName || "—"}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Desktop: Table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="w-10 py-3 px-4">
-                          <Checkbox
-                            checked={selectedIds.length === receipts.length && receipts.length > 0}
-                            onCheckedChange={() => toggleAll(receipts.map((r) => String(r.id)))}
-                            disabled={receipts.length === 0}
-                            aria-label="Tout sélectionner"
-                          />
-                        </th>
-                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">Enseigne</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant TTC</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Montant HT</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">TVA</th>
-                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Client assigné
-                        </th>
-                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">Traité par</th>
-                        <th className="text-left  py-3 px-4 text-sm font-medium text-muted-foreground">
-                          Date de traitement
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {receipts.map((receipt) => (
-                        <tr key={receipt.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                          <td className="py-3 px-4 w-10" onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedIds.includes(String(receipt.id))}
-                              onCheckedChange={() => toggleOne(String(receipt.id))}
-                            />
-                          </td>
-
-                          {/* Enseigne */}
-                          <td
-                            className="py-3 px-4 text-sm cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            <div className="font-medium">{receipt.enseigne || "—"}</div>
-                          </td>
-
-                          {/* Montant TTC */}
-                          <td
-                            className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {formatCurrency(receipt.montant_ttc)}
-                          </td>
-
-                          {/* Montant HT */}
-                          <td
-                            className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {formatCurrency(receipt.montant_ht)}
-                          </td>
-
-                          {/* TVA */}
-                          <td
-                            className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {formatCurrency(receipt.tva)}
-                          </td>
-
-                          {/* Client assigné */}
-                          <td
-                            className="py-3 px-4 text-sm cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {receipt.client_id ? clientNameById[receipt.client_id] || "—" : "—"}
-                          </td>
-
-                          {/* Traité par */}
-                          <td
-                            className="py-3 px-4 text-sm cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {receipt.processed_by ? memberNameById[receipt.processed_by] || "—" : "—"}
-                          </td>
-
-                          {/* Date de traitement */}
-                          <td
-                            className="py-3 px-4 text-sm cursor-pointer"
-                            onClick={() => {
-                              setSelectedId(receipt.id);
-                              setDetail(null);
-                              setDetailError(null);
-                              setIsDrawerOpen(true);
-                            }}
-                          >
-                            {formatDate(receipt.date_traitement || receipt.created_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <UploadInstructionsDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
-
-        <ReceiptDetailDrawer
-          open={isDrawerOpen}
-          onOpenChange={(open) => {
-            setIsDrawerOpen(open);
-            if (!open) {
-              setSelectedId(null);
-              setDetail(null);
-              setDetailError(null);
-            }
-          }}
-          detail={detail}
-          loading={detailLoading}
-          error={detailError}
-          clients={clients}
-          members={members}
-          onValidated={(id) => {
-            // Marque cet id pour ignorer le prochain UPDATE realtime (évite la réouverture + toast)
-            ignoreNextUpdateForId.current = id;
-          }}
-        />
-
-        {/* Export Dialog */}
-        <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Exporter les reçus sélectionnés</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Méthode d'export</Label>
-                <RadioGroup value={exportMethod} onValueChange={(v) => setExportMethod(v as any)}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="sheets" id="sheets" />
-                    <Label htmlFor="sheets" className="font-normal cursor-pointer">
-                      Google Sheets
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="pdf" id="pdf" />
-                    <Label htmlFor="pdf" className="font-normal cursor-pointer">
-                      PDF
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {exportMethod === "sheets" && (
-                <div className="space-y-2">
-                  <Label htmlFor="sheets-id">URL de votre feuille Google Sheets</Label>
-                  <Input
-                    id="sheets-id"
-                    placeholder="https://docs.google.com/spreadsheets/d/…/edit"
-                    value={sheetsSpreadsheetId}
-                    onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-4">
+          {/* TTC (éditable) */}
+          <div className="w-full flex items-center justify-center">
+            <div className="inline-block text-center">
+              <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
+              {isEditing ? (
+                <div className="inline-flex items-baseline gap-0">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editedData.montant_ttc}
+                    onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                    onFocus={() => setActiveField("montant_ttc")}
+                    onBlur={() => setActiveField(null)}
+                    className={cn(
+                      "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                      "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                      "cursor-text border-b-2 border-primary",
+                    )}
+                    style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Important :</strong> Cliquez sur <em>Partager</em> → mettez{" "}
-                    <em>Toute personne disposant du lien</em> en <em>Peut modifier</em> avant de lancer l’export Google
-                    Sheets.
-                  </p>
+                  <span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
                 </div>
+              ) : (
+                <p className="text-2xl font-bold">{formatCurrency(editedData.montant_ttc)}</p>
               )}
             </div>
+          </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setExportOpen(false)} disabled={exportLoading}>
-                Fermer
-              </Button>
-              <Button onClick={handleExportSubmit} disabled={exportLoading || !exportMethod}>
-                {exportLoading ? "Export en cours..." : "Valider l'export"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          {/* HT & TVA (non éditables, suivent TTC) */}
+          <div className="grid grid-cols-2 gap-3">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground mb-1">Montant HT :</p>
+                <p className="text-lg font-semibold">
+                  {formatCurrency(round2(editedData.montant_ttc - editedData.tva))}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground mb-1">TVA :</p>
+                <p className="text-lg font-semibold">{formatCurrency(editedData.tva)}</p>
+              </CardContent>
+            </Card>
+          </div>
 
-        {/* PDF download modal */}
-        <Dialog
-          open={pdfModalOpen}
-          onOpenChange={(o) => {
-            setPdfModalOpen(o);
-            if (!o && pdfUrl) {
-              URL.revokeObjectURL(pdfUrl);
-              setPdfUrl(null);
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Export PDF prêt</DialogTitle>
-            </DialogHeader>
-            <div className="py-2">
-              <p className="text-sm text-muted-foreground">Votre fichier PDF est prêt à être téléchargé.</p>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setPdfModalOpen(false);
-                }}
-              >
-                Fermer
-              </Button>
-              <Button asChild disabled={!pdfUrl}>
-                <a href={pdfUrl ?? "#"} download="finvisor.pdf" target="_blank" rel="noreferrer">
-                  Télécharger le PDF
-                </a>
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          {/* Infos */}
+          <div className="space-y-2">
+            <RowMobile label="Date de traitement">
+              <span className="text-xs font-medium">
+                {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
+              </span>
+            </RowMobile>
+
+            <EditableInput
+              label="Moyen de paiement"
+              field="moyen_paiement"
+              isEditing={isEditing}
+              value={editedData.moyen_paiement}
+              onChange={(v: string) => setEditedData({ ...editedData, moyen_paiement: v })}
+              setActiveField={setActiveField}
+            />
+            <EditableInput
+              label="Ville"
+              field="ville"
+              isEditing={isEditing}
+              value={editedData.ville}
+              onChange={(v: string) => setEditedData({ ...editedData, ville: v })}
+              setActiveField={setActiveField}
+            />
+            <EditableInput
+              label="Adresse"
+              field="adresse"
+              isEditing={isEditing}
+              value={editedData.adresse}
+              onChange={(v: string) => setEditedData({ ...editedData, adresse: v })}
+              setActiveField={setActiveField}
+            />
+            <EditableInput
+              label="Catégorie"
+              field="categorie"
+              isEditing={isEditing}
+              value={editedData.categorie}
+              onChange={(v: string) => setEditedData({ ...editedData, categorie: v })}
+              setActiveField={setActiveField}
+            />
+
+            {/* Traité par */}
+            <RowMobile label="Traité par">
+              <div className="text-right">
+                {isEditing ? (
+                  <>
+                    <Select
+                      value={editedData.processed_by || "none"}
+                      onValueChange={(value) =>
+                        setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
+                      }
+                    >
+                      <SelectTrigger className="w-[140px] h-7 text-xs">
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                        <SelectItem value="none">Aucun</SelectItem>
+                        {effectiveMembers.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {MembersSelectNote}
+                  </>
+                ) : (
+                  <span className="text-xs font-medium">{detail?._processedByName ?? "—"}</span>
+                )}
+              </div>
+            </RowMobile>
+
+            {/* Client assigné */}
+            <RowMobile label="Client assigné">
+              {isEditing ? (
+                <Select
+                  value={editedData.client_id || "none"}
+                  onValueChange={(value) => setEditedData({ ...editedData, client_id: value === "none" ? "" : value })}
+                >
+                  <SelectTrigger className="w-[140px] h-7 text-xs">
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
+                    <SelectItem value="none">Aucun</SelectItem>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs font-medium">{detail?._clientName ?? "—"}</span>
+              )}
+            </RowMobile>
+          </div>
+        </div>
       </div>
-    </MainLayout>
+
+      {/* Footer */}
+      <div className="flex-shrink-0 p-4 border-t border-border bg-card/95">
+        {isEditing ? (
+          <div className="flex gap-3">
+            <Button variant="default" className="flex-1 h-10" onClick={handleSave}>
+              Enregistrer
+            </Button>
+            <Button variant="outline" className="flex-1 h-10" onClick={handleCancel}>
+              Annuler
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
+                Valider
+              </Button>
+              <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
+                Corriger
+              </Button>
+            </div>
+            <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
+              Consulter le rapport d'analyse
+            </Button>
+          </div>
+        )}
+      </div>
+    </>
+  ) : null;
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange} modal={false}>
+        <DrawerContent className="mx-4 mb-8 h-[75vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 flex flex-col overflow-hidden">
+          {mobileContent}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+      <SheetContent
+        side="right"
+        className="h-full w-full max-w-[520px] bg-card border-l border-border overflow-y-auto p-0"
+      >
+        {desktopContent}
+      </SheetContent>
+    </Sheet>
   );
 };
-
-export default Recus;
