@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowDownUp, Plus, Search } from "lucide-react";
+import { ArrowDownUp, Plus, Search, Link2 } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
@@ -438,6 +438,19 @@ const Recus = () => {
               <span className="hidden sm:inline">Ajouter un reçu</span>
               <span className="sm:hidden">Ajouter</span>
             </Button>
+
+            {/* === Nouveau bouton : Créer un lien client === */}
+            <Button
+              className="gap-2 flex-1 md:flex-initial"
+              onClick={() => {
+                // action à brancher plus tard (modal/flow de création)
+              }}
+            >
+              <Link2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Créer un lien client</span>
+              <span className="sm:hidden">Lien client</span>
+            </Button>
+            {/* ============================================ */}
           </div>
         </div>
 
