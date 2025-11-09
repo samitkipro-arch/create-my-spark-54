@@ -34,12 +34,12 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
           {/* Bouton 'Choisir un client' */}
           <Select value={clientId} onValueChange={setClientId}>
             <SelectTrigger
-              className="h-11 md:h-12 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium px-5 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A] [&>span:last-child]:hidden"
+              className="h-11 md:h-12 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium px-5 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A] [&>span:last-child]:!hidden [&_svg]:!hidden"
               style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             >
-              <div className="flex items-center justify-center gap-2 w-full">
+              <div className="flex items-center justify-center gap-2 w-full mx-auto">
                 <SelectValue placeholder="Choisir un client" />
-                <ChevronDown className="w-4 h-4 opacity-80 text-[#0D1B2A]" />
+                <ChevronDown className="w-4 h-4 opacity-80 text-[#0D1B2A] shrink-0" />
               </div>
             </SelectTrigger>
 
