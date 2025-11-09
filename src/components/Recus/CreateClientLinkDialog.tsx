@@ -38,7 +38,7 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
               style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             >
               <div className="flex items-center justify-center gap-2 w-full mx-auto">
-                <SelectValue placeholder="Choisir un client" />
+                <SelectValue placeholder="Choisir un client ⌄" />
                 <ChevronDown className="w-4 h-4 opacity-80 text-[#0D1B2A] shrink-0" />
               </div>
             </SelectTrigger>
