@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Link2 } from "lucide-react";
 
 type Client = { id: string; name: string };
 
@@ -17,25 +16,22 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Fenêtre étroite et plus longue, comme le mock */}
-      <DialogContent className="w-[92vw] max-w-[360px] md:max-w-[380px] rounded-2xl py-7 px-4">
-        <div className="space-y-5 text-center">
-          <p className="text-[18px] font-semibold leading-snug">
+      {/* fenêtre plus haute et moins large */}
+      <DialogContent className="rounded-3xl sm:max-w-[420px] w-[92vw] p-6 sm:p-8">
+        <div className="text-center space-y-6">
+          <p className="text-base sm:text-lg font-semibold leading-snug">
             Générez un lien sécurisé pour permettre à vos clients de déposer leurs reçus directement dans votre espace
             Finvisor.
           </p>
-          <p className="text-sm text-muted-foreground">Vous pourrez ensuite les visualiser dans votre propre espace.</p>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Vous pourrez ensuite les visualiser dans votre propre espace.
+          </p>
 
-          <div className="space-y-3">
-            {/* Bouton Select blanc avec libellé centré et chevron à droite */}
+          <div className="space-y-4">
+            {/* Select en fond blanc, centré, SANS chevron */}
             <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger className="relative h-14 rounded-2xl bg-white text-foreground shadow-sm px-5">
-                {/* Libellé centré (toujours “Choisir un client”) */}
-                <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-medium">
-                  Choisir un client
-                </span>
-                {/* Valeur invisible pour conserver la structure du Select + chevron natif */}
-                <SelectValue className="opacity-0" />
+              <SelectTrigger className="h-12 sm:h-14 rounded-2xl text-base justify-center bg-white text-foreground border [&>svg]:hidden">
+                <SelectValue placeholder="Choisir un client" />
               </SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
@@ -46,9 +42,8 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
               </SelectContent>
             </Select>
 
-            {/* Bouton blanc “Crée un lien +” */}
-            <Button className="w-full h-14 rounded-2xl text-[16px] gap-2 bg-white text-foreground shadow-sm hover:bg-white/90">
-              <Link2 className="w-4 h-4" />
+            {/* Bouton fond blanc, comme le mock (pas d’icône) */}
+            <Button className="w-full h-12 sm:h-14 rounded-2xl text-base bg-white text-foreground hover:bg-white/90 border">
               Crée un lien +
             </Button>
           </div>
