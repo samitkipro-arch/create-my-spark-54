@@ -524,10 +524,9 @@ const Recus = () => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
                     const formattedDate = formatDate(dateValue);
                     const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
-                    const formattedMontantHT = formatCurrency(receipt.montant_ht);
+                    const formattedTVA = formatCurrency(receipt.tva);
                     const checked = selectedIds.includes(String(receipt.id));
                     const clientName = receipt.client_id ? clientNameById[receipt.client_id] : null;
-                    const memberName = receipt.processed_by ? memberNameById[receipt.processed_by] : null;
 
                     return (
                       <div
@@ -558,23 +557,22 @@ const Recus = () => {
                           <div className="text-sm text-muted-foreground">{formattedDate}</div>
                         </div>
 
+                        {/* TTC + TVA (HT retiré) */}
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
                             <span className="text-muted-foreground text-xs">TTC: </span>
                             <span className="font-semibold whitespace-nowrap tabular-nums">{formattedMontantTTC}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-muted-foreground text-xs">HT: </span>
-                            <span className="whitespace-nowrap tabular-nums">{formattedMontantHT}</span>
+                            <span className="text-muted-foreground text-xs">TVA: </span>
+                            <span className="whitespace-nowrap tabular-nums">{formattedTVA}</span>
                           </div>
                         </div>
 
+                        {/* Ligne basse : uniquement Client (Traité par retiré) */}
                         <div className="flex items-center justify-between text-xs">
                           <div className="text-muted-foreground">
                             Client : <span className="text-foreground">{clientName || "—"}</span>
-                          </div>
-                          <div className="text-muted-foreground">
-                            Traité par : <span className="text-foreground">{memberName || "—"}</span>
                           </div>
                         </div>
                       </div>
