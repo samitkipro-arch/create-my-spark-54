@@ -65,7 +65,6 @@ const Recus = () => {
 
   // Local filters
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-  const [selectedStatus, setSelectedStatus] = useState<"all" | "traite" | "en_cours" | "en_attente">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Export selection
@@ -111,7 +110,7 @@ const Recus = () => {
     try {
       const payload: any = {
         method: exportMethod, // "sheets" | "pdf"
-        receipt_ids: selectedIds, // array of ids (string[])
+        receipt_ids: selectedIds,
       };
 
       if (exportMethod === "sheets" && sheetsSpreadsheetId) {
@@ -222,7 +221,7 @@ const Recus = () => {
     error: queryError,
     refetch,
   } = useQuery({
-    queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, selectedStatus, debouncedQuery, sortOrder],
+    queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, debouncedQuery, sortOrder],
     queryFn: async () => {
       let query = (supabase as any)
         .from("recus")
@@ -239,9 +238,6 @@ const Recus = () => {
       }
       if (storedMemberId && storedMemberId !== "all") {
         query = query.eq("processed_by", storedMemberId);
-      }
-      if (selectedStatus && selectedStatus !== "all") {
-        query = query.eq("status", selectedStatus);
       }
       if (debouncedQuery) {
         const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
@@ -362,7 +358,6 @@ const Recus = () => {
           return;
         }
         // <<<
-
         refetch();
 
         const shouldOpen =
@@ -494,18 +489,7 @@ const Recus = () => {
             </SelectContent>
           </Select>
 
-          <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as typeof selectedStatus)}>
-            <SelectTrigger className="w-full md:w-[160px]">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les statuts</SelectItem>
-              <SelectItem value="traite">Traité</SelectItem>
-              <SelectItem value="en_cours">En cours</SelectItem>
-              <SelectItem value="en_attente">En attente</SelectItem>
-            </SelectContent>
-          </Select>
-
+          {/* Champ recherche */}
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -541,11 +525,6 @@ const Recus = () => {
                     const formattedDate = formatDate(dateValue);
                     const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
                     const formattedMontantHT = formatCurrency(receipt.montant_ht);
-                    const statusLabels: Record<string, string> = {
-                      traite: "Validé",
-                      en_cours: "En cours",
-                      en_attente: "En attente",
-                    };
                     const checked = selectedIds.includes(String(receipt.id));
                     const clientName = receipt.client_id ? clientNameById[receipt.client_id] : null;
                     const memberName = receipt.processed_by ? memberNameById[receipt.processed_by] : null;
