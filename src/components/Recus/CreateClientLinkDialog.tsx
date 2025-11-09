@@ -18,43 +18,32 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* boîte: un peu plus haute, pas trop large */}
-      <DialogContent className="w-[92vw] max-w-[560px] md:max-w-[580px] rounded-2xl md:rounded-3xl py-7 md:py-8 px-5 md:px-7">
-        {/* Titre supprimé volontairement */}
-
-        {/* Texte d’intro (inchangé visuel) */}
+      <DialogContent className="w-[92vw] max-w-[560px] md:max-w-[580px] rounded-2xl md:rounded-3xl py-7 md:py-8 px-5 md:px-7 bg-[#0B1220] text-white border-none">
+        {/* Texte d'intro */}
         <div className="text-center space-y-2 mb-5">
-          <p className="font-semibold leading-snug text-[15px] md:text-[16px]">
+          <p className="font-semibold leading-snug text-[15px] md:text-[16px] text-white">
             Générez un lien sécurisé pour permettre à vos clients de déposer leurs reçus directement dans votre espace
             Finvisor.
           </p>
-          <p className="text-muted-foreground text-[12px] md:text-[13px]">
+          <p className="text-[12px] md:text-[13px] leading-snug" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
             Vous pourrez ensuite les visualiser dans votre propre espace.
           </p>
         </div>
 
         <div className="space-y-4">
-          {/* Bouton 'Choisir un client' — blanc permanent + chevron visible */}
+          {/* Bouton 'Choisir un client' */}
           <Select value={clientId} onValueChange={setClientId}>
             <SelectTrigger
-              className={[
-                "h-12 md:h-14 rounded-2xl md:rounded-2xl",
-                "bg-white hover:bg-white active:bg-white focus:bg-white",
-                "disabled:opacity-100 disabled:cursor-not-allowed",
-                "border border-white/20 shadow-sm",
-                "text-[14px] md:text-[16px] font-medium",
-                "pl-5 pr-10", // espace pour le chevron à droite
-                "focus-visible:ring-0 focus-visible:outline-none",
-              ].join(" ")}
+              className="relative h-12 md:h-14 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium pl-5 pr-12 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A] data-[placeholder]:text-[#0D1B2A]"
+              style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             >
               <div className="w-full text-center">
-                {/* On laisse SelectValue gérer le placeholder/label */}
-                <SelectValue placeholder="Choisir un client" />
+                <SelectValue placeholder="Choisir un client" className="text-[#0D1B2A]" />
               </div>
 
               {/* Chevron toujours visible à droite */}
               <ChevronDown
-                className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 w-4 h-4 opacity-80 pointer-events-none"
+                className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 w-4 h-4 opacity-80 pointer-events-none text-[#0D1B2A]"
                 aria-hidden="true"
               />
             </SelectTrigger>
@@ -68,23 +57,16 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
             </SelectContent>
           </Select>
 
-          {/* Bouton 'Créer un lien' — blanc permanent (UI uniquement) */}
+          {/* Bouton 'Créer un lien' */}
           <Button
             type="button"
-            className={[
-              "w-full h-12 md:h-14 rounded-2xl md:rounded-2xl",
-              "bg-white hover:bg-white active:bg-white focus:bg-white",
-              "disabled:opacity-100 disabled:cursor-not-allowed",
-              "border border-white/20 shadow-sm",
-              "text-[14px] md:text-[16px] font-medium",
-              "gap-2",
-              "focus-visible:ring-0 focus-visible:outline-none",
-            ].join(" ")}
+            className="w-full h-12 md:h-14 rounded-2xl bg-white hover:bg-white active:bg-white focus:bg-white transition-none border shadow-sm text-[14px] md:text-[16px] font-medium gap-2 focus-visible:ring-0 focus-visible:outline-none focus:ring-0 outline-none ring-0 text-[#0D1B2A]"
+            style={{ borderColor: "rgba(255, 255, 255, 0.2)" }}
             onClick={() => {
               // (Action à brancher plus tard — génération du lien)
             }}
           >
-            <Link2 className="w-4 h-4" />
+            <Link2 className="w-4 h-4 text-[#0D1B2A]" />
             Crée un lien +
           </Button>
         </div>
