@@ -29,9 +29,7 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
           </p>
           <p className="text-muted-foreground">Vous pourrez ensuite les visualiser dans votre propre espace.</p>
 
-          {/* Bloc actions */}
           <div className="space-y-4 mt-2">
-            {/* Choisir un client (menu déroulant) */}
             <Select value={clientId} onValueChange={setClientId}>
               <SelectTrigger className="h-14 rounded-2xl text-lg justify-between px-5">
                 <div className="flex items-center gap-2">
@@ -41,9 +39,6 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
                 <SelectValue className="hidden" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="" disabled>
-                  Tous les clients
-                </SelectItem>
                 {clients.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
@@ -52,16 +47,10 @@ export default function CreateClientLinkDialog({ open, onOpenChange, clients }: 
               </SelectContent>
             </Select>
 
-            {/* Créer un lien (juste l’UI, pas de backend ici) */}
             <Button className="w-full h-14 rounded-2xl text-lg gap-2">
               <Link2 className="w-4 h-4" />
-              Crée un lien
+              Créer un lien
             </Button>
-
-            {/* Note courte d’usage (optionnelle, pour mimer l’intention du mock) */}
-            {/* <p className="text-xs text-muted-foreground">
-              En appuyant sur “Choisir un client”, la liste s’affiche afin d’assigner le lien.
-            </p> */}
           </div>
         </div>
       </DialogContent>
