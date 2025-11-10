@@ -1,121 +1,53 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Recus from "./pages/Recus";
-import Clients from "./pages/Clients";
-import Equipe from "./pages/Equipe";
-import Rapports from "./pages/Rapports";
-import Parametres from "./pages/Parametres";
-import CompteProfile from "./pages/parametres/CompteProfile";
-import AbonnementFacturation from "./pages/parametres/AbonnementFacturation";
-import AideSupport from "./pages/parametres/AideSupport";
-import NotFound from "./pages/NotFound";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Briefcase, Building2 } from "lucide-react";
 
-import WhoAreYou from "./pages/WhoAreYou";
+type RoleChoice = "cabinet" | "client";
 
-const queryClient = new QueryClient();
+export default function WhoAreYou() {
+  const [choice, setChoice] = useState<RoleChoice | null>(null);
+  const navigate = useNavigate();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            {/* Order: who-are-you, then auth, then the rest */}
-            <Route path="/who-are-you" element={<WhoAreYou />} />
-            <Route path="/auth" element={<Auth />} />
+  const Card = ({ value, title, desc, Icon }: { value: RoleChoice; title: string; desc: string; Icon: any }) => {
+    const selected = choice === value;
+    return (
+      <button
+        onClick={() => setChoice(value)}
+        className={`text-left rounded-2xl p-6 bg-[#0F172A] border transition
+          hover:-translate-y-px hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#006FFF]/30
+          ${selected ? "border-[#006FFF]" : "border-white/10"}`}
+      >
+        <Icon className="h-6 w-6 mb-3 opacity-80" />
+        <div className="text-base font-medium">{title}</div>
+        <div className="text-sm text-white/70 mt-1">{desc}</div>
+      </button>
+    );
+  };
 
-            {/* Root goes to WhoAreYou */}
-            <Route path="/" element={<WhoAreYou />} />
+  function goNext() {
+    if (!choice) return;
+    navigate(`/auth?mode=signup&role=${choice}`);
+  }
 
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/recus"
-              element={
-                <ProtectedRoute>
-                  <Recus />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/clients"
-              element={
-                <ProtectedRoute>
-                  <Clients />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/equipe"
-              element={
-                <ProtectedRoute>
-                  <Equipe />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/rapports"
-              element={
-                <ProtectedRoute>
-                  <Rapports />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/parametres"
-              element={
-                <ProtectedRoute>
-                  <Parametres />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/parametres/compte"
-              element={
-                <ProtectedRoute>
-                  <CompteProfile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/parametres/abonnement"
-              element={
-                <ProtectedRoute>
-                  <AbonnementFacturation />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/parametres/aide"
-              element={
-                <ProtectedRoute>
-                  <AideSupport />
-                </ProtectedRoute>
-              }
-            />
+  return (
+    <div className="min-h-screen grid place-items-center bg-[#0B1220] text-white px-6">
+      <div className="w-full max-w-2xl">
+        <h1 className="text-2xl font-semibold text-center">Qui êtes-vous ?</h1>
+        <p className="text-center text-white/70 mt-2">Sélectionnez votre espace pour continuer.</p>
 
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+          <Card value="cabinet" title="Comptable" desc="Je collabore avec mes clients." Icon={Briefcase} />
+          <Card value="client" title="Entreprise" desc="Je collabore avec mon comptable." Icon={Building2} />
+        </div>
 
-export default App;
+        <button
+          onClick={goNext}
+          disabled={!choice}
+          className="mt-8 w-full h-11 rounded-xl bg-[#006FFF] text-white disabled:opacity-50"
+        >
+          Continuer
+        </button>
+      </div>
+    </div>
+  );
+}
