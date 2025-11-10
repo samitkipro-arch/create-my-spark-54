@@ -52,11 +52,13 @@ const Clients = () => {
   const [toDelete, setToDelete] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // NEW: sélection bulk
+  // Sélection bulk
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const toggleOne = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
+
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -106,7 +108,7 @@ const Clients = () => {
     setDrawerOpen(true);
   };
 
-  // NEW: placeholder relance
+  // Relance (placeholder)
   const handleRelance = () => {
     if (selectedIds.length === 0) {
       toast({
@@ -122,6 +124,7 @@ const Clients = () => {
     });
   };
 
+  // Suppression simple (dialog par ligne)
   const handleDeleteClient = async () => {
     if (!toDelete || isDeleting) return;
     setIsDeleting(true);
@@ -141,7 +144,6 @@ const Clients = () => {
       });
 
       setToDelete(null);
-      // Rafraîchir liste + KPI
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       queryClient.invalidateQueries({ queryKey: ["client-kpis"] });
 
@@ -150,7 +152,6 @@ const Clients = () => {
         setSelectedClient(null);
       }
 
-      // Retirer des sélections au besoin
       setSelectedIds((prev) => prev.filter((id) => id !== toDelete.id));
     } catch (err: any) {
       toast({
@@ -160,6 +161,43 @@ const Clients = () => {
       });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Suppression bulk (nouveau bouton rouge)
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0 || isBulkDeleting) return;
+    setIsBulkDeleting(true);
+    try {
+      const { data, error } = await (supabase as any).from("clients").delete().in("id", selectedIds).select("id");
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Suppression bloquée par les règles d'accès (RLS) pour ces clients sélectionnés.");
+      }
+
+      toast({
+        title: "Suppression effectuée",
+        description: `${data.length} client(s) supprimé(s).`,
+      });
+
+      // Si un client ouvert a été supprimé, fermer le drawer
+      if (selectedClient && data.some((d: any) => d.id === selectedClient.id)) {
+        setDrawerOpen(false);
+        setSelectedClient(null);
+      }
+
+      setSelectedIds([]);
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["client-kpis"] });
+    } catch (err: any) {
+      toast({
+        title: "Impossible de supprimer",
+        description: err?.message ?? "Action interdite par la sécurité (RLS) ou autre erreur.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -173,10 +211,23 @@ const Clients = () => {
               <Plus className="w-4 h-4" />
               Ajouter un client
             </Button>
-            {/* NEW: bouton Relancer */}
+
+            {/* Relancer un client (toujours visible) */}
             <Button className="gap-2 w-full md:w-auto transition-all duration-200" onClick={handleRelance}>
-              Relancer
+              <Bell className="w-4 h-4" />
+              Relancer un client
             </Button>
+
+            {/* Supprimer (n'apparaît que s'il y a une sélection) */}
+            {selectedIds.length > 0 && (
+              <Button
+                className="w-full md:w-auto transition-all duration-200 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+              >
+                {isBulkDeleting ? "Suppression…" : "Supprimer"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -401,7 +452,7 @@ const Clients = () => {
         />
       </div>
 
-      {/* Confirm suppression */}
+      {/* Confirm suppression (par ligne) */}
       <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
