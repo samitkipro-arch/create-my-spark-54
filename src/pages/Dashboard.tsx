@@ -28,6 +28,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 const Dashboard = () => {
   const { role, loading: roleLoading } = useUserRole();
+  const isEnterprise = role === "enterprise"; // masque uniquement pour l’espace entreprise
 
   const {
     dateRange: storedDateRange,
@@ -59,6 +60,7 @@ const Dashboard = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const handleDateRangeChange = (range: DateRange | undefined) => {
     if (range?.from && range?.to) {
       setStoredDateRange(startOfDay(range.from).toISOString(), endOfDay(range.to).toISOString());
@@ -72,7 +74,8 @@ const Dashboard = () => {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !roleLoading && role !== "enterprise", // évite flash + inutile côté entreprise
+    // on évite juste côté entreprise (pas de filtres nécessaires)
+    enabled: !isEnterprise,
   });
 
   const { data: members = [] } = useQuery({
@@ -88,7 +91,7 @@ const Dashboard = () => {
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       })) as Array<{ id: string; name: string }>;
     },
-    enabled: !roleLoading && role !== "enterprise", // idem
+    enabled: !isEnterprise,
   });
 
   const {
@@ -96,7 +99,7 @@ const Dashboard = () => {
     isLoading: isLoadingReceipts,
     refetch: refetchReceipts,
   } = useQuery({
-    queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId],
+    queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId, role],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
       let query = (supabase as any)
@@ -105,7 +108,8 @@ const Dashboard = () => {
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
 
-      if (role !== "enterprise") {
+      // Filtres visibles uniquement en mode non-entreprise
+      if (!isEnterprise) {
         if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
         if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
       }
@@ -114,7 +118,7 @@ const Dashboard = () => {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!dateRange?.from && !!dateRange?.to && !roleLoading,
+    enabled: !!dateRange?.from && !!dateRange?.to && !roleLoading, // attend juste la période
   });
 
   useEffect(() => {
@@ -227,8 +231,8 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-300">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
-          {/* Masquer filtres côté entreprise et tant que le rôle charge */}
-          {!roleLoading && role !== "enterprise" && (
+          {/* Filtres visibles pour tous sauf entreprise (même si role charge) */}
+          {!isEnterprise && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full md:w-[250px]">
@@ -368,8 +372,8 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Masquer entièrement la section "activité des membres" côté entreprise */}
-        {!roleLoading && role !== "enterprise" && (
+        {/* Top catégories : visible sauf entreprise */}
+        {!isEnterprise && (
           <Card
             className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale"
             style={{ animationDelay: "0.3s" }}
@@ -454,10 +458,11 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {!roleLoading && role !== "enterprise" && (
+        {/* Activité des membres : visible sauf entreprise */}
+        {!isEnterprise && (
           <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
             <h2 className="text-base md:text-lg font-semibold">
-              Suivi de l'activité et la part des reçus traités par chaque membre de votre équipe
+              Suivi de l'activité et part des reçus traités par chaque membre de votre équipe
             </h2>
             {members.length === 0 ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground">Aucun membre trouvé</div>
