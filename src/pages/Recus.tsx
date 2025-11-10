@@ -54,7 +54,6 @@ function useDebounce<T>(value: T, delay: number): T {
 
 const Recus = () => {
   const { role, loading: roleLoading } = useUserRole();
-  const isEnterprise = role === "enterprise";
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClientLinkOpen, setIsClientLinkOpen] = useState(false);
@@ -163,7 +162,6 @@ const Recus = () => {
   const isDrawerOpenRef = useRef(false);
   const ignoreNextUpdateForId = useRef<number | null>(null);
 
-  // clients : toujours utile (nom dans le tableau), même côté entreprise
   const { data: clients = [], refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -174,7 +172,7 @@ const Recus = () => {
       if (error) throw error;
       return (data || []) as Client[];
     },
-    enabled: true,
+    enabled: !roleLoading,
   });
 
   const { data: members = [], refetch: refetchMembers } = useQuery({
@@ -194,14 +192,14 @@ const Recus = () => {
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
       })) as Member[];
     },
-    enabled: !isEnterprise, // inutile côté entreprise
+    enabled: !roleLoading && role !== "enterprise",
   });
 
-  // Associer automatiquement le client de l’entreprise
+  // -------- Résolution client pour la vue Entreprise --------
   const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
   useEffect(() => {
     const resolveEnterpriseClient = async () => {
-      if (!isEnterprise) return;
+      if (role !== "enterprise") return;
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
       if (!userId) return;
@@ -213,7 +211,10 @@ const Recus = () => {
         .maybeSingle();
 
       const companyName = ent?.name?.trim();
-      if (!companyName) return;
+      if (!companyName) {
+        setEnterpriseClientId("__none__");
+        return;
+      }
 
       const { data: cli } = await supabase
         .from("clients")
@@ -222,12 +223,11 @@ const Recus = () => {
         .limit(1)
         .maybeSingle();
 
-      if (cli?.id) setEnterpriseClientId(cli.id);
-      else setEnterpriseClientId("__none__"); // évite la boucle si non trouvé
+      setEnterpriseClientId(cli?.id ?? "__none__");
     };
 
     if (!roleLoading) resolveEnterpriseClient();
-  }, [isEnterprise, roleLoading]);
+  }, [role, roleLoading]);
 
   const clientNameById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients]);
   const memberNameById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
@@ -260,8 +260,7 @@ const Recus = () => {
         query = query.lte("date_traitement", storedDateRange.to);
       }
 
-      if (isEnterprise) {
-        // tant qu’on n’a pas l’ID client, on affiche vide pour éviter un flash hors périmètre
+      if (role === "enterprise") {
         if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
         query = query.eq("client_id", enterpriseClientId);
       } else {
@@ -283,8 +282,10 @@ const Recus = () => {
 
       return (data || []) as Receipt[];
     },
-    // on n’attend pas le rôle pour afficher l’UI; la logique interne gère entreprise vs non-entreprise
-    enabled: true,
+    enabled:
+      !roleLoading &&
+      role !== null &&
+      (role !== "enterprise" || (enterpriseClientId !== null && enterpriseClientId !== "")),
   });
 
   const error = queryError ? (queryError as any).message : null;
@@ -419,8 +420,8 @@ const Recus = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            {/* Exporter & Lien client — visibles sauf entreprise */}
-            {!isEnterprise && (
+            {/* Exporter & Lien client visibles seulement côté Comptable */}
+            {!roleLoading && role !== "enterprise" && (
               <Button
                 variant="outline"
                 className="flex-1 md:flex-initial"
@@ -446,7 +447,7 @@ const Recus = () => {
               <span className="sm:hidden">Ajouter</span>
             </Button>
 
-            {!isEnterprise && (
+            {!roleLoading && role !== "enterprise" && (
               <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsClientLinkOpen(true)}>
                 <Link2 className="w-4 h-4" />
                 <span className="hidden sm:inline">Créer un lien client</span>
@@ -468,8 +469,8 @@ const Recus = () => {
             </SelectContent>
           </Select>
 
-          {/* Filtres Client/Membre — visibles sauf entreprise */}
-          {!isEnterprise && (
+          {/* Filtres visibles seulement côté Comptable */}
+          {!roleLoading && role !== "enterprise" && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full md:w-[220px]">
@@ -786,9 +787,8 @@ const Recus = () => {
                     onChange={(e) => setSheetsSpreadsheetId(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    <strong>Important :</strong> Cliquez sur <em>Partager</em> → mettez{" "}
-                    <em>Toute personne disposant du lien</em> en <em>Peut modifier</em> avant de lancer l’export Google
-                    Sheets.
+                    <strong>Important :</strong> mettez “Toute personne disposant du lien” en “Peut modifier” avant de
+                    lancer l’export.
                   </p>
                 </div>
               )}
