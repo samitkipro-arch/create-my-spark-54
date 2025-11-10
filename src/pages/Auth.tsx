@@ -107,10 +107,19 @@ const Auth = () => {
               toast.error(error.message);
             }
           } else {
-            // --- AJOUT UNIQUE DEMANDÉ ---
-            // Après un signUp "Entreprise" réussi, on insère une ligne dans la table `enterprises`.
-            const { data: authData } = await supabase.auth.getUser();
-            const currentUserId = authData?.user?.id || null;
+            // --- INSERT dans `enterprises` après signUp Entreprise ---
+            // 1) Essayer de récupérer l'utilisateur immédiatement
+            let { data: authData } = await supabase.auth.getUser();
+            let currentUserId = authData?.user?.id || null;
+
+            // 2) Si pas de session (confirmation email activée / timing), se connecter vite fait et re-tester
+            if (!currentUserId) {
+              const { error: reSignErr } = await supabase.auth.signInWithPassword({ email, password });
+              if (!reSignErr) {
+                const recheck = await supabase.auth.getUser();
+                currentUserId = recheck.data?.user?.id || null;
+              }
+            }
 
             if (currentUserId) {
               const { error: insertErr } = await supabase.from("enterprises").insert({
@@ -120,13 +129,10 @@ const Auth = () => {
                 email: email,
                 phone: phoneClient,
               });
-
               if (insertErr) {
-                // On signale l’erreur d’insert mais on ne bloque pas la création de compte.
                 toast.error(`Création entreprise: ${insertErr.message}`);
               }
             } else {
-              // Si pour une raison quelconque on n'a pas encore l'user en session.
               toast.error("Impossible de récupérer l'utilisateur après l'inscription.");
             }
 
