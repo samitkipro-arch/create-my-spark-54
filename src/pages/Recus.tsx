@@ -175,21 +175,18 @@ const Recus = () => {
     enabled: !roleLoading,
   });
 
+  // ⬇️ FIX : on lit directement dans org_members (comme sur le Dashboard)
   const { data: members = [], refetch: refetchMembers } = useQuery({
-    queryKey: ["members-with-profiles"],
+    queryKey: ["team-members-for-filter"],
     queryFn: async () => {
-      const { data: orgMembers, error: omError } = await (supabase as any).from("org_members").select("user_id");
-      if (omError) throw omError;
-      if (!orgMembers || orgMembers.length === 0) return [];
-      const userIds = orgMembers.map((om: any) => om.user_id);
-      const { data: profiles, error: pError } = await (supabase as any)
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      if (pError) throw pError;
-      return (profiles || []).map((p: any) => ({
-        id: p.user_id,
-        name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
+      const { data, error } = await (supabase as any)
+        .from("org_members")
+        .select("user_id, first_name, last_name, email")
+        .order("first_name", { ascending: true });
+      if (error) throw error;
+      return (data || []).map((m: any) => ({
+        id: m.user_id as string,
+        name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       })) as Member[];
     },
     enabled: !roleLoading && role !== "enterprise",
@@ -420,7 +417,6 @@ const Recus = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            {/* Exporter & Lien client visibles seulement côté Comptable */}
             {!roleLoading && role !== "enterprise" && (
               <Button
                 variant="outline"
@@ -469,7 +465,6 @@ const Recus = () => {
             </SelectContent>
           </Select>
 
-          {/* Filtres visibles seulement côté Comptable */}
           {!roleLoading && role !== "enterprise" && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
