@@ -1,29 +1,59 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export const useUserRole = () => {
-  const [role, setRole] = useState<"cabinet" | "enterprise" | null>(null);
+export type UserRole = "cabinet" | "enterprise" | null;
+
+type UseUserRoleResult = {
+  role: UserRole;
+  loading: boolean;
+  enterpriseName: string | null;
+};
+
+export function useUserRole(): UseUserRoleResult {
+  // Hydratation ultra rapide pour éviter le "flash" au montage
+  const initialRole = (sessionStorage.getItem("finvisor:userRole") as UserRole) ?? null;
+  const initialEntName = sessionStorage.getItem("finvisor:enterpriseName");
+
+  const [role, setRole] = useState<UserRole>(initialRole);
+  const [enterpriseName, setEnterpriseName] = useState<string | null>(initialEntName);
+  const [loading, setLoading] = useState<boolean>(initialRole === null); // si connu en cache => pas de loading
 
   useEffect(() => {
-    const load = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return setRole(null);
+    const resolveRole = async () => {
+      setLoading(true);
+      const { data } = await supabase.auth.getUser();
+      const userId = data?.user?.id;
 
-      const email = user.email;
+      if (!userId) {
+        setRole(null);
+        setEnterpriseName(null);
+        sessionStorage.removeItem("finvisor:userRole");
+        sessionStorage.removeItem("finvisor:enterpriseName");
+        setLoading(false);
+        return;
+      }
 
-      // check si dans "entreprises"
-      const { data: ent } = await (supabase as any).from("entreprises").select("id").eq("email", email).single();
+      // Si l'utilisateur a une ligne dans `entreprises`, on le considère "enterprise".
+      const { data: ent, error } = await (supabase as any).from("entreprises").select("name").eq("user_id", userId).limit(1);
 
-      if (ent) return setRole("enterprise");
-
-      // sinon cabinet
-      setRole("cabinet");
+      if (!error && ent && ent.length > 0) {
+        setRole("enterprise");
+        setEnterpriseName(ent[0].name || null);
+        sessionStorage.setItem("finvisor:userRole", "enterprise");
+        sessionStorage.setItem("finvisor:enterpriseName", ent[0].name || "");
+      } else {
+        setRole("cabinet");
+        setEnterpriseName(null);
+        sessionStorage.setItem("finvisor:userRole", "cabinet");
+        sessionStorage.removeItem("finvisor:enterpriseName");
+      }
+      setLoading(false);
     };
 
-    load();
+    resolveRole();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => resolveRole());
+    return () => sub?.subscription?.unsubscribe();
   }, []);
 
-  return role;
-};
+  return { role, loading, enterpriseName };
+}
