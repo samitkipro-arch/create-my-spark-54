@@ -17,6 +17,9 @@ import AbonnementFacturation from "./pages/parametres/AbonnementFacturation";
 import AideSupport from "./pages/parametres/AideSupport";
 import NotFound from "./pages/NotFound";
 
+// >>> ajout import ici <<<
+import WhoAreYou from "./pages/WhoAreYou";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -28,16 +31,91 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/recus" element={<ProtectedRoute><Recus /></ProtectedRoute>} />
-            <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-            <Route path="/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />
-            <Route path="/rapports" element={<ProtectedRoute><Rapports /></ProtectedRoute>} />
-            <Route path="/parametres" element={<ProtectedRoute><Parametres /></ProtectedRoute>} />
-            <Route path="/parametres/compte" element={<ProtectedRoute><CompteProfile /></ProtectedRoute>} />
-            <Route path="/parametres/abonnement" element={<ProtectedRoute><AbonnementFacturation /></ProtectedRoute>} />
-            <Route path="/parametres/aide" element={<ProtectedRoute><AideSupport /></ProtectedRoute>} />
+
+            {/* >>> ajout route ici <<< */}
+            <Route path="/who-are-you" element={<WhoAreYou />} />
+
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recus"
+              element={
+                <ProtectedRoute>
+                  <Recus />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/clients"
+              element={
+                <ProtectedRoute>
+                  <Clients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/equipe"
+              element={
+                <ProtectedRoute>
+                  <Equipe />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rapports"
+              element={
+                <ProtectedRoute>
+                  <Rapports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres"
+              element={
+                <ProtectedRoute>
+                  <Parametres />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres/compte"
+              element={
+                <ProtectedRoute>
+                  <CompteProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres/abonnement"
+              element={
+                <ProtectedRoute>
+                  <AbonnementFacturation />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres/aide"
+              element={
+                <ProtectedRoute>
+                  <AideSupport />
+                </ProtectedRoute>
+              }
+            />
+
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
