@@ -16,15 +16,18 @@ export function useUserRole(): UseUserRoleResult {
 
   const [role, setRole] = useState<UserRole>(initialRole);
   const [enterpriseName, setEnterpriseName] = useState<string | null>(initialEntName);
-  const [loading, setLoading] = useState<boolean>(initialRole === null); // si connu en cache => pas de loading
+  const [loading, setLoading] = useState<boolean>(initialRole === null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const resolveRole = async () => {
       setLoading(true);
       const { data } = await supabase.auth.getUser();
       const userId = data?.user?.id;
 
       if (!userId) {
+        if (cancelled) return;
         setRole(null);
         setEnterpriseName(null);
         sessionStorage.removeItem("finvisor:userRole");
@@ -33,8 +36,13 @@ export function useUserRole(): UseUserRoleResult {
         return;
       }
 
-      // Si l'utilisateur a une ligne dans `entreprises`, on le considère "enterprise".
-      const { data: ent, error } = await (supabase as any).from("entreprises").select("name").eq("user_id", userId).limit(1);
+      const { data: ent, error } = await (supabase as any)
+        .from("entreprises")
+        .select("name")
+        .eq("user_id", userId)
+        .limit(1);
+
+      if (cancelled) return;
 
       if (!error && ent && ent.length > 0) {
         setRole("enterprise");
@@ -52,7 +60,10 @@ export function useUserRole(): UseUserRoleResult {
 
     resolveRole();
     const { data: sub } = supabase.auth.onAuthStateChange(() => resolveRole());
-    return () => sub?.subscription?.unsubscribe();
+    return () => {
+      cancelled = true;
+      sub?.subscription?.unsubscribe();
+    };
   }, []);
 
   return { role, loading, enterpriseName };
