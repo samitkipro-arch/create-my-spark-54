@@ -17,7 +17,6 @@ import AbonnementFacturation from "./pages/parametres/AbonnementFacturation";
 import AideSupport from "./pages/parametres/AideSupport";
 import NotFound from "./pages/NotFound";
 
-// >>> ajout import ici <<<
 import WhoAreYou from "./pages/WhoAreYou";
 
 const queryClient = new QueryClient();
@@ -30,19 +29,13 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            {/* Order: who-are-you, then auth, then the rest */}
+            <Route path="/who-are-you" element={<WhoAreYou />} />
             <Route path="/auth" element={<Auth />} />
 
-            {/* >>> ajout route ici <<< */}
-            <Route path="/who-are-you" element={<WhoAreYou />} />
+            {/* Root goes to WhoAreYou */}
+            <Route path="/" element={<WhoAreYou />} />
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
             <Route
               path="/dashboard"
               element={
