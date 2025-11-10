@@ -295,38 +295,27 @@ const Clients = () => {
             clients.map((client) => {
               const checked = selectedIds.includes(client.id);
               return (
-                <Card
-                  key={client.id}
-                  className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg relative"
-                >
+                <Card key={client.id} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
                   <CardContent className="p-3.5 space-y-2 transition-all duration-150">
-                    {/* Checkbox sélection (mobile) */}
-                    <div
-                      className="absolute right-3 top-3 z-10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleOne(client.id);
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      role="button"
-                      aria-label="Sélectionner le client"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={() => toggleOne(client.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      />
-                    </div>
-
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="font-semibold text-sm cursor-pointer" onClick={() => handleClientClick(client)}>
-                        {client.name}
+                    {/* Ligne d’en-tête : Checkbox à gauche, actions à droite */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggleOne(client.id)}
+                          aria-label="Sélectionner le client"
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                        <button
+                          className="font-semibold text-sm text-left truncate"
+                          onClick={() => handleClientClick(client)}
+                        >
+                          {client.name}
+                        </button>
                       </div>
 
-                      {/* Actions mobile */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Actions client">
@@ -345,7 +334,10 @@ const Clients = () => {
                       </DropdownMenu>
                     </div>
 
-                    <div className="text-xs text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
+                    <div
+                      className="text-xs text-primary cursor-pointer truncate"
+                      onClick={() => handleClientClick(client)}
+                    >
                       {client.email || "—"}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
