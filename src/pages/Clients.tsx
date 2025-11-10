@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Client = {
   id: string;
@@ -50,6 +51,12 @@ const Clients = () => {
   const [drawerKey, setDrawerKey] = useState<string>("new");
   const [toDelete, setToDelete] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // NEW: sélection bulk
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
 
   const queryClient = useQueryClient();
 
@@ -99,12 +106,26 @@ const Clients = () => {
     setDrawerOpen(true);
   };
 
+  // NEW: placeholder relance
+  const handleRelance = () => {
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Aucun client sélectionné",
+        description: "Sélectionnez au moins un client pour les relancer.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Relance prête",
+      description: `${selectedIds.length} client(s) sélectionné(s). L’envoi d’email sera branché ensuite.`,
+    });
+  };
+
   const handleDeleteClient = async () => {
     if (!toDelete || isDeleting) return;
     setIsDeleting(true);
     try {
-      // .select("id") -> force le retour des lignes supprimées
-      // Si RLS bloque, data === [] => on lève une erreur lisible
       const { data, error } = await (supabase as any).from("clients").delete().eq("id", toDelete.id).select("id");
 
       if (error) throw error;
@@ -128,6 +149,9 @@ const Clients = () => {
         setDrawerOpen(false);
         setSelectedClient(null);
       }
+
+      // Retirer des sélections au besoin
+      setSelectedIds((prev) => prev.filter((id) => id !== toDelete.id));
     } catch (err: any) {
       toast({
         title: "Impossible de supprimer",
@@ -144,10 +168,16 @@ const Clients = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         {/* Header actions */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
-          <Button className="gap-2 w/full md:w-auto transition-all duration-200" onClick={handleNewClient}>
-            <Plus className="w-4 h-4" />
-            Ajouter un client
-          </Button>
+          <div className="flex gap-3 w-full md:w-auto">
+            <Button className="gap-2 w-full md:w-auto transition-all duration-200" onClick={handleNewClient}>
+              <Plus className="w-4 h-4" />
+              Ajouter un client
+            </Button>
+            {/* NEW: bouton Relancer */}
+            <Button className="gap-2 w-full md:w-auto transition-all duration-200" onClick={handleRelance}>
+              Relancer
+            </Button>
+          </div>
         </div>
 
         {/* KPI cards — même design que le Dashboard */}
@@ -211,42 +241,69 @@ const Clients = () => {
               Aucun client n&apos;a encore été ajouté
             </div>
           ) : (
-            clients.map((client) => (
-              <Card key={client.id} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
-                <CardContent className="p-3.5 space-y-2 transition-all duration-150">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="font-semibold text-sm cursor-pointer" onClick={() => handleClientClick(client)}>
-                      {client.name}
+            clients.map((client) => {
+              const checked = selectedIds.includes(client.id);
+              return (
+                <Card
+                  key={client.id}
+                  className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg relative"
+                >
+                  <CardContent className="p-3.5 space-y-2 transition-all duration-150">
+                    {/* Checkbox sélection (mobile) */}
+                    <div
+                      className="absolute right-3 top-3 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleOne(client.id);
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      role="button"
+                      aria-label="Sélectionner le client"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleOne(client.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
                     </div>
 
-                    {/* Actions mobile */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Actions client">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleClientClick(client)}>Modifier</DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setToDelete(client)}
-                        >
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-sm cursor-pointer" onClick={() => handleClientClick(client)}>
+                        {client.name}
+                      </div>
 
-                  <div className="text-xs text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
-                    {client.email || "—"}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">
-                    Créé le {new Date(client.created_at).toLocaleDateString("fr-FR")}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                      {/* Actions mobile */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Actions client">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleClientClick(client)}>Modifier</DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setToDelete(client)}
+                          >
+                            Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <div className="text-xs text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
+                      {client.email || "—"}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Créé le {new Date(client.created_at).toLocaleDateString("fr-FR")}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </div>
 
@@ -263,6 +320,13 @@ const Clients = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={clients.length > 0 && selectedIds.length === clients.length}
+                        onCheckedChange={() => toggleAll(clients.map((c) => c.id))}
+                        aria-label="Tout sélectionner"
+                      />
+                    </TableHead>
                     <TableHead>Nom du client</TableHead>
                     <TableHead>Email de contact</TableHead>
                     <TableHead>Date de création</TableHead>
@@ -272,6 +336,13 @@ const Clients = () => {
                 <TableBody>
                   {clients.map((client) => (
                     <TableRow key={client.id} className="hover:bg-muted/50">
+                      <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.includes(client.id)}
+                          onCheckedChange={() => toggleOne(client.id)}
+                        />
+                      </TableCell>
+
                       <TableCell className="font-medium cursor-pointer" onClick={() => handleClientClick(client)}>
                         {client.name}
                       </TableCell>
