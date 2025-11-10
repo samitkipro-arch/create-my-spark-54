@@ -16,8 +16,10 @@ import CompteProfile from "./pages/parametres/CompteProfile";
 import AbonnementFacturation from "./pages/parametres/AbonnementFacturation";
 import AideSupport from "./pages/parametres/AideSupport";
 import NotFound from "./pages/NotFound";
-
 import WhoAreYou from "./pages/WhoAreYou";
+
+// ⬇️ NEW: guard “cabinet only”
+import RequireCabinet from "./pages/_guards/RequireCabinet";
 
 const queryClient = new QueryClient();
 
@@ -52,11 +54,15 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+
+            {/* CABINET ONLY */}
             <Route
               path="/clients"
               element={
                 <ProtectedRoute>
-                  <Clients />
+                  <RequireCabinet>
+                    <Clients />
+                  </RequireCabinet>
                 </ProtectedRoute>
               }
             />
@@ -64,7 +70,9 @@ const App = () => (
               path="/equipe"
               element={
                 <ProtectedRoute>
-                  <Equipe />
+                  <RequireCabinet>
+                    <Equipe />
+                  </RequireCabinet>
                 </ProtectedRoute>
               }
             />
@@ -72,10 +80,14 @@ const App = () => (
               path="/rapports"
               element={
                 <ProtectedRoute>
-                  <Rapports />
+                  <RequireCabinet>
+                    <Rapports />
+                  </RequireCabinet>
                 </ProtectedRoute>
               }
             />
+
+            {/* Accessible à tous les utilisateurs connectés */}
             <Route
               path="/parametres"
               element={
