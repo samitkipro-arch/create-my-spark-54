@@ -107,7 +107,7 @@ const Auth = () => {
               toast.error(error.message);
             }
           } else {
-            // --- INSERT dans `enterprises` après signUp Entreprise ---
+            // --- INSERT dans `entreprises` après signUp Entreprise ---
             // 1) Essayer de récupérer l'utilisateur immédiatement
             let { data: authData } = await supabase.auth.getUser();
             let currentUserId = authData?.user?.id || null;
@@ -122,7 +122,7 @@ const Auth = () => {
             }
 
             if (currentUserId) {
-              const { error: insertErr } = await supabase.from("enterprises").insert({
+              const { error: insertErr } = await supabase.from("entreprises").insert({
                 org_id: organisationId,
                 user_id: currentUserId,
                 name: companyName,
