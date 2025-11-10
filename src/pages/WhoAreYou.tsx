@@ -14,8 +14,8 @@ export default function WhoAreYou() {
       <button
         onClick={() => setChoice(value)}
         className={`text-left rounded-2xl p-6 bg-[#0F172A] border transition
-          hover:-translate-y-px hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-white/30
-          ${selected ? "border-white/25" : "border-white/10"}`}
+          hover:-translate-y-px hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#006FFF]/30
+          ${selected ? "border-[#006FFF]" : "border-white/10"}`}
       >
         <Icon className="h-6 w-6 mb-3 opacity-80" />
         <div className="text-base font-medium">{title}</div>
@@ -43,7 +43,7 @@ export default function WhoAreYou() {
         <button
           onClick={goNext}
           disabled={!choice}
-          className="mt-8 w-full h-11 rounded-xl bg-white text-[#0B1220] disabled:opacity-50"
+          className="mt-8 w-full h-11 rounded-xl bg-[#006FFF] text-white disabled:opacity-50"
         >
           Continuer
         </button>
