@@ -24,8 +24,11 @@ import { fr } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const Dashboard = () => {
+  const role = useUserRole(); // "cabinet" | "enterprise" | null
+
   // Global filters store
   const {
     dateRange: storedDateRange,
@@ -58,6 +61,7 @@ const Dashboard = () => {
       const to = endOfDay(new Date());
       setStoredDateRange(from.toISOString(), to.toISOString());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const handleDateRangeChange = (range: DateRange | undefined) => {
     if (range?.from && range?.to) {
@@ -75,7 +79,7 @@ const Dashboard = () => {
     },
   });
 
-  // Load members for filter — MÊME logique que la page Équipe (lecture directe org_members)
+  // Load members for filter
   const { data: members = [] } = useQuery({
     queryKey: ["team-members-for-filter"],
     queryFn: async () => {
@@ -157,7 +161,7 @@ const Dashboard = () => {
     { title: "Montant TTC total", value: isLoadingReceipts ? "..." : formatCurrency(kpis.ttc), icon: ShoppingCart },
   ];
 
-  // Prepare chart data - group by day or week depending on date range
+  // Prepare chart data
   const chartData = () => {
     if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
     const daysDiff = differenceInDays(dateRange.to, dateRange.from);
@@ -213,7 +217,7 @@ const Dashboard = () => {
       .slice(0, 10);
   };
 
-  // Calculate team member stats from filtered receipts
+  // Calculate team member stats
   const teamMemberStats = members.map((member) => {
     const memberReceipts = receipts.filter((r) => r.processed_by === member.id);
     const tvaAmount = memberReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
@@ -240,33 +244,38 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-300">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
-          <Select value={storedClientId} onValueChange={setClientId}>
-            <SelectTrigger className="w-full md:w-[250px]">
-              <SelectValue placeholder="Tous les clients" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les clients</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Masquer filtres côté entreprise */}
+          {role !== "enterprise" && (
+            <>
+              <Select value={storedClientId} onValueChange={setClientId}>
+                <SelectTrigger className="w-full md:w-[250px]">
+                  <SelectValue placeholder="Tous les clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les clients</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-          <Select value={storedMemberId ?? "all"} onValueChange={setMemberId}>
-            <SelectTrigger className="w-full md:w-[250px]">
-              <SelectValue placeholder="Tous les membres" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les membres</SelectItem>
-              {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Select value={storedMemberId ?? "all"} onValueChange={setMemberId}>
+                <SelectTrigger className="w-full md:w-[250px]">
+                  <SelectValue placeholder="Tous les membres" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les membres</SelectItem>
+                  {members.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
@@ -409,7 +418,6 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="space-y-3 md:space-y-0">
-                {/* Mobile: Cards */}
                 <div className="md:hidden space-y-3">
                   {topCats.map((cat, idx) => (
                     <div
@@ -440,7 +448,6 @@ const Dashboard = () => {
                   ))}
                 </div>
 
-                {/* Desktop: Table */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
