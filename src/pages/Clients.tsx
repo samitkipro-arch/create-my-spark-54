@@ -49,14 +49,12 @@ const Clients = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerKey, setDrawerKey] = useState<string>("new");
   const [toDelete, setToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const queryClient = useQueryClient();
 
   // ---- Clients (liste)
-  const {
-    data: clients = [],
-    isLoading: isLoadingClients,
-  } = useQuery({
+  const { data: clients = [], isLoading: isLoadingClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -70,21 +68,17 @@ const Clients = () => {
   });
 
   // ---- KPI (ultra rapide via RPC)
-  const {
-    data: kpis,
-    isLoading: isLoadingKpis,
-  } = useQuery({
+  const { data: kpis, isLoading: isLoadingKpis } = useQuery({
     queryKey: ["client-kpis"],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("client_kpis");
       if (error) throw error;
-      // la fonction renvoie une ligne
       const row = (data?.[0] ?? { total_clients: 0, active_30d: 0, to_remind_7d: 0 }) as ClientKpis;
       return row;
     },
-    staleTime: 60_000,           // cache 60s
-    refetchOnWindowFocus: false, // évite les refetch parasites
-    keepPreviousData: true,      // conserve les anciennes valeurs pendant le refetch
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    keepPreviousData: true,
   });
 
   const totalClients = kpis?.total_clients ?? 0;
@@ -106,10 +100,19 @@ const Clients = () => {
   };
 
   const handleDeleteClient = async () => {
-    if (!toDelete) return;
+    if (!toDelete || isDeleting) return;
+    setIsDeleting(true);
     try {
-      const { error } = await (supabase as any).from("clients").delete().eq("id", toDelete.id);
+      // .select("id") -> force le retour des lignes supprimées
+      // Si RLS bloque, data === [] => on lève une erreur lisible
+      const { data, error } = await (supabase as any).from("clients").delete().eq("id", toDelete.id).select("id");
+
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Suppression bloquée par les règles d'accès (RLS). Vérifiez que votre policy autorise DELETE pour ce client.",
+        );
+      }
 
       toast({
         title: "Client supprimé",
@@ -117,7 +120,7 @@ const Clients = () => {
       });
 
       setToDelete(null);
-      // Rafraîchir liste + KPI (si besoin)
+      // Rafraîchir liste + KPI
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       queryClient.invalidateQueries({ queryKey: ["client-kpis"] });
 
@@ -127,10 +130,12 @@ const Clients = () => {
       }
     } catch (err: any) {
       toast({
-        title: "Erreur lors de la suppression",
-        description: err?.message ?? "Une erreur est survenue.",
+        title: "Impossible de supprimer",
+        description: err?.message ?? "Action interdite par la sécurité (RLS) ou autre erreur.",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -152,9 +157,7 @@ const Clients = () => {
             <CardContent className="flex items-center justify-between p-5 md:p-6">
               <div className="space-y-1">
                 <div className="text-sm text-muted-foreground">Clients</div>
-                <div className="text-3xl font-semibold tracking-tight">
-                  {anyLoading ? "—" : totalClients}
-                </div>
+                <div className="text-3xl font-semibold tracking-tight">{anyLoading ? "—" : totalClients}</div>
               </div>
               <div className="rounded-xl bg-primary/10 p-3">
                 <Users className="w-5 h-5 text-primary" />
@@ -209,16 +212,10 @@ const Clients = () => {
             </div>
           ) : (
             clients.map((client) => (
-              <Card
-                key={client.id}
-                className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg"
-              >
+              <Card key={client.id} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
                 <CardContent className="p-3.5 space-y-2 transition-all duration-150">
                   <div className="flex items-start justify-between gap-2">
-                    <div
-                      className="font-semibold text-sm cursor-pointer"
-                      onClick={() => handleClientClick(client)}
-                    >
+                    <div className="font-semibold text-sm cursor-pointer" onClick={() => handleClientClick(client)}>
                       {client.name}
                     </div>
 
@@ -241,10 +238,7 @@ const Clients = () => {
                     </DropdownMenu>
                   </div>
 
-                  <div
-                    className="text-xs text-primary cursor-pointer"
-                    onClick={() => handleClientClick(client)}
-                  >
+                  <div className="text-xs text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
                     {client.email || "—"}
                   </div>
                   <div className="text-[10px] text-muted-foreground">
@@ -278,22 +272,13 @@ const Clients = () => {
                 <TableBody>
                   {clients.map((client) => (
                     <TableRow key={client.id} className="hover:bg-muted/50">
-                      <TableCell
-                        className="font-medium cursor-pointer"
-                        onClick={() => handleClientClick(client)}
-                      >
+                      <TableCell className="font-medium cursor-pointer" onClick={() => handleClientClick(client)}>
                         {client.name}
                       </TableCell>
-                      <TableCell
-                        className="text-primary cursor-pointer"
-                        onClick={() => handleClientClick(client)}
-                      >
+                      <TableCell className="text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
                         {client.email || "—"}
                       </TableCell>
-                      <TableCell
-                        className="cursor-pointer"
-                        onClick={() => handleClientClick(client)}
-                      >
+                      <TableCell className="cursor-pointer" onClick={() => handleClientClick(client)}>
                         {new Date(client.created_at).toLocaleDateString("fr-FR")}
                       </TableCell>
 
@@ -351,17 +336,18 @@ const Clients = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irréversible. Le client{" "}
-              <span className="font-medium">{toDelete?.name}</span> sera définitivement supprimé.
+              Cette action est irréversible. Le client <span className="font-medium">{toDelete?.name}</span> sera
+              définitivement supprimé.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
               onClick={handleDeleteClient}
+              disabled={isDeleting}
             >
-              Supprimer
+              {isDeleting ? "Suppression…" : "Supprimer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
