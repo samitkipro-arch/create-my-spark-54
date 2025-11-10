@@ -43,7 +43,6 @@ type Receipt = {
 type Client = { id: string; name: string };
 type Member = { id: string; name: string };
 
-// --- debounce helper ---
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
@@ -54,12 +53,11 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const Recus = () => {
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClientLinkOpen, setIsClientLinkOpen] = useState(false);
 
-  // Global filters
   const {
     dateRange: storedDateRange,
     clientId: storedClientId,
@@ -68,28 +66,23 @@ const Recus = () => {
     setMemberId,
   } = useGlobalFilters();
 
-  // Local filters
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Export selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportMethod, setExportMethod] = useState<"sheets" | "pdf" | "">("");
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
 
-  // PDF modal state
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  // n8n webhook (PROD)
   const N8N_EXPORT_URL =
     (import.meta as any).env?.VITE_N8N_EXPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/export-receipt";
 
   const debouncedQuery = useDebounce(searchQuery, 400);
 
-  // Selection helpers
   const toggleOne = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleAll = (allIds: string[]) => setSelectedIds((prev) => (prev.length === allIds.length ? [] : allIds));
@@ -100,7 +93,6 @@ const Recus = () => {
     setSheetsSpreadsheetId("");
   };
 
-  // Submit export
   const handleExportSubmit = async () => {
     if (!exportMethod || selectedIds.length === 0) {
       toast({
@@ -113,14 +105,8 @@ const Recus = () => {
 
     setExportLoading(true);
     try {
-      const payload: any = {
-        method: exportMethod,
-        receipt_ids: selectedIds,
-      };
-
-      if (exportMethod === "sheets" && sheetsSpreadsheetId) {
-        payload.sheet_url = sheetsSpreadsheetId;
-      }
+      const payload: any = { method: exportMethod, receipt_ids: selectedIds };
+      if (exportMethod === "sheets" && sheetsSpreadsheetId) payload.sheet_url = sheetsSpreadsheetId;
 
       const res = await fetch(N8N_EXPORT_URL, {
         method: "POST",
@@ -145,9 +131,7 @@ const Recus = () => {
         data = await res.json();
       } catch {}
 
-      if (!res.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
       const link = data?.sheet_url || data?.download_url;
       if (link) window.open(link, "_blank");
@@ -156,7 +140,7 @@ const Recus = () => {
       }
 
       resetExportUI();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Export error:", err);
       toast({
         title: "Erreur d’export",
@@ -168,7 +152,6 @@ const Recus = () => {
     }
   };
 
-  // Drawer détail
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -177,11 +160,8 @@ const Recus = () => {
 
   const currentOpenReceiptId = useRef<number | null>(null);
   const isDrawerOpenRef = useRef(false);
-
-  // Empêcher la réouverture après "Valider"
   const ignoreNextUpdateForId = useRef<number | null>(null);
 
-  // Clients
   const { data: clients = [], refetch: refetchClients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -192,9 +172,10 @@ const Recus = () => {
       if (error) throw error;
       return (data || []) as Client[];
     },
+    // inutile de charger si role en cours de résolution
+    enabled: !roleLoading,
   });
 
-  // Members (org_members -> profiles)
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ["members-with-profiles"],
     queryFn: async () => {
@@ -212,9 +193,11 @@ const Recus = () => {
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
       })) as Member[];
     },
+    // pas besoin côté entreprise, et pas pendant le chargement du rôle
+    enabled: !roleLoading && role !== "enterprise",
   });
 
-  // Résolution automatique du client de l’entreprise (vue entreprise)
+  // Associer automatiquement le client de l’entreprise
   const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
   useEffect(() => {
     const resolveEnterpriseClient = async () => {
@@ -223,13 +206,15 @@ const Recus = () => {
       const userId = auth?.user?.id;
       if (!userId) return;
 
-      // Récupère la fiche entreprise (créée à l’inscription)
-      const { data: ent } = await (supabase as any).from("entreprises").select("name").eq("user_id", userId).maybeSingle();
+      const { data: ent } = await (supabase as any)
+        .from("entreprises")
+        .select("name")
+        .eq("user_id", userId)
+        .maybeSingle();
 
       const companyName = ent?.name?.trim();
       if (!companyName) return;
 
-      // Tente d’associer un client via le nom (ilike)
       const { data: cli } = await supabase
         .from("clients")
         .select("id, name")
@@ -238,16 +223,15 @@ const Recus = () => {
         .maybeSingle();
 
       if (cli?.id) setEnterpriseClientId(cli.id);
+      else setEnterpriseClientId("__none__"); // évite la requête infinie si non trouvé
     };
 
-    resolveEnterpriseClient();
-  }, [role]);
+    if (!roleLoading) resolveEnterpriseClient();
+  }, [role, roleLoading]);
 
-  // Maps pour noms (clients / membres)
   const clientNameById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients]);
   const memberNameById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
 
-  // Receipts list
   const {
     data: receipts = [],
     isLoading: loading,
@@ -276,17 +260,13 @@ const Recus = () => {
         query = query.lte("date_traitement", storedDateRange.to);
       }
 
-      // Vue entreprise : restreindre aux reçus qui lui sont destinés
-      if (role === "enterprise" && enterpriseClientId) {
+      if (role === "enterprise") {
+        // Si on n’a pas encore résolu l’ID client, afficher vide (évite le flash)
+        if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
         query = query.eq("client_id", enterpriseClientId);
       } else {
-        // Vue cabinet : filtres classiques
-        if (storedClientId && storedClientId !== "all") {
-          query = query.eq("client_id", storedClientId);
-        }
-        if (storedMemberId && storedMemberId !== "all") {
-          query = query.eq("processed_by", storedMemberId);
-        }
+        if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
+        if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
       }
 
       if (debouncedQuery) {
@@ -301,33 +281,14 @@ const Recus = () => {
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map((r: any) => ({
-        id: r.id,
-        created_at: r.created_at ?? null,
-        date_traitement: r.date_traitement ?? null,
-        date_recu: r.date_recu ?? null,
-        numero_recu: r.numero_recu ?? null,
-        receipt_number: r.receipt_number ?? null,
-        enseigne: r.enseigne ?? null,
-        adresse: r.adresse ?? null,
-        ville: r.ville ?? null,
-        montant_ht: r.montant_ht ?? null,
-        montant_ttc: r.montant_ttc ?? null,
-        tva: r.tva ?? null,
-        moyen_paiement: r.moyen_paiement ?? null,
-        status: r.status ?? null,
-        client_id: r.client_id ?? null,
-        processed_by: r.processed_by ?? null,
-        category_id: r.category_id ?? null,
-        org_id: r.org_id ?? null,
-      })) as Receipt[];
+      return (data || []) as Receipt[];
     },
-    enabled: role !== null, // attendre de connaître le rôle pour éviter le "flash"
+    // N’active la requête qu’après résolution du rôle
+    enabled: !roleLoading && role !== null,
   });
 
   const error = queryError ? (queryError as any).message : null;
 
-  // Drawer detail fetch
   useEffect(() => {
     if (!selectedId || !isDrawerOpen) return;
     (async () => {
@@ -378,7 +339,6 @@ const Recus = () => {
     isDrawerOpenRef.current = isDrawerOpen;
   }, [isDrawerOpen]);
 
-  // Realtime
   useEffect(() => {
     const recusChannel = supabase
       .channel("recus-realtime")
@@ -394,7 +354,7 @@ const Recus = () => {
           setIsDrawerOpen(true);
           toast({
             title: "Nouveau reçu analysé !",
-            description: `${newRecu.enseigne || "Reçu"} - ${formatCurrency(newRecu.montant_ttc)}`,
+            description: `${newRecu.enseigne || "Reçu"} - ${formatCurrency(newRecu.montant_ttc || 0)}`,
           });
         }
       })
@@ -459,8 +419,8 @@ const Recus = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            {/* Masquer Exporter côté entreprise */}
-            {role !== "enterprise" && (
+            {/* Masquer Exporter & Lien client côté entreprise ET tant que le rôle charge (évite flash) */}
+            {!roleLoading && role !== "enterprise" && (
               <Button
                 variant="outline"
                 className="flex-1 md:flex-initial"
@@ -486,8 +446,7 @@ const Recus = () => {
               <span className="sm:hidden">Ajouter</span>
             </Button>
 
-            {/* Masquer "Créer un lien client" côté entreprise */}
-            {role !== "enterprise" && (
+            {!roleLoading && role !== "enterprise" && (
               <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsClientLinkOpen(true)}>
                 <Link2 className="w-4 h-4" />
                 <span className="hidden sm:inline">Créer un lien client</span>
@@ -509,8 +468,8 @@ const Recus = () => {
             </SelectContent>
           </Select>
 
-          {/* Masquer filtres Client/Membre côté entreprise */}
-          {role !== "enterprise" && (
+          {/* Masquer filtres Client/Membre côté entreprise et tant que le rôle charge */}
+          {!roleLoading && role !== "enterprise" && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full md:w-[220px]">
@@ -542,7 +501,6 @@ const Recus = () => {
             </>
           )}
 
-          {/* Champ recherche */}
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -576,8 +534,8 @@ const Recus = () => {
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
                     const formattedDate = formatDate(dateValue);
-                    const formattedMontantTTC = formatCurrency(receipt.montant_ttc);
-                    const formattedTVA = formatCurrency(receipt.tva);
+                    const formattedMontantTTC = formatCurrency(receipt.montant_ttc || 0);
+                    const formattedTVA = formatCurrency(receipt.tva || 0);
                     const checked = selectedIds.includes(String(receipt.id));
                     const clientName = receipt.client_id ? clientNameById[receipt.client_id] : null;
 
@@ -592,7 +550,6 @@ const Recus = () => {
                           setIsDrawerOpen(true);
                         }}
                       >
-                        {/* pastille sélection */}
                         <div
                           className="absolute right-3 top-3 z-10"
                           onClick={(e) => {
@@ -698,7 +655,7 @@ const Recus = () => {
                               setIsDrawerOpen(true);
                             }}
                           >
-                            {formatCurrency(receipt.montant_ttc)}
+                            {formatCurrency(receipt.montant_ttc || 0)}
                           </td>
 
                           <td
@@ -710,7 +667,7 @@ const Recus = () => {
                               setIsDrawerOpen(true);
                             }}
                           >
-                            {formatCurrency(receipt.montant_ht)}
+                            {formatCurrency(receipt.montant_ht || 0)}
                           </td>
 
                           <td
@@ -722,7 +679,7 @@ const Recus = () => {
                               setIsDrawerOpen(true);
                             }}
                           >
-                            {formatCurrency(receipt.tva)}
+                            {formatCurrency(receipt.tva || 0)}
                           </td>
 
                           <td
@@ -792,10 +749,8 @@ const Recus = () => {
           }}
         />
 
-        {/* Fenêtre "Créer un lien client" (masquée côté entreprise via le bouton) */}
         <CreateClientLinkDialog open={isClientLinkOpen} onOpenChange={setIsClientLinkOpen} clients={clients} />
 
-        {/* Export Dialog */}
         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -850,7 +805,6 @@ const Recus = () => {
           </DialogContent>
         </Dialog>
 
-        {/* PDF download modal */}
         <Dialog
           open={pdfModalOpen}
           onOpenChange={(o) => {
@@ -869,12 +823,7 @@ const Recus = () => {
               <p className="text-sm text-muted-foreground">Votre fichier PDF est prêt à être téléchargé.</p>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setPdfModalOpen(false);
-                }}
-              >
+              <Button variant="outline" onClick={() => setPdfModalOpen(false)}>
                 Fermer
               </Button>
               <Button asChild disabled={!pdfUrl}>
