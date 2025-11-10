@@ -43,36 +43,46 @@ const CompteProfile = () => {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select("first_name,last_name,email,phone,org_id")
         .eq("user_id", user?.id)
         .single();
 
-      if (error) throw error;
-
+      if (error && error.code !== "PGRST116") throw error; // ignore "No rows"
       if (data) {
         setProfile({
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone: null,
-          org_id: data.org_id,
+          first_name: data.first_name ?? "",
+          last_name: data.last_name ?? "",
+          email: data.email ?? user?.email ?? "",
+          phone: data.phone ?? "",
+          org_id: data.org_id ?? "",
         });
+      } else {
+        // pas de ligne encore : au moins afficher l'email de la session
+        setProfile((p) => ({ ...p, email: user?.email ?? "" }));
       }
     } catch (error) {
       console.error("Erreur lors du chargement du profil:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger votre profil.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleUpdateProfile = async () => {
+    if (!user?.id) return;
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-        })
-        .eq("user_id", user?.id);
+      const payload = {
+        user_id: user.id, // nécessaire pour l'upsert
+        first_name: profile.first_name ?? "",
+        last_name: profile.last_name ?? "",
+        phone: profile.phone ?? "",
+        // on NE modifie pas email / org_id ici côté UI (email et org_id restent en lecture seule)
+      };
+
+      const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" });
 
       if (error) throw error;
 
@@ -81,10 +91,11 @@ const CompteProfile = () => {
         title: "Profil mis à jour",
         description: "Vos informations ont été mises à jour avec succès.",
       });
+      await loadProfile();
     } catch (error: any) {
       toast({
         title: "Erreur",
-        description: error.message,
+        description: error.message || "Échec de la mise à jour du profil.",
         variant: "destructive",
       });
     } finally {
@@ -118,7 +129,7 @@ const CompteProfile = () => {
     } catch (error: any) {
       toast({
         title: "Erreur",
-        description: error.message,
+        description: error.message || "Impossible de mettre à jour le mot de passe.",
         variant: "destructive",
       });
     } finally {
@@ -141,22 +152,16 @@ const CompteProfile = () => {
           <CardHeader className="flex flex-row items-center gap-4">
             <Avatar className="w-20 h-20">
               <AvatarImage src="" />
-              <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
-                {getInitials()}
-              </AvatarFallback>
+              <AvatarFallback className="text-2xl bg-primary text-primary-foreground">{getInitials()}</AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <CardTitle className="text-xl">
-                {profile.first_name && profile.last_name
-                  ? `${profile.first_name} ${profile.last_name}`
-                  : "Utilisateur"}
+                {profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : "Utilisateur"}
               </CardTitle>
               <p className="text-sm text-muted-foreground">{profile.email}</p>
             </div>
             {!isEditing ? (
-              <Button onClick={() => setIsEditing(true)}>
-                Modifier
-              </Button>
+              <Button onClick={() => setIsEditing(true)}>Modifier</Button>
             ) : (
               <Button onClick={handleUpdateProfile} disabled={loading}>
                 Enregistrer
@@ -172,9 +177,7 @@ const CompteProfile = () => {
                   id="firstName"
                   placeholder="Your First Name"
                   value={profile.first_name || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, first_name: e.target.value })
-                  }
+                  onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
                   disabled={!isEditing}
                 />
               </div>
@@ -185,9 +188,7 @@ const CompteProfile = () => {
                   id="lastName"
                   placeholder="Your First Name"
                   value={profile.last_name || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, last_name: e.target.value })
-                  }
+                  onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
                   disabled={!isEditing}
                 />
               </div>
@@ -213,9 +214,7 @@ const CompteProfile = () => {
                   type="tel"
                   placeholder="Your First Name"
                   value={profile.phone || ""}
-                  onChange={(e) =>
-                    setProfile({ ...profile, phone: e.target.value })
-                  }
+                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                   disabled={!isEditing}
                 />
               </div>
@@ -240,20 +239,11 @@ const CompteProfile = () => {
                     className="absolute right-0 top-0 h-full px-3"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
                 {password && (
-                  <Button
-                    onClick={handleUpdatePassword}
-                    disabled={loading}
-                    size="sm"
-                    className="mt-2"
-                  >
+                  <Button onClick={handleUpdatePassword} disabled={loading} size="sm" className="mt-2">
                     Mettre à jour le mot de passe
                   </Button>
                 )}
