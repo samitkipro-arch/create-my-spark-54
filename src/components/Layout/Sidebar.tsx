@@ -27,29 +27,30 @@ interface SidebarProps {
 export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const location = useLocation();
   const { signOut } = useAuth();
-  const { role, loading } = useUserRole(); // évite le flash
+  const role = useUserRole(); // "cabinet" | "enterprise" | null (pendant le chargement)
 
-  // Tant que le rôle n'est pas résolu, ne rends pas le menu (évite le "1 sec" de flash)
-  if (loading) {
+  // Évite le "flash" d’items : tant que le rôle n’est pas connu, on ne rend rien
+  if (role === null) {
     return (
       <div className="w-full bg-sidebar flex flex-col h-full md:border-r md:border-sidebar-border">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-primary">Finvisor</h1>
         </div>
-        <nav className="flex-1 px-4 py-2">
-          <div className="space-y-2 opacity-60">
-            <div className="h-9 rounded-lg bg-sidebar-accent" />
-            <div className="h-9 rounded-lg bg-sidebar-accent" />
-            <div className="h-9 rounded-lg bg-sidebar-accent" />
+        <nav className="flex-1 px-4 py-2" aria-hidden>
+          <div className="space-y-1">
+            <div className="h-9 rounded-lg bg-sidebar-accent/40" />
+            <div className="h-9 rounded-lg bg-sidebar-accent/40" />
+            <div className="h-9 rounded-lg bg-sidebar-accent/40" />
           </div>
         </nav>
         <div className="p-4">
-          <div className="h-9 rounded-lg bg-sidebar-accent" />
+          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
         </div>
       </div>
     );
   }
 
+  // Si enterprise => ne garder que Dashboard, Reçus, Paramètres
   const menuItems: MenuItem[] =
     role === "enterprise"
       ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))

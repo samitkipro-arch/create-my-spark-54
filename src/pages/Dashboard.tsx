@@ -27,7 +27,7 @@ import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 
 const Dashboard = () => {
-  const { role } = useUserRole();
+  const role = useUserRole(); // "cabinet" | "enterprise" | null
 
   // Global filters store
   const {
