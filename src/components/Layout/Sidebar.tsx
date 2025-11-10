@@ -27,11 +27,11 @@ interface SidebarProps {
 export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const location = useLocation();
   const { signOut } = useAuth();
-  const { role } = useUserRole(); // 'cabinet' | 'entreprise' | 'unknown'
+  const role = useUserRole(); // 'cabinet' | 'enterprise' | null
 
-  // Si entreprise => ne garder que Dashboard, Reçus, Paramètres
+  // Si enterprise => ne garder que Dashboard, Reçus, Paramètres
   const menuItems: MenuItem[] =
-    role === "entreprise"
+    role === "enterprise"
       ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))
       : ALL_ITEMS;
 

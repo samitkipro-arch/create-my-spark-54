@@ -121,7 +121,7 @@ const Auth = () => {
             }
 
             if (currentUserId) {
-              const { error: insertErr } = await supabase.from("entreprises").insert({
+              const { error: insertErr } = await (supabase as any).from("entreprises").insert({
                 org_id: organisationId,
                 user_id: currentUserId,
                 name: companyName,

@@ -14,7 +14,7 @@ export const useUserRole = () => {
       const email = user.email;
 
       // check si dans "entreprises"
-      const { data: ent } = await supabase.from("entreprises").select("id").eq("email", email).single();
+      const { data: ent } = await (supabase as any).from("entreprises").select("id").eq("email", email).single();
 
       if (ent) return setRole("enterprise");
 
