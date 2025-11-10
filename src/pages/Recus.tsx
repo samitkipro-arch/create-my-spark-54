@@ -224,7 +224,7 @@ const Recus = () => {
       if (!userId) return;
 
       // Récupère la fiche entreprise (créée à l’inscription)
-      const { data: ent } = await supabase.from("entreprises").select("name").eq("user_id", userId).maybeSingle();
+      const { data: ent } = await (supabase as any).from("entreprises").select("name").eq("user_id", userId).maybeSingle();
 
       const companyName = ent?.name?.trim();
       if (!companyName) return;
