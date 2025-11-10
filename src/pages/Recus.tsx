@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowDownUp, Plus, Search, Link2 } from "lucide-react";
 import { UploadInstructionsDialog } from "@/components/Recus/UploadInstructionsDialog";
 import { ReceiptDetailDrawer } from "@/components/Recus/ReceiptDetailDrawer";
-import CreateClientLinkDialog from "@/components/Recus/CreateClientLinkDialog"; // ← AJOUT
+import CreateClientLinkDialog from "@/components/Recus/CreateClientLinkDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { useUserRole } from "@/hooks/useUserRole";
 
 type Receipt = {
   id: number;
@@ -53,8 +54,10 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const Recus = () => {
+  const role = useUserRole(); // "cabinet" | "enterprise" | null
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isClientLinkOpen, setIsClientLinkOpen] = useState(false); // ← AJOUT
+  const [isClientLinkOpen, setIsClientLinkOpen] = useState(false);
 
   // Global filters
   const {
@@ -111,7 +114,7 @@ const Recus = () => {
     setExportLoading(true);
     try {
       const payload: any = {
-        method: exportMethod, // "sheets" | "pdf"
+        method: exportMethod,
         receipt_ids: selectedIds,
       };
 
@@ -175,9 +178,8 @@ const Recus = () => {
   const currentOpenReceiptId = useRef<number | null>(null);
   const isDrawerOpenRef = useRef(false);
 
-  // >>> FIX: empêcher la réouverture après "Valider"
+  // Empêcher la réouverture après "Valider"
   const ignoreNextUpdateForId = useRef<number | null>(null);
-  // <<<
 
   // Clients
   const { data: clients = [], refetch: refetchClients } = useQuery({
@@ -212,6 +214,35 @@ const Recus = () => {
     },
   });
 
+  // Résolution automatique du client de l’entreprise (vue entreprise)
+  const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
+  useEffect(() => {
+    const resolveEnterpriseClient = async () => {
+      if (role !== "enterprise") return;
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id;
+      if (!userId) return;
+
+      // Récupère la fiche entreprise (créée à l’inscription)
+      const { data: ent } = await supabase.from("entreprises").select("name").eq("user_id", userId).maybeSingle();
+
+      const companyName = ent?.name?.trim();
+      if (!companyName) return;
+
+      // Tente d’associer un client via le nom (ilike)
+      const { data: cli } = await supabase
+        .from("clients")
+        .select("id, name")
+        .ilike("name", companyName)
+        .limit(1)
+        .maybeSingle();
+
+      if (cli?.id) setEnterpriseClientId(cli.id);
+    };
+
+    resolveEnterpriseClient();
+  }, [role]);
+
   // Maps pour noms (clients / membres)
   const clientNameById = useMemo(() => Object.fromEntries(clients.map((c) => [c.id, c.name])), [clients]);
   const memberNameById = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
@@ -223,7 +254,16 @@ const Recus = () => {
     error: queryError,
     refetch,
   } = useQuery({
-    queryKey: ["recus", storedDateRange, storedClientId, storedMemberId, debouncedQuery, sortOrder],
+    queryKey: [
+      "recus",
+      storedDateRange,
+      storedClientId,
+      storedMemberId,
+      debouncedQuery,
+      sortOrder,
+      enterpriseClientId,
+      role,
+    ],
     queryFn: async () => {
       let query = (supabase as any)
         .from("recus")
@@ -235,12 +275,20 @@ const Recus = () => {
         query = query.gte("date_traitement", storedDateRange.from);
         query = query.lte("date_traitement", storedDateRange.to);
       }
-      if (storedClientId && storedClientId !== "all") {
-        query = query.eq("client_id", storedClientId);
+
+      // Vue entreprise : restreindre aux reçus qui lui sont destinés
+      if (role === "enterprise" && enterpriseClientId) {
+        query = query.eq("client_id", enterpriseClientId);
+      } else {
+        // Vue cabinet : filtres classiques
+        if (storedClientId && storedClientId !== "all") {
+          query = query.eq("client_id", storedClientId);
+        }
+        if (storedMemberId && storedMemberId !== "all") {
+          query = query.eq("processed_by", storedMemberId);
+        }
       }
-      if (storedMemberId && storedMemberId !== "all") {
-        query = query.eq("processed_by", storedMemberId);
-      }
+
       if (debouncedQuery) {
         const escaped = debouncedQuery.replace(/%/g, "\\%").replace(/_/g, "\\_");
         query = query.or(`numero_recu.ilike.%${escaped}%,enseigne.ilike.%${escaped}%,adresse.ilike.%${escaped}%`);
@@ -274,6 +322,7 @@ const Recus = () => {
         org_id: r.org_id ?? null,
       })) as Receipt[];
     },
+    enabled: role !== null, // attendre de connaître le rôle pour éviter le "flash"
   });
 
   const error = queryError ? (queryError as any).message : null;
@@ -353,13 +402,11 @@ const Recus = () => {
         const updatedRecu = payload.new as Receipt;
         const oldRecu = payload.old as Receipt;
 
-        // >>> FIX: si on vient de valider localement ce reçu, ignorer CETTE mise à jour
         if (ignoreNextUpdateForId.current === updatedRecu.id) {
           ignoreNextUpdateForId.current = null;
           refetch();
           return;
         }
-        // <<<
         refetch();
 
         const shouldOpen =
@@ -412,23 +459,26 @@ const Recus = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            <Button
-              variant="outline"
-              className="flex-1 md:flex-initial"
-              onClick={() => {
-                if (selectedIds.length === 0) {
-                  toast({
-                    title: "Aucun reçu sélectionné",
-                    description: "Sélectionnez au moins un reçu.",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                setExportOpen(true);
-              }}
-            >
-              {selectedIds.length > 0 ? `Exporter (${selectedIds.length})` : "Exporter"}
-            </Button>
+            {/* Masquer Exporter côté entreprise */}
+            {role !== "enterprise" && (
+              <Button
+                variant="outline"
+                className="flex-1 md:flex-initial"
+                onClick={() => {
+                  if (selectedIds.length === 0) {
+                    toast({
+                      title: "Aucun reçu sélectionné",
+                      description: "Sélectionnez au moins un reçu.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setExportOpen(true);
+                }}
+              >
+                {selectedIds.length > 0 ? `Exporter (${selectedIds.length})` : "Exporter"}
+              </Button>
+            )}
 
             <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
@@ -436,16 +486,14 @@ const Recus = () => {
               <span className="sm:hidden">Ajouter</span>
             </Button>
 
-            {/* === Nouveau bouton : Créer un lien client === */}
-            <Button
-              className="gap-2 flex-1 md:flex-initial"
-              onClick={() => setIsClientLinkOpen(true)} // ← AJOUT
-            >
-              <Link2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Créer un lien client</span>
-              <span className="sm:hidden">Lien client</span>
-            </Button>
-            {/* ============================================ */}
+            {/* Masquer "Créer un lien client" côté entreprise */}
+            {role !== "enterprise" && (
+              <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsClientLinkOpen(true)}>
+                <Link2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Créer un lien client</span>
+                <span className="sm:hidden">Lien client</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -461,33 +509,38 @@ const Recus = () => {
             </SelectContent>
           </Select>
 
-          <Select value={storedClientId} onValueChange={setClientId}>
-            <SelectTrigger className="w-full md:w-[220px]">
-              <SelectValue placeholder="Tous les clients" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les clients</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Masquer filtres Client/Membre côté entreprise */}
+          {role !== "enterprise" && (
+            <>
+              <Select value={storedClientId} onValueChange={setClientId}>
+                <SelectTrigger className="w-full md:w-[220px]">
+                  <SelectValue placeholder="Tous les clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les clients</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-          <Select value={storedMemberId || "all"} onValueChange={setMemberId}>
-            <SelectTrigger className="w-full md:w-[220px]">
-              <SelectValue placeholder="Tous les membres" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les membres</SelectItem>
-              {members.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Select value={storedMemberId || "all"} onValueChange={setMemberId}>
+                <SelectTrigger className="w-full md:w-[220px]">
+                  <SelectValue placeholder="Tous les membres" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les membres</SelectItem>
+                  {members.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
 
           {/* Champ recherche */}
           <div className="flex-1">
@@ -518,7 +571,7 @@ const Recus = () => {
               </div>
             ) : (
               <>
-                {/* Mobile: Cards (TTC + TVA, pas de "Traité par") */}
+                {/* Mobile */}
                 <div className="md:hidden space-y-3 transition-all duration-200">
                   {receipts.map((receipt) => {
                     const dateValue = receipt.date_traitement || receipt.created_at;
@@ -539,7 +592,7 @@ const Recus = () => {
                           setIsDrawerOpen(true);
                         }}
                       >
-                        {/* pastille sélection (cliquable sans ouvrir le drawer) */}
+                        {/* pastille sélection */}
                         <div
                           className="absolute right-3 top-3 z-10"
                           onClick={(e) => {
@@ -588,7 +641,7 @@ const Recus = () => {
                   })}
                 </div>
 
-                {/* Desktop: Table (inchangé) */}
+                {/* Desktop */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -624,7 +677,6 @@ const Recus = () => {
                             />
                           </td>
 
-                          {/* Enseigne */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -637,7 +689,6 @@ const Recus = () => {
                             <div className="font-medium">{receipt.enseigne || "—"}</div>
                           </td>
 
-                          {/* Montant TTC */}
                           <td
                             className="py-3 px-4 text-sm text-right font-medium whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -650,7 +701,6 @@ const Recus = () => {
                             {formatCurrency(receipt.montant_ttc)}
                           </td>
 
-                          {/* Montant HT */}
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -663,7 +713,6 @@ const Recus = () => {
                             {formatCurrency(receipt.montant_ht)}
                           </td>
 
-                          {/* TVA */}
                           <td
                             className="py-3 px-4 text-sm text-right whitespace-nowrap tabular-nums cursor-pointer"
                             onClick={() => {
@@ -676,7 +725,6 @@ const Recus = () => {
                             {formatCurrency(receipt.tva)}
                           </td>
 
-                          {/* Client assigné */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -689,7 +737,6 @@ const Recus = () => {
                             {receipt.client_id ? clientNameById[receipt.client_id] || "—" : "—"}
                           </td>
 
-                          {/* Traité par */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -702,7 +749,6 @@ const Recus = () => {
                             {receipt.processed_by ? memberNameById[receipt.processed_by] || "—" : "—"}
                           </td>
 
-                          {/* Date de traitement */}
                           <td
                             className="py-3 px-4 text-sm cursor-pointer"
                             onClick={() => {
@@ -742,14 +788,12 @@ const Recus = () => {
           clients={clients}
           members={members}
           onValidated={(id) => {
-            // Marque cet id pour ignorer le prochain UPDATE realtime (évite la réouverture + toast)
             ignoreNextUpdateForId.current = id;
           }}
         />
 
-        {/* === Fenêtre "Créer un lien client" (UI only) === */}
+        {/* Fenêtre "Créer un lien client" (masquée côté entreprise via le bouton) */}
         <CreateClientLinkDialog open={isClientLinkOpen} onOpenChange={setIsClientLinkOpen} clients={clients} />
-        {/* =============================================== */}
 
         {/* Export Dialog */}
         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
