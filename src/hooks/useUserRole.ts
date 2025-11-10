@@ -34,7 +34,7 @@ export function useUserRole(): UseUserRoleResult {
       }
 
       // Si l'utilisateur a une ligne dans `entreprises`, on le considère "enterprise".
-      const { data: ent, error } = await supabase.from("entreprises").select("name").eq("user_id", userId).limit(1);
+      const { data: ent, error } = await (supabase as any).from("entreprises").select("name").eq("user_id", userId).limit(1);
 
       if (!error && ent && ent.length > 0) {
         setRole("enterprise");

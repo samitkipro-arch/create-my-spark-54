@@ -27,7 +27,7 @@ interface SidebarProps {
 export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const location = useLocation();
   const { signOut } = useAuth();
-  const role = useUserRole(); // "cabinet" | "enterprise" | null (pendant le chargement)
+  const { role } = useUserRole();
 
   // Évite le "flash" d’items : tant que le rôle n’est pas connu, on ne rend rien
   if (role === null) {

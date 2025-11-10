@@ -54,7 +54,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const Recus = () => {
-  const role = useUserRole(); // "cabinet" | "enterprise" | null
+  const { role } = useUserRole();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClientLinkOpen, setIsClientLinkOpen] = useState(false);
