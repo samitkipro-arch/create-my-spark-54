@@ -75,7 +75,7 @@ const Auth = () => {
             return;
           }
 
-          // On conserve la logique existante : org_id créé automatiquement côté backend (organisationId NON fourni)
+          // org_id créé côté backend (organisationId NON fourni)
           const { error } = await signUp(email, password, firstName, lastName, undefined);
           if (error) {
             if (error.message?.includes("User already registered")) {
@@ -94,7 +94,6 @@ const Auth = () => {
             return;
           }
 
-          // On réutilise la signature existante de signUp sans toucher au backend :
           // on passe le nom d’entreprise dans firstName et on laisse lastName vide.
           const pseudoFirst = companyName;
           const pseudoLast = "";
@@ -112,7 +111,7 @@ const Auth = () => {
             let { data: authData } = await supabase.auth.getUser();
             let currentUserId = authData?.user?.id || null;
 
-            // 2) Si pas de session (confirmation email activée / timing), se connecter vite fait et re-tester
+            // 2) Si pas de session (confirmation email / timing), retenter une connexion et re-check
             if (!currentUserId) {
               const { error: reSignErr } = await supabase.auth.signInWithPassword({ email, password });
               if (!reSignErr) {
@@ -129,7 +128,9 @@ const Auth = () => {
                 email: email,
                 phone: phoneClient,
               });
+
               if (insertErr) {
+                // On notifie l’erreur d’insert sans bloquer le flux d’inscription
                 toast.error(`Création entreprise: ${insertErr.message}`);
               }
             } else {
