@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, MoreVertical, Users, Bell, Activity } from "lucide-react";
+import { Plus, Search, MoreVertical, Users, Bell, Activity, Check } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ClientDetailDrawer } from "@/components/Clients/ClientDetailDrawer";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 type Client = {
   id: string;
@@ -45,6 +56,16 @@ type ClientKpis = {
   to_remind_7d: number;
 };
 
+type Profile = {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  org_id: string | null;
+};
+
+const WEBHOOK_URL = "https://samilzr.app.n8n.cloud/webhook-test/relance-client";
+
 const Clients = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -52,7 +73,7 @@ const Clients = () => {
   const [toDelete, setToDelete] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Sélection bulk
+  // Sélection bulk (liste & table)
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const toggleOne = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -76,7 +97,7 @@ const Clients = () => {
     },
   });
 
-  // ---- KPI (ultra rapide via RPC)
+  // ---- KPI (RPC)
   const { data: kpis, isLoading: isLoadingKpis } = useQuery({
     queryKey: ["client-kpis"],
     queryFn: async () => {
@@ -108,20 +129,122 @@ const Clients = () => {
     setDrawerOpen(true);
   };
 
-  // Relance (placeholder)
+  /* -------------------------
+   * Widget "Relancer un client"
+   * ------------------------*/
+  const [relanceOpen, setRelanceOpen] = useState(false);
+  const [relanceSelectedIds, setRelanceSelectedIds] = useState<string[]>([]);
+  const [sendCopyToMe, setSendCopyToMe] = useState<boolean>(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [relanceLoading, setRelanceLoading] = useState(false);
+  const [selectPopoverOpen, setSelectPopoverOpen] = useState(false);
+
+  // Ouvre le widget
+  const openRelance = () => {
+    setRelanceOpen(true);
+    // pré-sélection : s'il y a déjà une sélection dans la liste, on la réutilise
+    setRelanceSelectedIds((prev) => (selectedIds.length ? selectedIds : prev));
+  };
+
+  // Récup infos comptable (profil + email session)
+  useEffect(() => {
+    const load = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const sessionEmail = auth?.user?.email || null;
+      const { data, error } = await (supabase as any)
+        .from("profiles")
+        .select("first_name,last_name,email,phone,org_id")
+        .eq("user_id", auth?.user?.id)
+        .maybeSingle();
+      if (error) {
+        console.error(error);
+      }
+      const p: Profile = {
+        first_name: data?.first_name ?? null,
+        last_name: data?.last_name ?? null,
+        email: data?.email ?? sessionEmail,
+        phone: data?.phone ?? null,
+        org_id: data?.org_id ?? null,
+      };
+      setProfile(p);
+    };
+    load();
+  }, []);
+
+  const selectedClientsForRelance = clients.filter((c) => relanceSelectedIds.includes(c.id));
+
   const handleRelance = () => {
-    if (selectedIds.length === 0) {
+    // Bouton d’ouverture uniquement
+    openRelance();
+  };
+
+  const toggleRelanceOne = (id: string) =>
+    setRelanceSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const toggleRelanceAll = () =>
+    setRelanceSelectedIds((prev) => (prev.length === clients.length ? [] : clients.map((c) => c.id)));
+
+  const sendRelanceNow = async () => {
+    if (selectedClientsForRelance.length === 0) {
       toast({
         title: "Aucun client sélectionné",
-        description: "Sélectionnez au moins un client pour les relancer.",
+        description: "Sélectionnez au moins un client.",
         variant: "destructive",
       });
       return;
     }
-    toast({
-      title: "Relance prête",
-      description: `${selectedIds.length} client(s) sélectionné(s). L’envoi d’email sera branché ensuite.`,
-    });
+    setRelanceLoading(true);
+    try {
+      // Prépare payload
+      const payload = {
+        selected_clients: selectedClientsForRelance.map((c) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email || null,
+        })),
+        accountant: {
+          first_name: profile?.first_name ?? null,
+          last_name: profile?.last_name ?? null,
+          email: profile?.email ?? null,
+          phone: profile?.phone ?? null,
+        },
+        send_copy_to_me: sendCopyToMe,
+      };
+
+      const res = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let info: any = null;
+        try {
+          info = await res.json();
+        } catch {}
+        throw new Error(info?.error || `Webhook HTTP ${res.status}`);
+      }
+
+      toast({
+        title: "Relance envoyée",
+        description:
+          `${selectedClientsForRelance.length} client(s) notifié(s).` +
+          (sendCopyToMe ? " Copie envoyée au comptable." : ""),
+      });
+
+      setRelanceOpen(false);
+      setRelanceSelectedIds([]);
+      setSendCopyToMe(false);
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Erreur",
+        description: e?.message || "Échec lors de l’envoi de la relance.",
+        variant: "destructive",
+      });
+    } finally {
+      setRelanceLoading(false);
+    }
   };
 
   // Suppression simple (dialog par ligne)
@@ -164,7 +287,7 @@ const Clients = () => {
     }
   };
 
-  // Suppression bulk (nouveau bouton rouge)
+  // Suppression bulk
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0 || isBulkDeleting) return;
     setIsBulkDeleting(true);
@@ -181,7 +304,6 @@ const Clients = () => {
         description: `${data.length} client(s) supprimé(s).`,
       });
 
-      // Si un client ouvert a été supprimé, fermer le drawer
       if (selectedClient && data.some((d: any) => d.id === selectedClient.id)) {
         setDrawerOpen(false);
         setSelectedClient(null);
@@ -212,7 +334,7 @@ const Clients = () => {
               Ajouter un client
             </Button>
 
-            {/* Relancer un client (toujours visible) */}
+            {/* Relancer un client (ouvre le widget) */}
             <Button className="gap-2 w-full md:w-auto transition-all duration-200" onClick={handleRelance}>
               <Bell className="w-4 h-4" />
               Relancer un client
@@ -231,7 +353,7 @@ const Clients = () => {
           </div>
         </div>
 
-        {/* KPI cards — même design que le Dashboard */}
+        {/* KPI cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
           {/* Total clients */}
           <Card className="bg-card/60 border-border">
@@ -466,6 +588,99 @@ const Clients = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* --------- Widget Relancer un client --------- */}
+      <Dialog open={relanceOpen} onOpenChange={setRelanceOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Relancer un client</DialogTitle>
+            <DialogDescription>
+              Un mail automatique sera envoyé à votre client pour lui rappeler de déposer ou compléter ses reçus.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* CC comptable */}
+            <div className="flex items-center space-x-2">
+              <Checkbox id="sendCopy" checked={sendCopyToMe} onCheckedChange={(v) => setSendCopyToMe(!!v)} />
+              <Label htmlFor="sendCopy" className="cursor-pointer">
+                Envoyer le mail à moi également.
+              </Label>
+            </div>
+
+            {/* Sélecteur multi (menu déroulant avec cases) */}
+            <Popover open={selectPopoverOpen} onOpenChange={setSelectPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  <span>
+                    {relanceSelectedIds.length === 0
+                      ? "Sélectionner un client"
+                      : `${relanceSelectedIds.length} client(s) sélectionné(s)`}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] p-0">
+                <div className="p-2 border-b flex items-center justify-between">
+                  <div className="text-sm font-medium">Clients</div>
+                  <Button variant="ghost" size="sm" onClick={toggleRelanceAll} className="h-7 px-2 text-xs">
+                    {relanceSelectedIds.length === clients.length ? "Tout désélectionner" : "Tout sélectionner"}
+                  </Button>
+                </div>
+
+                <div className="max-h-64 overflow-auto">
+                  {clients.length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">Aucun client.</div>
+                  ) : (
+                    clients.map((c) => {
+                      const checked = relanceSelectedIds.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/60",
+                            checked && "bg-muted/50",
+                          )}
+                          onClick={() => toggleRelanceOne(c.id)}
+                        >
+                          <div
+                            className={cn(
+                              "grid place-items-center h-4 w-4 rounded border",
+                              checked ? "bg-primary text-primary-foreground" : "bg-background",
+                            )}
+                          >
+                            {checked && <Check className="h-3 w-3" />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm truncate">{c.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{c.email || "—"}</div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Récap rapide (optionnel, non intrusif) */}
+            {relanceSelectedIds.length > 0 && (
+              <div className="rounded-md border p-3 text-xs text-muted-foreground">
+                {relanceSelectedIds.length} client(s) prêt(s) à être relancé(s).
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRelanceOpen(false)} disabled={relanceLoading}>
+              Annuler
+            </Button>
+            <Button onClick={sendRelanceNow} disabled={relanceLoading || relanceSelectedIds.length === 0}>
+              {relanceLoading ? "Envoi..." : "Relancer maintenant"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* --------- /Widget --------- */}
     </MainLayout>
   );
 };
