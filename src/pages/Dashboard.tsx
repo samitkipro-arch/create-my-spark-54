@@ -27,9 +27,8 @@ import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 
 const Dashboard = () => {
-  const { role } = useUserRole();
+  const { role, loading: roleLoading } = useUserRole();
 
-  // Global filters store
   const {
     dateRange: storedDateRange,
     clientId: storedClientId,
@@ -39,7 +38,6 @@ const Dashboard = () => {
     setMemberId,
   } = useGlobalFilters();
 
-  // Convert stored date range to DateRange format
   const dateRange = useMemo<DateRange | undefined>(() => {
     if (storedDateRange.from && storedDateRange.to) {
       return {
@@ -47,14 +45,12 @@ const Dashboard = () => {
         to: new Date(storedDateRange.to),
       };
     }
-    // Default: last 30 days
     return {
       from: startOfDay(subDays(new Date(), 29)),
       to: endOfDay(new Date()),
     };
   }, [storedDateRange]);
 
-  // Initialize default date range on mount if not set
   useEffect(() => {
     if (!storedDateRange.from || !storedDateRange.to) {
       const from = startOfDay(subDays(new Date(), 29));
@@ -69,7 +65,6 @@ const Dashboard = () => {
     }
   };
 
-  // Load clients for filter
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -77,9 +72,9 @@ const Dashboard = () => {
       if (error) throw error;
       return (data || []) as any[];
     },
+    enabled: !roleLoading && role !== "enterprise", // évite flash + inutile côté entreprise
   });
 
-  // Load members for filter
   const { data: members = [] } = useQuery({
     queryKey: ["team-members-for-filter"],
     queryFn: async () => {
@@ -87,17 +82,15 @@ const Dashboard = () => {
         .from("org_members")
         .select("user_id, first_name, last_name, email")
         .order("first_name", { ascending: true });
-
       if (error) throw error;
-
       return (data || []).map((m: any) => ({
         id: m.user_id as string,
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       })) as Array<{ id: string; name: string }>;
     },
+    enabled: !roleLoading && role !== "enterprise", // idem
   });
 
-  // Load receipts data with filters
   const {
     data: receipts = [],
     isLoading: isLoadingReceipts,
@@ -112,21 +105,18 @@ const Dashboard = () => {
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
 
-      if (storedClientId && storedClientId !== "all") {
-        query = query.eq("client_id", storedClientId);
-      }
-      if (storedMemberId && storedMemberId !== "all") {
-        query = query.eq("processed_by", storedMemberId);
+      if (role !== "enterprise") {
+        if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
+        if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
       }
 
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!dateRange?.from && !!dateRange?.to,
+    enabled: !!dateRange?.from && !!dateRange?.to && !roleLoading,
   });
 
-  // Setup realtime listener for receipts
   useEffect(() => {
     const channel = supabase
       .channel("dashboard-receipts-changes")
@@ -134,13 +124,11 @@ const Dashboard = () => {
         refetchReceipts();
       })
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [refetchReceipts]);
 
-  // Calculate KPIs
   const kpis = {
     count: receipts.length,
     ht: receipts.reduce(
@@ -161,7 +149,6 @@ const Dashboard = () => {
     { title: "Montant TTC total", value: isLoadingReceipts ? "..." : formatCurrency(kpis.ttc), icon: ShoppingCart },
   ];
 
-  // Prepare chart data
   const chartData = () => {
     if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
     const daysDiff = differenceInDays(dateRange.to, dateRange.from);
@@ -198,10 +185,8 @@ const Dashboard = () => {
     }
   };
 
-  // Prepare Top categories data
   const topCategories = () => {
     const categoryMap = new Map<string, { label: string; count: number; ttc: number; ht: number; tva: number }>();
-
     receipts.forEach((r) => {
       const categoryLabel = r.categorie || "Sans catégorie";
       const existing = categoryMap.get(categoryLabel) || { label: categoryLabel, count: 0, ttc: 0, ht: 0, tva: 0 };
@@ -211,13 +196,11 @@ const Dashboard = () => {
       existing.tva += Number(r.tva) || 0;
       categoryMap.set(categoryLabel, existing);
     });
-
     return Array.from(categoryMap.values())
       .sort((a, b) => b.ttc - a.ttc)
       .slice(0, 10);
   };
 
-  // Calculate team member stats
   const teamMemberStats = members.map((member) => {
     const memberReceipts = receipts.filter((r) => r.processed_by === member.id);
     const tvaAmount = memberReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
@@ -244,8 +227,8 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-300">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
-          {/* Masquer filtres côté entreprise */}
-          {role !== "enterprise" && (
+          {/* Masquer filtres côté entreprise et tant que le rôle charge */}
+          {!roleLoading && role !== "enterprise" && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full md:w-[250px]">
@@ -326,30 +309,21 @@ const Dashboard = () => {
                   <XAxis
                     dataKey="date"
                     stroke="hsl(var(--muted-foreground))"
-                    tick={{
-                      fill: "hsl(var(--muted-foreground))",
-                      fontSize: window.innerWidth < 768 ? 8 : 12,
-                    }}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     ticks={chart.length > 0 ? [chart[0].date, chart[chart.length - 1].date] : []}
                     height={window.innerWidth < 768 ? 28 : 40}
-                    padding={{
-                      left: window.innerWidth < 768 ? 15 : 0,
-                      right: window.innerWidth < 768 ? 15 : 0,
-                    }}
+                    padding={{ left: window.innerWidth < 768 ? 15 : 0, right: window.innerWidth < 768 ? 15 : 0 }}
                   />
                   <YAxis
                     stroke="hsl(var(--muted-foreground))"
-                    tick={{
-                      fill: "hsl(var(--muted-foreground))",
-                      fontSize: window.innerWidth < 768 ? 8 : 12,
-                    }}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: window.innerWidth < 768 ? 8 : 12 }}
                     domain={[0, "auto"]}
                     width={window.innerWidth < 768 ? 40 : 55}
                   />
                   <Tooltip
                     cursor={{
                       stroke: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(var(--border))",
-                      strokeWidth: window.innerWidth < 768 ? 1 : 1,
+                      strokeWidth: 1,
                       strokeDasharray: "3 3",
                     }}
                     animationDuration={window.innerWidth < 768 ? 150 : 300}
@@ -375,7 +349,7 @@ const Dashboard = () => {
                     type={window.innerWidth < 768 ? "basis" : "monotone"}
                     dataKey="montant_ttc_total"
                     stroke={window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)"}
-                    strokeWidth={window.innerWidth < 768 ? 2.5 : 2.5}
+                    strokeWidth={2.5}
                     dot={{
                       fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)",
                       r: window.innerWidth < 768 ? 1.5 : 2,
@@ -386,10 +360,6 @@ const Dashboard = () => {
                       fill: window.innerWidth < 768 ? "hsl(210 100% 70%)" : "hsl(217 91% 60%)",
                       stroke: "hsl(var(--card))",
                       strokeWidth: window.innerWidth < 768 ? 2.5 : 2,
-                      style: {
-                        transition: "all 0.15s ease-out",
-                        filter: window.innerWidth < 768 ? "drop-shadow(0 0 4px hsl(210 100% 70% / 0.6))" : "none",
-                      },
                     }}
                   />
                 </LineChart>
@@ -398,109 +368,114 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card
-          className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale"
-          style={{ animationDelay: "0.3s" }}
-        >
-          <CardHeader>
-            <CardTitle className="text-base md:text-lg">Top catégories</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoadingReceipts ? (
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : topCats.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
-                Aucune catégorie trouvée
-              </div>
-            ) : (
-              <div className="space-y-3 md:space-y-0">
-                <div className="md:hidden space-y-3">
-                  {topCats.map((cat, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3.5 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up"
-                      style={{ animationDelay: `${0.4 + idx * 0.05}s` }}
-                    >
-                      <div className="font-semibold text-sm">{cat.label}</div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-muted-foreground">Reçus: </span>
-                          <span className="font-medium">{cat.count}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-muted-foreground">TTC: </span>
-                          <span className="font-semibold">{formatCurrency(cat.ttc)}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">HT: </span>
-                          <span>{formatCurrency(cat.ht)}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-muted-foreground">TVA: </span>
-                          <span>{formatCurrency(cat.tva)}</span>
+        {/* Masquer entièrement la section "activité des membres" côté entreprise */}
+        {!roleLoading && role !== "enterprise" && (
+          <Card
+            className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale"
+            style={{ animationDelay: "0.3s" }}
+          >
+            <CardHeader>
+              <CardTitle className="text-base md:text-lg">Top catégories</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingReceipts ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : topCats.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  Aucune catégorie trouvée
+                </div>
+              ) : (
+                <div className="space-y-3 md:space-y-0">
+                  <div className="md:hidden space-y-3">
+                    {topCats.map((cat, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-lg bg-muted/30 border border-border space-y-2 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up"
+                        style={{ animationDelay: `${0.4 + idx * 0.05}s` }}
+                      >
+                        <div className="font-semibold text-sm">{cat.label}</div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Reçus: </span>
+                            <span className="font-medium">{cat.count}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-muted-foreground">TTC: </span>
+                            <span className="font-semibold">{formatCurrency(cat.ttc)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">HT: </span>
+                            <span>{formatCurrency(cat.ht)}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-muted-foreground">TVA: </span>
+                            <span>{formatCurrency(cat.tva)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-3.5 text-sm font-semibold">Catégorie</th>
-                        <th className="text-right py-3 px-3.5 text-sm font-semibold">Nb reçus</th>
-                        <th className="text-right py-3 px-3.5 text-sm font-semibold">Montant TTC</th>
-                        <th className="text-right py-3 px-3.5 text-sm font-semibold">Montant HT</th>
-                        <th className="text-right py-3 px-3.5 text-sm font-semibold">TVA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topCats.map((cat, idx) => (
-                        <tr
-                          key={idx}
-                          className="border-b border-border/50 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up"
-                          style={{ animationDelay: `${0.4 + idx * 0.05}s` }}
-                        >
-                          <td className="py-3 px-3.5 text-sm">{cat.label}</td>
-                          <td className="py-3 px-3.5 text-sm text-right">{cat.count}</td>
-                          <td className="py-3 px-3.5 text-sm text-right font-semibold">{formatCurrency(cat.ttc)}</td>
-                          <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.ht)}</td>
-                          <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.tva)}</td>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-3.5 text-sm font-semibold">Catégorie</th>
+                          <th className="text-right py-3 px-3.5 text-sm font-semibold">Nb reçus</th>
+                          <th className="text-right py-3 px-3.5 text-sm font-semibold">Montant TTC</th>
+                          <th className="text-right py-3 px-3.5 text-sm font-semibold">Montant HT</th>
+                          <th className="text-right py-3 px-3.5 text-sm font-semibold">TVA</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {topCats.map((cat, idx) => (
+                          <tr
+                            key={idx}
+                            className="border-b border-border/50 transition-all duration-200 hover:brightness-[1.05] animate-fade-in-up"
+                            style={{ animationDelay: `${0.4 + idx * 0.05}s` }}
+                          >
+                            <td className="py-3 px-3.5 text-sm">{cat.label}</td>
+                            <td className="py-3 px-3.5 text-sm text-right">{cat.count}</td>
+                            <td className="py-3 px-3.5 text-sm text-right font-semibold">{formatCurrency(cat.ttc)}</td>
+                            <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.ht)}</td>
+                            <td className="py-3 px-3.5 text-sm text-right">{formatCurrency(cat.tva)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {!roleLoading && role !== "enterprise" && (
+          <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
+            <h2 className="text-base md:text-lg font-semibold">
+              Suivi de l'activité et la part des reçus traités par chaque membre de votre équipe
+            </h2>
+            {members.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">Aucun membre trouvé</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                {teamMemberStats.map((member, index) => (
+                  <div
+                    key={member.name}
+                    className="animate-fade-in-scale"
+                    style={{ animationDelay: `${0.5 + index * 0.1}s` }}
+                  >
+                    <TeamMemberCard {...member} />
+                  </div>
+                ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
-          <h2 className="text-base md:text-lg font-semibold">
-            Suivi de l'activité et la part des reçus traités par chaque membre de votre équipe
-          </h2>
-          {teamMemberStats.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">Aucun membre trouvé</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-              {teamMemberStats.map((member, index) => (
-                <div
-                  key={member.name}
-                  className="animate-fade-in-scale"
-                  style={{ animationDelay: `${0.5 + index * 0.1}s` }}
-                >
-                  <TeamMemberCard {...member} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </MainLayout>
   );
