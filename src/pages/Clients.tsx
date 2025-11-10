@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,12 +38,11 @@ type Client = {
   notes?: string | null;
 };
 
-type ReceiptRow = {
-  client_id: string;
-  created_at: string;
+type ClientKpis = {
+  total_clients: number;
+  active_30d: number;
+  to_remind_7d: number;
 };
-
-const isoDaysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString();
 
 const Clients = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -53,67 +52,46 @@ const Clients = () => {
 
   const queryClient = useQueryClient();
 
-  // ---- Clients
-  const { data: clients = [], isLoading: isLoadingClients } = useQuery({
+  // ---- Clients (liste)
+  const {
+    data: clients = [],
+    isLoading: isLoadingClients,
+  } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("clients")
         .select("id, name, email, created_at, siret_siren, legal_representative, address, phone, notes")
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       return (data || []) as Client[];
     },
   });
 
-  // ---- Receipts (30j) pour "actifs"
-  const { data: last30Receipts = [], isLoading: isLoading30 } = useQuery({
-    queryKey: ["client-receipts-30d"],
+  // ---- KPI (ultra rapide via RPC)
+  const {
+    data: kpis,
+    isLoading: isLoadingKpis,
+  } = useQuery({
+    queryKey: ["client-kpis"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("receipts")
-        .select("client_id, created_at")
-        .gte("created_at", isoDaysAgo(30));
+      const { data, error } = await (supabase as any).rpc("client_kpis");
       if (error) throw error;
-      return (data || []) as ReceiptRow[];
+      // la fonction renvoie une ligne
+      const row = (data?.[0] ?? { total_clients: 0, active_30d: 0, to_remind_7d: 0 }) as ClientKpis;
+      return row;
     },
+    staleTime: 60_000,           // cache 60s
+    refetchOnWindowFocus: false, // évite les refetch parasites
+    keepPreviousData: true,      // conserve les anciennes valeurs pendant le refetch
   });
 
-  // ---- Receipts (7j) pour "à relancer"
-  const { data: last7Receipts = [], isLoading: isLoading7 } = useQuery({
-    queryKey: ["client-receipts-7d"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("receipts")
-        .select("client_id, created_at")
-        .gte("created_at", isoDaysAgo(7));
-      if (error) throw error;
-      return (data || []) as ReceiptRow[];
-    },
-  });
+  const totalClients = kpis?.total_clients ?? 0;
+  const activeClients = kpis?.active_30d ?? 0;
+  const toRemindClients = kpis?.to_remind_7d ?? 0;
 
-  // ---- KPI calculés
-  const { totalClients, activeClients, toRemindClients } = useMemo(() => {
-    const total = clients.length;
-
-    // set des clients qui ont déposé au moins 1 reçu dans la fenêtre
-    const activeSet = new Set<string>(last30Receipts.map((r) => r.client_id).filter(Boolean));
-    const recent7Set = new Set<string>(last7Receipts.map((r) => r.client_id).filter(Boolean));
-
-    const actifs = [...activeSet].filter((id) => clients.some((c) => c.id === id)).length;
-
-    // "à relancer" = clients qui n'ont AUCUN reçu sur 7 jours
-    // (compte aussi ceux qui n'ont jamais déposé → logique pour relance)
-    const remind = clients.reduce((acc, c) => (recent7Set.has(c.id) ? acc : acc + 1), 0);
-
-    return {
-      totalClients: total,
-      activeClients: actifs,
-      toRemindClients: remind,
-    };
-  }, [clients, last30Receipts, last7Receipts]);
-
-  const anyLoading = isLoadingClients || isLoading30 || isLoading7;
+  const anyLoading = isLoadingClients || isLoadingKpis;
 
   const handleClientClick = (client: Client) => {
     setSelectedClient(client);
@@ -139,7 +117,10 @@ const Clients = () => {
       });
 
       setToDelete(null);
+      // Rafraîchir liste + KPI (si besoin)
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["client-kpis"] });
+
       if (selectedClient?.id === toDelete.id) {
         setDrawerOpen(false);
         setSelectedClient(null);
@@ -164,14 +145,16 @@ const Clients = () => {
           </Button>
         </div>
 
-        {/* KPI cards — même design que Dashboard */}
+        {/* KPI cards — même design que le Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
           {/* Total clients */}
           <Card className="bg-card/60 border-border">
             <CardContent className="flex items-center justify-between p-5 md:p-6">
               <div className="space-y-1">
                 <div className="text-sm text-muted-foreground">Clients</div>
-                <div className="text-3xl font-semibold tracking-tight">{anyLoading ? "—" : totalClients}</div>
+                <div className="text-3xl font-semibold tracking-tight">
+                  {anyLoading ? "—" : totalClients}
+                </div>
               </div>
               <div className="rounded-xl bg-primary/10 p-3">
                 <Users className="w-5 h-5 text-primary" />
@@ -194,7 +177,7 @@ const Clients = () => {
             </CardContent>
           </Card>
 
-          {/* À relancer (>7j sans dépôt) */}
+          {/* À relancer (>7j) */}
           <Card className="bg-card/60 border-border">
             <CardContent className="flex items-center justify-between p-5 md:p-6">
               <div className="space-y-1">
@@ -226,10 +209,16 @@ const Clients = () => {
             </div>
           ) : (
             clients.map((client) => (
-              <Card key={client.id} className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg">
+              <Card
+                key={client.id}
+                className="bg-card/50 border-border transition-all duration-200 hover:shadow-lg"
+              >
                 <CardContent className="p-3.5 space-y-2 transition-all duration-150">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="font-semibold text-sm cursor-pointer" onClick={() => handleClientClick(client)}>
+                    <div
+                      className="font-semibold text-sm cursor-pointer"
+                      onClick={() => handleClientClick(client)}
+                    >
                       {client.name}
                     </div>
 
@@ -252,7 +241,10 @@ const Clients = () => {
                     </DropdownMenu>
                   </div>
 
-                  <div className="text-xs text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
+                  <div
+                    className="text-xs text-primary cursor-pointer"
+                    onClick={() => handleClientClick(client)}
+                  >
                     {client.email || "—"}
                   </div>
                   <div className="text-[10px] text-muted-foreground">
@@ -286,13 +278,22 @@ const Clients = () => {
                 <TableBody>
                   {clients.map((client) => (
                     <TableRow key={client.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium cursor-pointer" onClick={() => handleClientClick(client)}>
+                      <TableCell
+                        className="font-medium cursor-pointer"
+                        onClick={() => handleClientClick(client)}
+                      >
                         {client.name}
                       </TableCell>
-                      <TableCell className="text-primary cursor-pointer" onClick={() => handleClientClick(client)}>
+                      <TableCell
+                        className="text-primary cursor-pointer"
+                        onClick={() => handleClientClick(client)}
+                      >
                         {client.email || "—"}
                       </TableCell>
-                      <TableCell className="cursor-pointer" onClick={() => handleClientClick(client)}>
+                      <TableCell
+                        className="cursor-pointer"
+                        onClick={() => handleClientClick(client)}
+                      >
                         {new Date(client.created_at).toLocaleDateString("fr-FR")}
                       </TableCell>
 
@@ -350,8 +351,8 @@ const Clients = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irréversible. Le client <span className="font-medium">{toDelete?.name}</span> sera
-              définitivement supprimé.
+              Cette action est irréversible. Le client{" "}
+              <span className="font-medium">{toDelete?.name}</span> sera définitivement supprimé.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
