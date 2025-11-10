@@ -27,10 +27,10 @@ interface SidebarProps {
 export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const location = useLocation();
   const { signOut } = useAuth();
-  const { role, loading } = useUserRole();
+  const { role } = useUserRole();
 
-  // Tant que le rôle charge, on affiche un squelette pour éviter tout "flash"
-  if (loading) {
+  // Évite le "flash" d’items : tant que le rôle n’est pas connu, on ne rend rien
+  if (role === null) {
     return (
       <div className="w-full bg-sidebar flex flex-col h-full md:border-r md:border-sidebar-border">
         <div className="p-6">
@@ -67,12 +67,11 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
+
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                // IMPORTANT : ne jamais faire de full reload; Link gère le client-side.
-                // onNavigate doit rester optionnel (fermer un drawer mobile par ex), pas de window.location.
                 onClick={onNavigate}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
