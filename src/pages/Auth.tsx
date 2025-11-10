@@ -1,196 +1,121 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
+import Recus from "./pages/Recus";
+import Clients from "./pages/Clients";
+import Equipe from "./pages/Equipe";
+import Rapports from "./pages/Rapports";
+import Parametres from "./pages/Parametres";
+import CompteProfile from "./pages/parametres/CompteProfile";
+import AbonnementFacturation from "./pages/parametres/AbonnementFacturation";
+import AideSupport from "./pages/parametres/AideSupport";
+import NotFound from "./pages/NotFound";
 
-const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [organisationId, setOrganisationId] = useState('');
-  const [loading, setLoading] = useState(false);
-  
-  const { signIn, signUp, user } = useAuth();
-  const navigate = useNavigate();
+import WhoAreYou from "./pages/WhoAreYou";
 
-  useEffect(() => {
-    if (user) {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
+const queryClient = new QueryClient();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            {/* Order: who-are-you, then auth, then the rest */}
+            <Route path="/who-are-you" element={<WhoAreYou />} />
+            <Route path="/auth" element={<Auth />} />
 
-    try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            toast.error('Email ou mot de passe incorrect');
-          } else {
-            toast.error(error.message);
-          }
-        } else {
-          toast.success('Connexion réussie !');
-          navigate('/dashboard');
-        }
-      } else {
-        if (!firstName || !lastName) {
-          toast.error('Veuillez remplir tous les champs');
-          setLoading(false);
-          return;
-        }
-        
-        const { error } = await signUp(email, password, firstName, lastName, organisationId || undefined);
-        if (error) {
-          if (error.message.includes('User already registered')) {
-            toast.error('Cet email est déjà utilisé');
-          } else {
-            toast.error(error.message);
-          }
-        } else {
-          toast.success('Compte créé avec succès !');
-        }
-      }
-    } catch (error: any) {
-      toast.error('Une erreur est survenue');
-    } finally {
-      setLoading(false);
-    }
-  };
+            {/* Root goes to WhoAreYou */}
+            <Route path="/" element={<WhoAreYou />} />
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Bienvenue
-          </CardTitle>
-          <CardDescription className="text-center">
-            Connectez-vous ou créez un compte pour continuer
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={isLogin ? 'login' : 'signup'} onValueChange={(v) => setIsLogin(v === 'login')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Connexion</TabsTrigger>
-              <TabsTrigger value="signup">Inscription</TabsTrigger>
-            </TabsList>
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recus"
+              element={
+                <ProtectedRoute>
+                  <Recus />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/clients"
+              element={
+                <ProtectedRoute>
+                  <Clients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/equipe"
+              element={
+                <ProtectedRoute>
+                  <Equipe />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rapports"
+              element={
+                <ProtectedRoute>
+                  <Rapports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres"
+              element={
+                <ProtectedRoute>
+                  <Parametres />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres/compte"
+              element={
+                <ProtectedRoute>
+                  <CompteProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres/abonnement"
+              element={
+                <ProtectedRoute>
+                  <AbonnementFacturation />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parametres/aide"
+              element={
+                <ProtectedRoute>
+                  <AideSupport />
+                </ProtectedRoute>
+              }
+            />
 
-            <TabsContent value="login">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="exemple@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Mot de passe</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Connexion...' : 'Se connecter'}
-                </Button>
-              </form>
-            </TabsContent>
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
-            <TabsContent value="signup">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">Prénom</Label>
-                    <Input
-                      id="firstName"
-                      type="text"
-                      placeholder="Jean"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Nom</Label>
-                    <Input
-                      id="lastName"
-                      type="text"
-                      placeholder="Dupont"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="exemple@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Mot de passe</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Minimum 6 caractères
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="organisationId">ID Organisation (optionnel)</Label>
-                  <Input
-                    id="organisationId"
-                    type="text"
-                    placeholder="Laissez vide pour créer une nouvelle organisation"
-                    value={organisationId}
-                    onChange={(e) => setOrganisationId(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Si vide, une nouvelle organisation sera créée
-                  </p>
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Création...' : 'Créer un compte'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default Auth;
+export default App;
