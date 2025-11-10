@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { StatCard } from "@/components/Dashboard/StatCard";
 import { TeamMemberCard } from "@/components/Dashboard/TeamMemberCard";
@@ -28,7 +28,6 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 const Dashboard = () => {
   const { role, loading: roleLoading } = useUserRole();
-  const isEnterprise = role === "enterprise"; // masque uniquement pour l’espace entreprise
 
   const {
     dateRange: storedDateRange,
@@ -39,17 +38,46 @@ const Dashboard = () => {
     setMemberId,
   } = useGlobalFilters();
 
+  // -------- Résolution client pour la vue Entreprise --------
+  const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
+  useEffect(() => {
+    const resolve = async () => {
+      if (role !== "enterprise") return;
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id;
+      if (!userId) return;
+
+      const { data: ent } = await (supabase as any)
+        .from("entreprises")
+        .select("name")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const companyName = ent?.name?.trim();
+      if (!companyName) {
+        setEnterpriseClientId("__none__");
+        return;
+      }
+
+      const { data: cli } = await supabase
+        .from("clients")
+        .select("id, name")
+        .ilike("name", companyName)
+        .limit(1)
+        .maybeSingle();
+
+      setEnterpriseClientId(cli?.id ?? "__none__");
+    };
+
+    if (!roleLoading) resolve();
+  }, [role, roleLoading]);
+
+  // -------- Période --------
   const dateRange = useMemo<DateRange | undefined>(() => {
     if (storedDateRange.from && storedDateRange.to) {
-      return {
-        from: new Date(storedDateRange.from),
-        to: new Date(storedDateRange.to),
-      };
+      return { from: new Date(storedDateRange.from), to: new Date(storedDateRange.to) };
     }
-    return {
-      from: startOfDay(subDays(new Date(), 29)),
-      to: endOfDay(new Date()),
-    };
+    return { from: startOfDay(subDays(new Date(), 29)), to: endOfDay(new Date()) };
   }, [storedDateRange]);
 
   useEffect(() => {
@@ -67,6 +95,7 @@ const Dashboard = () => {
     }
   };
 
+  // -------- Filtres (chargés uniquement pour les comptables) --------
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -74,8 +103,7 @@ const Dashboard = () => {
       if (error) throw error;
       return (data || []) as any[];
     },
-    // on évite juste côté entreprise (pas de filtres nécessaires)
-    enabled: !isEnterprise,
+    enabled: !roleLoading && role !== "enterprise",
   });
 
   const { data: members = [] } = useQuery({
@@ -91,25 +119,29 @@ const Dashboard = () => {
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       })) as Array<{ id: string; name: string }>;
     },
-    enabled: !isEnterprise,
+    enabled: !roleLoading && role !== "enterprise",
   });
 
+  // -------- Reçus (filtrés correctement en Entreprise) --------
   const {
     data: receipts = [],
     isLoading: isLoadingReceipts,
     refetch: refetchReceipts,
   } = useQuery({
-    queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId, role],
+    queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId, role, enterpriseClientId],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
+
       let query = (supabase as any)
         .from("recus")
         .select("*")
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
 
-      // Filtres visibles uniquement en mode non-entreprise
-      if (!isEnterprise) {
+      if (role === "enterprise") {
+        if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
+        query = query.eq("client_id", enterpriseClientId);
+      } else {
         if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
         if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
       }
@@ -118,7 +150,11 @@ const Dashboard = () => {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!dateRange?.from && !!dateRange?.to && !roleLoading, // attend juste la période
+    enabled:
+      !!dateRange?.from &&
+      !!dateRange?.to &&
+      !roleLoading &&
+      (role !== "enterprise" || (enterpriseClientId !== null && enterpriseClientId !== "")),
   });
 
   useEffect(() => {
@@ -133,6 +169,7 @@ const Dashboard = () => {
     };
   }, [refetchReceipts]);
 
+  // -------- KPIs & dérivés --------
   const kpis = {
     count: receipts.length,
     ht: receipts.reduce(
@@ -231,8 +268,8 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-300">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
 
-          {/* Filtres visibles pour tous sauf entreprise (même si role charge) */}
-          {!isEnterprise && (
+          {/* Filtres visibles seulement côté Comptable */}
+          {!roleLoading && role !== "enterprise" && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full md:w-[250px]">
@@ -299,10 +336,7 @@ const Dashboard = () => {
               <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 240 : 300}>
                 <LineChart
                   data={chart}
-                  margin={{
-                    left: window.innerWidth < 768 ? -10 : 0,
-                    right: window.innerWidth < 768 ? 10 : 0,
-                  }}
+                  margin={{ left: window.innerWidth < 768 ? -10 : 0, right: window.innerWidth < 768 ? 10 : 0 }}
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -372,8 +406,8 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Top catégories : visible sauf entreprise */}
-        {!isEnterprise && (
+        {/* Top catégories & activité membres : visibles seulement côté Comptable */}
+        {!roleLoading && role !== "enterprise" && (
           <Card
             className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale"
             style={{ animationDelay: "0.3s" }}
@@ -458,12 +492,9 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Activité des membres : visible sauf entreprise */}
-        {!isEnterprise && (
+        {!roleLoading && role !== "enterprise" && (
           <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
-            <h2 className="text-base md:text-lg font-semibold">
-              Suivi de l'activité et part des reçus traités par chaque membre de votre équipe
-            </h2>
+            <h2 className="text-base md:text-lg font-semibold">Suivi de l'activité et part des reçus par membre</h2>
             {members.length === 0 ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground">Aucun membre trouvé</div>
             ) : (
