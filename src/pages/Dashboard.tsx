@@ -8,11 +8,25 @@ import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { subDays, format, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+// Tooltip personnalisé : fond sombre, texte blanc
+const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+  if (active && payload && payload[0]) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-gray-900 text-white p-3 rounded-lg shadow-lg border border-gray-700">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs">{data.count} reçus</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const Dashboard = () => {
   const { role, loading: roleLoading } = useUserRole();
@@ -138,9 +152,7 @@ const Dashboard = () => {
       .channel("dashboard-receipts")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [refetchReceipts]);
 
   // --- Calculs ---
@@ -151,19 +163,22 @@ const Dashboard = () => {
     return { count: receipts.length, tva, ht, ttc };
   }, [receipts]);
 
-  // --- Évolution TVA ---
+  // --- Évolution TVA + compteur de reçus par jour ---
   const tvaEvolutionData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
     return days.map((day) => {
       const dayStr = format(day, "yyyy-MM-dd");
-      const dayTva = receipts
-        .filter((r) => {
-          const d = format(new Date(r.date_traitement || r.created_at), "yyyy-MM-dd");
-          return d === dayStr;
-        })
-        .reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
-      return { date: format(day, "dd/MM"), tva: dayTva };
+      const dayReceipts = receipts.filter((r) => {
+        const d = format(new Date(r.date_traitement || r.created_at), "yyyy-MM-dd");
+        return d === dayStr;
+      });
+      const dayTva = dayReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
+      return {
+        date: format(day, "dd/MM"),
+        tva: dayTva,
+        count: dayReceipts.length,
+      };
     });
   }, [receipts, dateRange]);
 
@@ -184,6 +199,17 @@ const Dashboard = () => {
       .sort((a, b) => b.tva - a.tva)
       .slice(0, 5);
   }, [receipts]);
+
+  // --- Performance équipe ---
+  const teamPerformance = useMemo(() => {
+    return members
+      .map((m) => {
+        const userReceipts = receipts.filter((r) => r.processed_by === m.id);
+        const tva = userReceipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
+        return { ...m, tva, count: userReceipts.length };
+      })
+      .sort((a, b) => b.tva - a.tva);
+  }, [members, receipts]);
 
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
@@ -271,7 +297,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique SANS GRILLE */}
+        {/* Graphique : sans grille, tooltip propre */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -284,8 +310,15 @@ const Dashboard = () => {
                 <LineChart data={tvaEvolutionData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                  <Line type="monotone" dataKey="tva" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="tva"
+                    stroke="#2563eb"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -315,6 +348,35 @@ const Dashboard = () => {
                       <TableCell className="text-right">{c.count}</TableCell>
                       <TableCell className="text-right">{formatCurrency(c.ttc)}</TableCell>
                       <TableCell className="text-right font-semibold text-blue-600">{formatCurrency(c.tva)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Performance équipe */}
+        {role !== "enterprise" && teamPerformance.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Performance équipe (TVA récupérée)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Membre</TableHead>
+                    <TableHead className="text-right">Reçus</TableHead>
+                    <TableHead className="text-right">TVA récup</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {teamPerformance.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell>{m.name}</TableCell>
+                      <TableCell className="text-right">{m.count}</TableCell>
+                      <TableCell className="text-right font-medium text-blue-600">{formatCurrency(m.tva)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
