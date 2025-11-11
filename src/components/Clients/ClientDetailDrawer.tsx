@@ -35,18 +35,19 @@ type ClientFormData = {
   email: string;
   phone: string;
   notes: string;
-}
+};
 
-export const ClientDetailDrawer = ({
-  open,
-  onOpenChange,
-  client,
-}: ClientDetailDrawerProps) => {
+export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
-  
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<ClientFormData>({
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting },
+  } = useForm<ClientFormData>({
     defaultValues: {
       name: client?.name || "",
       siret_siren: client?.siret_siren || "",
@@ -55,7 +56,7 @@ export const ClientDetailDrawer = ({
       email: client?.email || "",
       phone: client?.phone || "",
       notes: client?.notes || "",
-    }
+    },
   });
 
   useEffect(() => {
@@ -94,7 +95,9 @@ export const ClientDetailDrawer = ({
 
   const onSubmit = async (data: ClientFormData) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
       const { data: profile } = await (supabase as any)
@@ -122,18 +125,16 @@ export const ClientDetailDrawer = ({
         if (error) throw error;
         toast.success("Client modifié avec succès");
       } else {
-        const { error } = await (supabase as any)
-          .from("clients")
-          .insert({
-            org_id: profile.org_id,
-            name: data.name,
-            siret_siren: data.siret_siren,
-            legal_representative: data.legal_representative,
-            address: data.address,
-            email: data.email,
-            phone: data.phone,
-            notes: data.notes,
-          });
+        const { error } = await (supabase as any).from("clients").insert({
+          org_id: profile.org_id,
+          name: data.name,
+          siret_siren: data.siret_siren,
+          legal_representative: data.legal_representative,
+          address: data.address,
+          email: data.email,
+          phone: data.phone,
+          notes: data.notes,
+        });
 
         if (error) throw error;
         toast.success("Client ajouté avec succès");
@@ -147,145 +148,207 @@ export const ClientDetailDrawer = ({
     }
   };
 
+  /** ---------- UI Helpers ---------- */
+
+  const Section = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
+    <div className="rounded-2xl border border-border/60 bg-background/50">
+      <div className="flex items-start justify-between p-4 md:p-5 border-b border-border/60">
+        <div>
+          <h3 className="text-sm md:text-base font-semibold">{title}</h3>
+          {subtitle ? <p className="text-xs md:text-sm text-muted-foreground mt-1">{subtitle}</p> : null}
+        </div>
+      </div>
+      <div className="p-4 md:p-5">{children}</div>
+    </div>
+  );
+
+  const ReadonlyValue = ({ value }: { value?: string }) => (
+    <div className="min-h-[44px] flex items-center rounded-md border border-border/60 bg-muted/20 px-3 text-sm">
+      {value && value.trim().length > 0 ? value : "—"}
+    </div>
+  );
+
+  const Field = ({
+    id,
+    label,
+    type = "text",
+    placeholder,
+    registerKey,
+    readOnlyValue,
+  }: {
+    id: string;
+    label: string;
+    type?: string;
+    placeholder?: string;
+    registerKey: keyof ClientFormData;
+    readOnlyValue?: string;
+  }) => (
+    <div className="space-y-2">
+      <Label htmlFor={id} className="text-[13px] md:text-sm">
+        {label}
+      </Label>
+      {isEditing ? (
+        <Input
+          id={id}
+          type={type}
+          placeholder={placeholder}
+          className="h-11 md:h-12 bg-background"
+          {...register(registerKey)}
+        />
+      ) : (
+        <ReadonlyValue value={readOnlyValue} />
+      )}
+    </div>
+  );
+
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-lg border-b border-border p-6 md:p-8">
-        <div className="flex items-start justify-between gap-4 md:gap-6">
-          <div className="flex items-center gap-4 md:gap-6 flex-1">
-            <Avatar className="h-16 w-16 md:h-24 md:w-24">
-              <AvatarFallback className="bg-primary/20 text-primary text-xl md:text-2xl font-semibold">
-                {initials}
-              </AvatarFallback>
+      {/* Header sticky */}
+      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-6 py-4 md:px-8 md:py-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 md:gap-5">
+            <Avatar className="h-12 w-12 md:h-14 md:w-14 ring-2 ring-primary/10">
+              <AvatarFallback className="bg-primary/15 text-primary font-semibold">{initials}</AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <SheetTitle className="text-xl md:text-3xl font-bold">
+            <div>
+              <SheetTitle className="text-lg md:text-2xl font-bold tracking-tight">
                 {client?.name || "Nouveau client"}
               </SheetTitle>
-              <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">
-                {client?.email || ""}
+              <p className="text-xs md:text-sm text-muted-foreground">
+                {client?.email || "Renseignez les informations ci-dessous"}
               </p>
             </div>
           </div>
+
           {client && (
-            <Button size="default" className="shrink-0" type="button" onClick={() => setIsEditing(!isEditing)}>
-              {isEditing ? "Annuler" : "Modifier"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant={isEditing ? "outline" : "default"} onClick={() => setIsEditing((v) => !v)}>
+                {isEditing ? "Annuler" : "Modifier"}
+              </Button>
+            </div>
           )}
         </div>
       </div>
 
+      {/* Body */}
       <div className="p-6 md:p-8 space-y-6 md:space-y-8">
-        {/* Raison sociale */}
-        <div className="space-y-3">
-          <Label htmlFor="company-name" className="text-base md:text-lg font-semibold text-foreground">
-            Raison sociale / Nom légal de l'entreprise
-          </Label>
-          <Input
-            id="company-name"
-            placeholder="Nom de l'entreprise"
-            className="bg-background/50 h-11 md:h-12"
-            disabled={!isEditing}
-            {...register("name")}
-          />
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
-          {/* SIRET/SIREN */}
-          <div className="space-y-3">
-            <Label htmlFor="siret-siren" className="text-base md:text-lg font-semibold text-foreground">
-              SIRET / SIREN (optionnel)
-            </Label>
-            <Input
-              id="siret-siren"
-              placeholder="123 456 789 00010"
-              className="bg-background/50 h-11 md:h-12"
-              disabled={!isEditing}
-              {...register("siret_siren")}
-            />
-          </div>
-
-          {/* Nom dirigeant */}
-          <div className="space-y-3">
-            <Label htmlFor="representative" className="text-base md:text-lg font-semibold text-foreground">
-              Nom complet du dirigeant / représentant légal
-            </Label>
-            <Input
-              id="representative"
-              placeholder="Prénom Nom"
-              className="bg-background/50 h-11 md:h-12"
-              disabled={!isEditing}
-              {...register("legal_representative")}
-            />
+        {/* Synthèse compacte */}
+        <div className="rounded-xl border border-border/60 bg-emerald-500/5 text-emerald-900 dark:text-emerald-300">
+          <div className="px-4 py-3 md:px-5 md:py-4 text-sm md:text-[15px]">
+            <span className="font-medium">Conseil : </span>
+            Renseignez d’abord l’<span className="font-medium">identité</span> puis les
+            <span className="font-medium"> contacts</span>. Les
+            <span className="font-medium"> notes internes</span> vous aident pour les relances.
           </div>
         </div>
 
-        {/* Adresse */}
-        <div className="space-y-3">
-          <Label htmlFor="address" className="text-base md:text-lg font-semibold text-foreground">
-            Adresse complète du siège social (optionnel)
-          </Label>
-          <Input
-            id="address"
-            placeholder="Numéro, rue, ville, code postal"
-            className="bg-background/50 h-11 md:h-12"
-            disabled={!isEditing}
-            {...register("address")}
-          />
-        </div>
+        {/* Identité */}
+        <Section title="Identité légale" subtitle="Raison sociale et informations juridiques.">
+          <div className="grid grid-cols-1 gap-4 md:gap-5">
+            <div className="space-y-2">
+              <Label htmlFor="company-name" className="text-[13px] md:text-sm">
+                Raison sociale / Nom légal de l'entreprise
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="company-name"
+                  placeholder="Nom de l'entreprise"
+                  className="h-11 md:h-12 bg-background"
+                  {...register("name")}
+                />
+              ) : (
+                <ReadonlyValue value={client?.name} />
+              )}
+            </div>
 
-        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
-          {/* E-mail */}
-          <div className="space-y-3">
-            <Label htmlFor="email" className="text-base md:text-lg font-semibold text-foreground">
-              E-mail de contact de l'entreprise
-            </Label>
-            <Input
+            <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+              <Field
+                id="siret-siren"
+                label="SIRET / SIREN (optionnel)"
+                placeholder="123 456 789 00010"
+                registerKey="siret_siren"
+                readOnlyValue={client?.siret_siren}
+              />
+              <Field
+                id="representative"
+                label="Nom complet du dirigeant / représentant légal"
+                placeholder="Prénom Nom"
+                registerKey="legal_representative"
+                readOnlyValue={client?.legal_representative}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address" className="text-[13px] md:text-sm">
+                Adresse complète du siège social (optionnel)
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="address"
+                  placeholder="Numéro, rue, ville, code postal"
+                  className="h-11 md:h-12 bg-background"
+                  {...register("address")}
+                />
+              ) : (
+                <ReadonlyValue value={client?.address} />
+              )}
+            </div>
+          </div>
+        </Section>
+
+        {/* Contact */}
+        <Section title="Contact" subtitle="Coordonnées principales de l’entreprise.">
+          <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+            <Field
               id="email"
+              label="E-mail de contact de l'entreprise"
               type="email"
               placeholder="contact@entreprise.fr"
-              className="bg-background/50 h-11 md:h-12"
-              disabled={!isEditing}
-              {...register("email")}
+              registerKey="email"
+              readOnlyValue={client?.email}
             />
-          </div>
-
-          {/* Téléphone */}
-          <div className="space-y-3">
-            <Label htmlFor="phone" className="text-base md:text-lg font-semibold text-foreground">
-              Téléphone de contact de l'entreprise (optionnel)
-            </Label>
-            <Input
+            <Field
               id="phone"
+              label="Téléphone de contact de l'entreprise (optionnel)"
               type="tel"
               placeholder="+33 1 23 45 67 89"
-              className="bg-background/50 h-11 md:h-12"
-              disabled={!isEditing}
-              {...register("phone")}
+              registerKey="phone"
+              readOnlyValue={client?.phone}
             />
           </div>
-        </div>
+        </Section>
 
-        {/* Commentaire */}
-        <div className="space-y-3">
-          <Label htmlFor="notes" className="text-base md:text-lg font-semibold text-foreground">
-            Commentaire
-          </Label>
-          <Textarea
-            id="notes"
-            placeholder="Notes internes sur ce client..."
-            rows={4}
-            className="bg-background/50 resize-none min-h-[100px]"
-            disabled={!isEditing}
-            {...register("notes")}
-          />
-        </div>
+        {/* Notes */}
+        <Section title="Notes internes" subtitle="Informations utiles pour votre équipe (non visibles par le client).">
+          <div className="space-y-2">
+            <Label htmlFor="notes" className="text-[13px] md:text-sm">
+              Commentaire
+            </Label>
+            {isEditing ? (
+              <Textarea
+                id="notes"
+                placeholder="Notes internes sur ce client..."
+                rows={5}
+                className="resize-none bg-background"
+                {...register("notes")}
+              />
+            ) : (
+              <ReadonlyValue value={client?.notes} />
+            )}
+          </div>
+        </Section>
 
-        {/* Actions */}
-        {isEditing && (
-          <div className="flex gap-3 md:gap-4 pt-6 md:pt-8">
-            <Button 
-              variant="outline" 
-              className="flex-1" 
+        {/* Action bar */}
+        <div className="h-2" />
+      </div>
+
+      {/* Footer sticky (actions) */}
+      <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
+        {isEditing ? (
+          <div className="flex gap-3 md:gap-4">
+            <Button
+              variant="outline"
+              className="flex-1"
               type="button"
               onClick={() => {
                 if (client) {
@@ -295,12 +358,21 @@ export const ClientDetailDrawer = ({
                   onOpenChange(false);
                 }
               }}
+              disabled={isSubmitting}
             >
               Annuler
             </Button>
             <Button className="flex-1" type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Enregistrement..." : "Enregistrer"}
             </Button>
+          </div>
+        ) : (
+          <div className="flex justify-end">
+            {client ? (
+              <Button type="button" onClick={() => setIsEditing(true)}>
+                Modifier
+              </Button>
+            ) : null}
           </div>
         )}
       </div>
@@ -311,9 +383,7 @@ export const ClientDetailDrawer = ({
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent className="mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50">
-          <div className="overflow-y-auto h-full">
-            {content}
-          </div>
+          <div className="overflow-y-auto h-full">{content}</div>
         </DrawerContent>
       </Drawer>
     );
@@ -323,9 +393,12 @@ export const ClientDetailDrawer = ({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 mr-4 h-[calc(100vh-2rem)] w-full max-w-[1200px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-y-auto p-0"
+        className="m-4 h-[calc(100vh-2rem)] w-full max-w-[560px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.40)] border border-border/60 p-0 overflow-hidden"
       >
-        {content}
+        <SheetHeader className="sr-only">
+          <SheetTitle>Détail client</SheetTitle>
+        </SheetHeader>
+        <div className="h-full overflow-y-auto">{content}</div>
       </SheetContent>
     </Sheet>
   );
