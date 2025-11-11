@@ -1,3 +1,4 @@
+// src/components/Recus/ReceiptDetailDrawer.tsx
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -5,7 +6,7 @@ import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { X } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency, formatDateTime } from "@/lib/formatters";
@@ -22,6 +23,19 @@ interface ReceiptDetailDrawerProps {
 }
 
 type Member = { id: string; name: string };
+
+type EditedData = {
+  enseigne: string;
+  numero_recu: string;
+  montant_ttc: number;
+  tva: number;
+  ville: string;
+  adresse: string;
+  moyen_paiement: string;
+  categorie: string;
+  client_id: string;
+  processed_by: string;
+};
 
 export const ReceiptDetailDrawer = ({
   open,
@@ -42,8 +56,9 @@ export const ReceiptDetailDrawer = ({
   const N8N_REPORT_URL =
     (import.meta as any).env?.VITE_N8N_REPORT_URL ?? "https://samilzr.app.n8n.cloud/webhook/rapport%20d%27analyse";
 
-  // ----------------- Edition -----------------
-  const [editedData, setEditedData] = useState({
+  /** ----------------- Edition (contrôlée, sans autosave) ----------------- */
+  const initialDataRef = useRef<EditedData | null>(null);
+  const [editedData, setEditedData] = useState<EditedData>({
     enseigne: "",
     numero_recu: "",
     montant_ttc: 0,
@@ -56,20 +71,56 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // ---------- MEMBRES: chargement robuste ----------
+  // Dirty state calculé
+  const isDirty = useMemo(() => {
+    const init = initialDataRef.current;
+    if (!init) return false;
+    return (
+      init.enseigne !== editedData.enseigne ||
+      init.numero_recu !== editedData.numero_recu ||
+      init.montant_ttc !== editedData.montant_ttc ||
+      init.tva !== editedData.tva ||
+      init.ville !== editedData.ville ||
+      init.adresse !== editedData.adresse ||
+      init.moyen_paiement !== editedData.moyen_paiement ||
+      init.categorie !== editedData.categorie ||
+      (init.client_id || "") !== (editedData.client_id || "") ||
+      (init.processed_by || "") !== (editedData.processed_by || "")
+    );
+  }, [editedData]);
+
+  // Sync depuis detail à l’ouverture / changement de reçu
+  useEffect(() => {
+    if (!detail) return;
+    const next: EditedData = {
+      enseigne: detail?.enseigne ?? "",
+      numero_recu: detail?.numero_recu ?? "",
+      montant_ttc: Number(detail?.montant_ttc ?? detail?.montant ?? 0) || 0,
+      tva: Number(detail?.tva ?? 0) || 0,
+      ville: detail?.ville ?? "",
+      adresse: detail?.adresse ?? "",
+      moyen_paiement: detail?.moyen_paiement ?? "",
+      categorie: detail?.categorie ?? "",
+      client_id: detail?.client_id ?? "",
+      processed_by: detail?.processed_by ?? "",
+    };
+    initialDataRef.current = next;
+    setEditedData(next);
+    setIsEditing(false);
+    setActiveField(null);
+  }, [detail, open]);
+
+  /** ---------- MEMBRES: chargement robuste ---------- */
   const [orgScopedMembers, setOrgScopedMembers] = useState<Member[]>([]);
   const [genericMembers, setGenericMembers] = useState<Member[]>([]);
   const [membersLoadNote, setMembersLoadNote] = useState<string>("");
-
   const lastOrgIdRef = useRef<string | null>(null);
 
-  // RPC sécurisé (si dispo)
   const tryRpcMembers = async (orgId: string): Promise<Member[] | null> => {
     try {
       const { data, error } = await (supabase as any).rpc("get_org_members", { p_org_id: orgId });
       if (error) return null;
-      if (!data) return [];
-      return (data as any[]).map((r) => ({
+      return (data || []).map((r: any) => ({
         id: (r.user_id ?? r.id) as string,
         name: (r.name as string) || "Membre sans nom",
       }));
@@ -78,7 +129,6 @@ export const ReceiptDetailDrawer = ({
     }
   };
 
-  // Fallback join org_members → profiles (scopé org)
   const tryJoinMembers = async (orgId: string): Promise<Member[] | null> => {
     try {
       const { data: orgMembers, error: e1 } = await (supabase as any)
@@ -86,19 +136,14 @@ export const ReceiptDetailDrawer = ({
         .select("user_id")
         .eq("org_id", orgId);
       if (e1) return null;
-      if (!orgMembers?.length) return [];
-
-      const userIds = orgMembers.map((m: any) => m.user_id).filter(Boolean);
+      const userIds = (orgMembers || []).map((m: any) => m.user_id).filter(Boolean);
       if (userIds.length === 0) return [];
-
       const { data: profiles, error: e2 } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", userIds);
       if (e2) return null;
-      if (!profiles?.length) return [];
-
-      return profiles.map((p: any) => ({
+      return (profiles || []).map((p: any) => ({
         id: p.user_id as string,
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
       }));
@@ -107,21 +152,18 @@ export const ReceiptDetailDrawer = ({
     }
   };
 
-  // Dernier recours (non filtré org — utile en dev)
   const tryGenericMembers = async (): Promise<Member[] | null> => {
     try {
       const { data: orgMembers, error: e1 } = await (supabase as any).from("org_members").select("user_id");
       if (e1) return null;
-      if (!orgMembers?.length) return [];
-      const userIds = orgMembers.map((m: any) => m.user_id).filter(Boolean);
+      const userIds = (orgMembers || []).map((m: any) => m.user_id).filter(Boolean);
       if (userIds.length === 0) return [];
       const { data: profiles, error: e2 } = await (supabase as any)
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", userIds);
       if (e2) return null;
-      if (!profiles?.length) return [];
-      return profiles.map((p: any) => ({
+      return (profiles || []).map((p: any) => ({
         id: p.user_id as string,
         name: `${p.first_name || ""} ${p.last_name || ""}`.trim() || "Membre sans nom",
       }));
@@ -130,38 +172,31 @@ export const ReceiptDetailDrawer = ({
     }
   };
 
-  // Charge à l’ouverture et à chaque org_id
   const loadMembers = async (orgId?: string) => {
     setMembersLoadNote("");
-
-    // Si le parent a fourni des membres, on respecte (pas de fetchs)
     if (members && members.length > 0) {
       setOrgScopedMembers([]);
       setGenericMembers([]);
       return;
     }
-
     if (!orgId) {
       const gen = await tryGenericMembers();
       setGenericMembers(gen ?? []);
       if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
       return;
     }
-
     const rpc = await tryRpcMembers(orgId);
     if (rpc !== null) {
       setOrgScopedMembers(rpc);
       if (rpc.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
       return;
     }
-
     const join = await tryJoinMembers(orgId);
     if (join !== null) {
       setOrgScopedMembers(join);
       if (join.length === 0) setMembersLoadNote("Aucun membre pour cette organisation.");
       return;
     }
-
     const gen = await tryGenericMembers();
     setGenericMembers(gen ?? []);
     if (gen === null) setMembersLoadNote("Accès RLS: org_members/profiles non visibles.");
@@ -175,20 +210,17 @@ export const ReceiptDetailDrawer = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, detail?.org_id, members?.length]);
 
-  // ===== TEMPS RÉEL: org_members (scopé org) + profiles =====
   useEffect(() => {
     if (!open) return;
     const orgId = (detail?.org_id as string) || null;
-    if (!orgId || members.length > 0) return; // parent override → pas besoin de live
+    if (!orgId || members.length > 0) return;
 
-    // Abonnement org_members (insert/update/delete) filtré par org_id
     const orgChan = (supabase as any)
       .channel(`recus-drawer-org-members-${orgId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
         async (payload: any) => {
-          // INSERT rapide: merge du nouveau membre
           if (payload.eventType === "INSERT") {
             const newUserId = payload.new?.user_id as string | undefined;
             if (newUserId) {
@@ -212,14 +244,12 @@ export const ReceiptDetailDrawer = ({
               return;
             }
           }
-          // UPDATE/DELETE ou cas non géré → reload propre
           const currentOrg = lastOrgIdRef.current ?? orgId;
           loadMembers(currentOrg || undefined);
         },
       )
       .subscribe();
 
-    // Abonnement aux profils pour refléter les changements de noms
     const profilesChan = (supabase as any)
       .channel(`recus-drawer-profiles-${orgId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
@@ -253,56 +283,17 @@ export const ReceiptDetailDrawer = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, detail?.org_id, members?.length]);
 
-  // Liste effective des membres (priorité: props -> orgScoped -> generic)
   const effectiveMembers: Member[] =
     (members && members.length > 0 && members) ||
     (orgScopedMembers && orgScopedMembers.length > 0 && orgScopedMembers) ||
     genericMembers;
 
-  // ----------------- Sync & save -----------------
-  useEffect(() => {
-    if (detail) {
-      setEditedData({
-        enseigne: detail?.enseigne ?? "",
-        numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
-        ville: detail?.ville ?? "",
-        adresse: detail?.adresse ?? "",
-        moyen_paiement: detail?.moyen_paiement ?? "",
-        categorie: detail?.categorie ?? "",
-        client_id: detail?.client_id ?? "",
-        processed_by: detail?.processed_by ?? "",
-      });
-    }
-  }, [detail]);
+  const MembersSelectNote =
+    effectiveMembers.length === 0 && membersLoadNote ? (
+      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
+    ) : null;
 
-  useEffect(() => {
-    if (!isEditing || !detail?.id) return;
-    const t = setTimeout(async () => {
-      try {
-        await (supabase as any)
-          .from("recus")
-          .update({
-            enseigne: editedData.enseigne,
-            numero_recu: editedData.numero_recu,
-            montant_ttc: editedData.montant_ttc,
-            tva: editedData.tva,
-            ville: editedData.ville,
-            adresse: editedData.adresse,
-            moyen_paiement: editedData.moyen_paiement,
-            categorie: editedData.categorie,
-            client_id: editedData.client_id || null,
-            processed_by: editedData.processed_by || null,
-          })
-          .eq("id", detail.id);
-      } catch (err) {
-        console.error("Autosave error:", err);
-      }
-    }, 500);
-    return () => clearTimeout(t);
-  }, [editedData, isEditing, detail?.id]);
-
+  /** ----------------- Actions ----------------- */
   const handleValidate = async () => {
     if (!detail?.id) return;
     try {
@@ -350,7 +341,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   };
 
   const handleSave = async () => {
-    if (!detail?.id) return;
+    if (!detail?.id || !isDirty) return; // rien à faire si aucune modif
     try {
       const { error: e } = await (supabase as any)
         .from("recus")
@@ -368,6 +359,9 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         })
         .eq("id", detail.id);
       if (e) throw e;
+
+      // reset base
+      initialDataRef.current = { ...editedData };
       setIsEditing(false);
       setActiveField(null);
     } catch (err) {
@@ -376,25 +370,13 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   };
 
   const handleCancel = () => {
+    if (!initialDataRef.current) return;
+    setEditedData(initialDataRef.current);
     setIsEditing(false);
     setActiveField(null);
-    if (detail) {
-      setEditedData({
-        enseigne: detail?.enseigne ?? "",
-        numero_recu: detail?.numero_recu ?? "",
-        montant_ttc: detail?.montant_ttc ?? detail?.montant ?? 0,
-        tva: detail?.tva ?? 0,
-        ville: detail?.ville ?? "",
-        adresse: detail?.adresse ?? "",
-        moyen_paiement: detail?.moyen_paiement ?? "",
-        categorie: detail?.categorie ?? "",
-        client_id: detail?.client_id ?? "",
-        processed_by: detail?.processed_by ?? "",
-      });
-    }
   };
 
-  // ---------- UI helpers ----------
+  /** ---------- UI helpers ---------- */
   function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
       <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
@@ -411,47 +393,42 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </div>
     );
   }
-  function EditableInput({
+  function EditableText({
     label,
     field,
     value,
     onChange,
     isEditing,
-    setActiveField,
   }: {
     label: string;
-    field: string;
+    field: keyof EditedData;
     value: string;
     onChange: (v: string) => void;
     isEditing: boolean;
-    setActiveField: (f: string | null) => void;
   }) {
     return (
       <Row label={label}>
-        <input
-          type="text"
-          value={value || "—"}
-          onChange={(e) => isEditing && onChange(e.target.value)}
-          onFocus={() => setActiveField(field)}
-          onBlur={() => setActiveField(null)}
-          disabled={!isEditing}
-          className={cn(
-            "text-xs md:text-sm font-medium bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-right",
-            isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-          )}
-        />
+        {isEditing ? (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setActiveField(field)}
+            onBlur={() => setActiveField(null)}
+            className={cn(
+              "text-xs md:text-sm font-medium bg-transparent border-none p-0 text-right focus:outline-none focus:ring-0",
+              "border-b border-primary/50",
+            )}
+            placeholder="—"
+          />
+        ) : (
+          <span className="text-xs md:text-sm font-medium">{value?.trim() ? value : "—"}</span>
+        )}
       </Row>
     );
   }
-  const EditableInputMobile = (props: any) => <EditableInput {...props} />;
 
-  // Note d’aide au Select (après avoir la liste effective)
-  const MembersSelectNote =
-    effectiveMembers.length === 0 && membersLoadNote ? (
-      <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
-    ) : null;
-
-  // ---------- Desktop ----------
+  /** ---------- Desktop ---------- */
   const desktopContent = (
     <div className="relative flex h-full">
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -468,20 +445,22 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             <SheetHeader>
               <div className="flex items-start justify-between">
                 <div className="flex-1 text-left">
-                  <div className="flex items-baseline gap-2">
+                  {isEditing ? (
                     <input
                       type="text"
-                      value={editedData.enseigne || "—"}
-                      onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
+                      value={editedData.enseigne}
+                      onChange={(e) => setEditedData({ ...editedData, enseigne: e.target.value })}
                       onFocus={() => setActiveField("enseigne")}
                       onBlur={() => setActiveField(null)}
-                      disabled={!isEditing}
                       className={cn(
                         "text-lg md:text-2xl font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
-                        isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+                        "border-b border-primary/50",
                       )}
+                      placeholder="Enseigne"
                     />
-                  </div>
+                  ) : (
+                    <div className="text-lg md:text-2xl font-bold">{editedData.enseigne || "—"}</div>
+                  )}
                 </div>
               </div>
             </SheetHeader>
@@ -492,20 +471,26 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 <div className="inline-block text-center">
                   <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant TTC :</p>
                   {isEditing ? (
-                    <div className="inline-flex items-baseline gap-0">
+                    <div className="inline-flex items-baseline gap-1">
                       <input
                         type="number"
                         step="0.01"
-                        value={editedData.montant_ttc}
-                        onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                        inputMode="decimal"
+                        value={Number.isFinite(editedData.montant_ttc) ? editedData.montant_ttc : 0}
+                        onChange={(e) =>
+                          setEditedData({
+                            ...editedData,
+                            montant_ttc: Number.isFinite(parseFloat(e.target.value)) ? parseFloat(e.target.value) : 0,
+                          })
+                        }
                         onFocus={() => setActiveField("montant_ttc")}
                         onBlur={() => setActiveField(null)}
                         className={cn(
-                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                          "text-2xl md:text-4xl font-bold text-center bg-transparent border-none p-0 focus:outline-none",
+                          "border-b-2 border-primary/60",
                           "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                          "cursor-text border-b-2 border-primary",
                         )}
-                        style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                        style={{ letterSpacing: "-0.03em" }}
                       />
                     </div>
                   ) : (
@@ -522,7 +507,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                     <p className="text-xs md:text-sm text-muted-foreground mb-1">Montant HT :</p>
                     <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
-                      {formatCurrency(editedData.montant_ttc - editedData.tva)}
+                      {formatCurrency(Math.max(0, editedData.montant_ttc - editedData.tva))}
                     </p>
                   </CardContent>
                 </Card>
@@ -530,24 +515,28 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   <CardContent className="pt-4 md:pt-6 pb-3 md:pb-4">
                     <p className="text-xs md:text-sm text-muted-foreground mb-1">TVA :</p>
                     {isEditing ? (
-                      <div className="inline-flex items-baseline gap-0">
+                      <div className="inline-flex items-baseline gap-1">
                         <input
                           type="number"
                           step="0.01"
-                          value={editedData.tva}
-                          onChange={(e) => setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                          inputMode="decimal"
+                          value={Number.isFinite(editedData.tva) ? editedData.tva : 0}
+                          onChange={(e) =>
+                            setEditedData({
+                              ...editedData,
+                              tva: Number.isFinite(parseFloat(e.target.value)) ? parseFloat(e.target.value) : 0,
+                            })
+                          }
                           onFocus={() => setActiveField("tva")}
                           onBlur={() => setActiveField(null)}
                           className={cn(
-                            "text-lg md:text-2xl font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                            "text-lg md:text-2xl font-semibold bg-transparent border-none p-0 focus:outline-none",
+                            "border-b border-primary/60",
                             "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                            "cursor-text border-b border-primary",
                           )}
-                          style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                          style={{ letterSpacing: "-0.03em" }}
                         />
-                        <span className="text-lg md:text-2xl font-semibold leading-none inline-block flex-none -ml-[2px]">
-                          €
-                        </span>
+                        <span className="text-lg md:text-2xl font-semibold leading-none">€</span>
                       </div>
                     ) : (
                       <p className="text-lg md:text-2xl font-semibold whitespace-nowrap tabular-nums">
@@ -566,42 +555,37 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   </span>
                 </Row>
 
-                <EditableInput
+                <EditableText
                   label="Moyen de paiement"
                   field="moyen_paiement"
                   isEditing={isEditing}
                   value={editedData.moyen_paiement}
                   onChange={(v) => setEditedData({ ...editedData, moyen_paiement: v })}
-                  setActiveField={setActiveField}
                 />
-                <EditableInput
+                <EditableText
                   label="Ville"
                   field="ville"
                   isEditing={isEditing}
                   value={editedData.ville}
                   onChange={(v) => setEditedData({ ...editedData, ville: v })}
-                  setActiveField={setActiveField}
                 />
-                <EditableInput
+                <EditableText
                   label="Adresse"
                   field="adresse"
                   isEditing={isEditing}
                   value={editedData.adresse}
                   onChange={(v) => setEditedData({ ...editedData, adresse: v })}
-                  setActiveField={setActiveField}
                 />
-                <EditableInput
+                <EditableText
                   label="Catégorie"
                   field="categorie"
                   isEditing={isEditing}
                   value={editedData.categorie}
                   onChange={(v) => setEditedData({ ...editedData, categorie: v })}
-                  setActiveField={setActiveField}
                 />
 
                 {/* Traité par */}
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Traité par :</span>
+                <Row label="Traité par">
                   <div className="text-right">
                     {isEditing ? (
                       <>
@@ -611,7 +595,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                             setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
                           }
                         >
-                          <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                          <SelectTrigger className="w-[200px] h-8 text-xs md:text-sm">
                             <SelectValue placeholder="Sélectionner" />
                           </SelectTrigger>
                           <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
@@ -629,11 +613,10 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       <span className="text-xs md:text-sm font-medium">{detail?._processedByName ?? "—"}</span>
                     )}
                   </div>
-                </div>
+                </Row>
 
                 {/* Client assigné */}
-                <div className="flex justify-between items-center py-1.5 md:py-2 border-b border-border">
-                  <span className="text-xs md:text-sm text-muted-foreground">Client assigné :</span>
+                <Row label="Client assigné">
                   <div className="text-right">
                     {isEditing ? (
                       <Select
@@ -642,7 +625,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                           setEditedData({ ...editedData, client_id: value === "none" ? "" : value })
                         }
                       >
-                        <SelectTrigger className="w-[180px] h-8 text-xs md:text-sm">
+                        <SelectTrigger className="w-[200px] h-8 text-xs md:text-sm">
                           <SelectValue placeholder="Sélectionner" />
                         </SelectTrigger>
                         <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
@@ -658,33 +641,35 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                       <span className="text-xs md:text-sm font-medium">{detail?._clientName ?? "—"}</span>
                     )}
                   </div>
-                </div>
+                </Row>
               </div>
 
               {/* Boutons */}
-              <div className="space-y-3 pt-4 md:pt-6">
+              <div className="pt-4 md:pt-6">
                 {isEditing ? (
-                  <div className="flex gap-3">
-                    <Button variant="default" className="flex-1 h-10" onClick={handleSave}>
-                      Enregistrer
-                    </Button>
-                    <Button variant="outline" className="flex-1 h-10" onClick={handleCancel}>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button variant="outline" className="h-10 px-4" onClick={handleCancel}>
                       Annuler
+                    </Button>
+                    <Button className="h-10 px-4" onClick={handleSave} disabled={!isDirty}>
+                      Enregistrer
                     </Button>
                   </div>
                 ) : (
                   <>
-                    <div className="flex gap-3">
-                      <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" className="h-10 px-4" onClick={handleValidate}>
                         Valider
                       </Button>
-                      <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
+                      <Button variant="outline" className="h-10 px-4" onClick={() => setIsEditing(true)}>
                         Corriger
                       </Button>
                     </div>
-                    <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
-                      Consulter le rapport d'analyse
-                    </Button>
+                    <div className="mt-3">
+                      <Button variant="outline" className="w-full h-10" disabled={!detail?.id} onClick={openReport}>
+                        Consulter le rapport d'analyse
+                      </Button>
+                    </div>
                   </>
                 )}
               </div>
@@ -695,7 +680,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
     </div>
   );
 
-  // ---------- Mobile ----------
+  /** ---------- Mobile ---------- */
   const mobileContent = loading ? (
     <div className="flex items-center justify-center h-full">
       <p className="text-muted-foreground">Chargement…</p>
@@ -709,34 +694,40 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       <div className="flex-shrink-0 p-4 border-b border-border">
         <div className="flex items-start justify-between">
           <div className="flex-1 text-left">
-            <div className="flex items-baseline gap-2">
+            {isEditing ? (
               <input
                 type="text"
-                value={editedData.enseigne || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, enseigne: e.target.value })}
+                value={editedData.enseigne}
+                onChange={(e) => setEditedData({ ...editedData, enseigne: e.target.value })}
                 onFocus={() => setActiveField("enseigne")}
                 onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
                 className={cn(
                   "text-lg font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
+                  "border-b border-primary/50",
                 )}
+                placeholder="Enseigne"
               />
-            </div>
+            ) : (
+              <div className="text-lg font-bold">{editedData.enseigne || "—"}</div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               Reçu n°{" "}
-              <input
-                type="text"
-                value={editedData.numero_recu || "—"}
-                onChange={(e) => isEditing && setEditedData({ ...editedData, numero_recu: e.target.value })}
-                onFocus={() => setActiveField("numero_recu")}
-                onBlur={() => setActiveField(null)}
-                disabled={!isEditing}
-                className={cn(
-                  "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
-                  isEditing ? "cursor-text border-b border-primary" : "cursor-default",
-                )}
-              />
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedData.numero_recu}
+                  onChange={(e) => setEditedData({ ...editedData, numero_recu: e.target.value })}
+                  onFocus={() => setActiveField("numero_recu")}
+                  onBlur={() => setActiveField(null)}
+                  className={cn(
+                    "bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-xs",
+                    "border-b border-primary/50",
+                  )}
+                  placeholder="—"
+                />
+              ) : (
+                <span>{editedData.numero_recu || "—"}</span>
+              )}
             </p>
           </div>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="shrink-0">
@@ -752,22 +743,28 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             <div className="inline-block text-center">
               <p className="text-xs text-muted-foreground mb-1">Montant TTC :</p>
               {isEditing ? (
-                <div className="inline-flex items-baseline gap-0">
+                <div className="inline-flex items-baseline gap-1">
                   <input
                     type="number"
                     step="0.01"
-                    value={editedData.montant_ttc}
-                    onChange={(e) => setEditedData({ ...editedData, montant_ttc: parseFloat(e.target.value) || 0 })}
+                    inputMode="decimal"
+                    value={Number.isFinite(editedData.montant_ttc) ? editedData.montant_ttc : 0}
+                    onChange={(e) =>
+                      setEditedData({
+                        ...editedData,
+                        montant_ttc: Number.isFinite(parseFloat(e.target.value)) ? parseFloat(e.target.value) : 0,
+                      })
+                    }
                     onFocus={() => setActiveField("montant_ttc")}
                     onBlur={() => setActiveField(null)}
                     className={cn(
-                      "text-2xl font-bold text-center bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                      "text-2xl font-bold text-center bg-transparent border-none p-0 focus:outline-none",
+                      "border-b-2 border-primary/60",
                       "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                      "cursor-text border-b-2 border-primary",
                     )}
-                    style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                    style={{ letterSpacing: "-0.03em" }}
                   />
-                  <span className="text-2xl font-bold leading-none inline-block flex-none -ml-[2px]">€</span>
+                  <span className="text-2xl font-bold leading-none">€</span>
                 </div>
               ) : (
                 <p className="text-2xl font-bold">{formatCurrency(editedData.montant_ttc)}</p>
@@ -780,29 +777,37 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             <Card>
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground mb-1">Montant HT :</p>
-                <p className="text-lg font-semibold">{formatCurrency(editedData.montant_ttc - editedData.tva)}</p>
+                <p className="text-lg font-semibold">
+                  {formatCurrency(Math.max(0, editedData.montant_ttc - editedData.tva))}
+                </p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground mb-1">TVA :</p>
                 {isEditing ? (
-                  <div className="inline-flex items-baseline gap-0">
+                  <div className="inline-flex items-baseline gap-1">
                     <input
                       type="number"
                       step="0.01"
-                      value={editedData.tva}
-                      onChange={(e) => setEditedData({ ...editedData, tva: parseFloat(e.target.value) || 0 })}
+                      inputMode="decimal"
+                      value={Number.isFinite(editedData.tva) ? editedData.tva : 0}
+                      onChange={(e) =>
+                        setEditedData({
+                          ...editedData,
+                          tva: Number.isFinite(parseFloat(e.target.value)) ? parseFloat(e.target.value) : 0,
+                        })
+                      }
                       onFocus={() => setActiveField("tva")}
                       onBlur={() => setActiveField(null)}
                       className={cn(
-                        "text-lg font-semibold text-left bg-transparent border-none inline-block flex-none shrink-0 basis-auto w-auto max-w-fit p-0 pr-0 m-0 mr-0 focus:outline-none leading-none tracking-tight appearance-none",
+                        "text-lg font-semibold bg-transparent border-none p-0 focus:outline-none",
+                        "border-b border-primary/60",
                         "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                        "cursor-text border-b border-primary",
                       )}
-                      style={{ letterSpacing: "-0.03em", minWidth: "0", width: "auto" }}
+                      style={{ letterSpacing: "-0.03em" }}
                     />
-                    <span className="text-lg font-semibold leading-none inline-block flex-none -ml-[2px]">€</span>
+                    <span className="text-lg font-semibold leading-none">€</span>
                   </div>
                 ) : (
                   <p className="text-lg font-semibold">{formatCurrency(editedData.tva)}</p>
@@ -819,38 +824,61 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               </span>
             </RowMobile>
 
-            <EditableInputMobile
-              label="Moyen de paiement"
-              field="moyen_paiement"
-              isEditing={isEditing}
-              value={editedData.moyen_paiement}
-              onChange={(v: string) => setEditedData({ ...editedData, moyen_paiement: v })}
-              setActiveField={setActiveField}
-            />
-            <EditableInputMobile
-              label="Ville"
-              field="ville"
-              isEditing={isEditing}
-              value={editedData.ville}
-              onChange={(v: string) => setEditedData({ ...editedData, ville: v })}
-              setActiveField={setActiveField}
-            />
-            <EditableInputMobile
-              label="Adresse"
-              field="adresse"
-              isEditing={isEditing}
-              value={editedData.adresse}
-              onChange={(v: string) => setEditedData({ ...editedData, adresse: v })}
-              setActiveField={setActiveField}
-            />
-            <EditableInputMobile
-              label="Catégorie"
-              field="categorie"
-              isEditing={isEditing}
-              value={editedData.categorie}
-              onChange={(v: string) => setEditedData({ ...editedData, categorie: v })}
-              setActiveField={setActiveField}
-            />
+            <RowMobile label="Moyen de paiement">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedData.moyen_paiement}
+                  onChange={(e) => setEditedData({ ...editedData, moyen_paiement: e.target.value })}
+                  className="text-xs text-right bg-transparent border-b border-primary/50 focus:outline-none"
+                  placeholder="—"
+                />
+              ) : (
+                <span className="text-xs font-medium">{editedData.moyen_paiement || "—"}</span>
+              )}
+            </RowMobile>
+
+            <RowMobile label="Ville">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedData.ville}
+                  onChange={(e) => setEditedData({ ...editedData, ville: e.target.value })}
+                  className="text-xs text-right bg-transparent border-b border-primary/50 focus:outline-none"
+                  placeholder="—"
+                />
+              ) : (
+                <span className="text-xs font-medium">{editedData.ville || "—"}</span>
+              )}
+            </RowMobile>
+
+            <RowMobile label="Adresse">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedData.adresse}
+                  onChange={(e) => setEditedData({ ...editedData, adresse: e.target.value })}
+                  className="text-xs text-right bg-transparent border-b border-primary/50 focus:outline-none"
+                  placeholder="—"
+                />
+              ) : (
+                <span className="text-xs font-medium">{editedData.adresse || "—"}</span>
+              )}
+            </RowMobile>
+
+            <RowMobile label="Catégorie">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedData.categorie}
+                  onChange={(e) => setEditedData({ ...editedData, categorie: e.target.value })}
+                  className="text-xs text-right bg-transparent border-b border-primary/50 focus:outline-none"
+                  placeholder="—"
+                />
+              ) : (
+                <span className="text-xs font-medium">{editedData.categorie || "—"}</span>
+              )}
+            </RowMobile>
 
             {/* Traité par */}
             <RowMobile label="Traité par">
@@ -863,7 +891,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                         setEditedData({ ...editedData, processed_by: value === "none" ? "" : value })
                       }
                     >
-                      <SelectTrigger className="w-[140px] h-7 text-xs">
+                      <SelectTrigger className="w-[160px] h-7 text-xs">
                         <SelectValue placeholder="Sélectionner" />
                       </SelectTrigger>
                       <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
@@ -890,7 +918,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   value={editedData.client_id || "none"}
                   onValueChange={(value) => setEditedData({ ...editedData, client_id: value === "none" ? "" : value })}
                 >
-                  <SelectTrigger className="w-[140px] h-7 text-xs">
+                  <SelectTrigger className="w-[160px] h-7 text-xs">
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
                   <SelectContent position="popper" className="z-[9999] max-h-64 overflow-auto">
@@ -914,20 +942,20 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       <div className="flex-shrink-0 p-4 border-t border-border bg-card/95">
         {isEditing ? (
           <div className="flex gap-3">
-            <Button variant="default" className="flex-1 h-10" onClick={handleSave}>
-              Enregistrer
-            </Button>
-            <Button variant="outline" className="flex-1 h-10" onClick={handleCancel}>
+            <Button variant="outline" className="h-10 flex-1" onClick={handleCancel}>
               Annuler
+            </Button>
+            <Button className="h-10 flex-1" onClick={handleSave} disabled={!isDirty}>
+              Enregistrer
             </Button>
           </div>
         ) : (
           <div className="space-y-2">
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1 h-10" onClick={handleValidate}>
+              <Button variant="outline" className="h-10 flex-1" onClick={handleValidate}>
                 Valider
               </Button>
-              <Button variant="outline" className="flex-1 h-10" onClick={() => setIsEditing(true)}>
+              <Button variant="outline" className="h-10 flex-1" onClick={() => setIsEditing(true)}>
                 Corriger
               </Button>
             </div>
