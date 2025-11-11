@@ -540,11 +540,10 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        {/* ↓↓↓ Changement UNIQUEMENT ici pour supprimer l’excédent en bas ↓↓↓ */}
-        <DrawerContent className="relative mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-hidden">
+        {/* z-index ↑ et scroll wrapper pour supprimer l’excédent bas */}
+        <DrawerContent className="relative z-[60] mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-hidden">
           <div className="max-h-[85vh] h-full overflow-y-auto overscroll-contain overflow-x-hidden">{content}</div>
         </DrawerContent>
-        {/* ↑↑↑ */}
       </Drawer>
     );
   }
@@ -554,6 +553,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       <SheetContent
         side="right"
         className="
+          z-[60]
           m-4 h-[calc(100vh-2rem)]
           !max-w-none !w-[min(96vw,1440px)]
           rounded-2xl bg-card/95 backdrop-blur-lg
