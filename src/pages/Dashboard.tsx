@@ -352,24 +352,26 @@ const Dashboard = () => {
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={tvaEvolutionGraphData} margin={{ top: 10, right: 35, left: 0, bottom: 10 }}>
-                  <XAxis
-                    dataKey={showDetailedDates ? "date" : undefined}
-                    tick={{ fontSize: 12 }}
-                    tickMargin={8}
-                    padding={{ left: 0, right: 0 }}
-                    // Afficher seulement début/fin si >7 jours
-                    ticks={showDetailedDates ? undefined : [0, tvaEvolutionGraphData.length - 1]}
-                    domain={["dataMin", "dataMax"]}
-                    type="number"
-                    // Label manuel
-                    tickFormatter={(value) => {
-                      if (!showDetailedDates) {
+                  {showDetailedDates ? (
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12 }}
+                      tickMargin={8}
+                      padding={{ left: 0, right: 0 }}
+                    />
+                  ) : (
+                    <XAxis
+                      tick={{ fontSize: 12 }}
+                      tickMargin={8}
+                      padding={{ left: 0, right: 0 }}
+                      ticks={[0, tvaEvolutionGraphData.length - 1]}
+                      tickFormatter={(value) => {
                         if (value === 0) return xAxisLabelLeft;
                         if (value === tvaEvolutionGraphData.length - 1) return xAxisLabelRight;
-                      }
-                      return "";
-                    }}
-                  />
+                        return "";
+                      }}
+                    />
+                  )}
                   <YAxis tick={{ fontSize: 12 }} tickMargin={8} ticks={yTicks} domain={[0, yMax]} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line
