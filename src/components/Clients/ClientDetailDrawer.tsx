@@ -341,7 +341,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         {/* KPI + DateRangePicker */}
         <div className="rounded-2xl border border-border/60 bg-background/50 p-4 md:p-5">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
-            <div className="text-sm font-semibold">KPI (période)</div>
+            <div className="text-sm font-semibold">Vue d’ensemble (période)</div>
             <div className="flex-1" />
             <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           </div>
