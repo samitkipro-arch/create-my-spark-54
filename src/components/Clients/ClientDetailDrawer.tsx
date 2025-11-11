@@ -42,11 +42,10 @@ interface ClientDetailDrawerProps {
     phone?: string;
     notes?: string;
 
-    // Champs TVA (présumés en base)
     regime_tva?: "reel_normal" | "simplifie" | "franchise";
     prorata_tva?: number | null;
-    vehicules?: string | null; // ex: "1 VP", "2 VU"
-    repas_deductibles?: number | null; // %
+    vehicules?: string | null;
+    repas_deductibles?: number | null;
   } | null;
 }
 
@@ -63,9 +62,10 @@ type ClientFormData = {
 export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false); // <-- contrôle explicite du bouton Enregistrer
   const queryClient = useQueryClient();
 
-  // ----- Date range pour KPI -----
+  // ----- Date range pour Vue d’ensemble -----
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(subDays(new Date(), 29)),
     to: endOfDay(new Date()),
@@ -74,12 +74,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     if (range?.from && range?.to) setDateRange({ from: startOfDay(range.from), to: endOfDay(range.to) });
   };
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = useForm<ClientFormData>({
+  const { register, handleSubmit, reset } = useForm<ClientFormData>({
     defaultValues: {
       name: client?.name || "",
       siret_siren: client?.siret_siren || "",
@@ -106,14 +101,15 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       reset({
         name: "",
         siret_siren: "",
-        legal_representitative: "",
+        legal_representative: "",
         address: "",
         email: "",
         phone: "",
         notes: "",
-      } as any);
+      });
     }
     setIsEditing(!client);
+    setSaving(false);
   }, [client, reset]);
 
   const initials = client?.name
@@ -127,6 +123,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
   const onSubmit = async (data: ClientFormData) => {
     try {
+      setSaving(true);
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -153,7 +150,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             notes: data.notes,
           })
           .eq("id", client.id);
-
         if (error) throw error;
         toast.success("Client modifié avec succès");
       } else {
@@ -167,7 +163,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           phone: data.phone,
           notes: data.notes,
         });
-
         if (error) throw error;
         toast.success("Client ajouté avec succès");
       }
@@ -177,10 +172,12 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       onOpenChange(false);
     } catch (error: any) {
       toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setSaving(false);
     }
   };
 
-  /** ---------- Data KPI pour CE client ---------- */
+  /** ---------- Data Vue d’ensemble pour CE client ---------- */
   const { data: receipts = [], isLoading: loadingReceipts } = useQuery({
     queryKey: ["client-receipts", client?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
@@ -204,12 +201,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     );
     const ttc = receipts.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0);
     const tva = receipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
-    return {
-      count: receipts.length,
-      ht,
-      tva,
-      ttc,
-    };
+    return { count: receipts.length, ht, tva, ttc };
   }, [receipts]);
 
   const formatCurrency = (value: number) =>
@@ -309,19 +301,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     toast.success("Relance envoyée (démo) — branche n8n à connecter.");
   };
 
-  // ----- KPI Card inline -----
-  const KpiCard = ({ icon: Icon, label, value }: { icon: any; label: string; value: string }) => (
-    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3.5 py-3">
-      <div className="p-2 rounded-lg bg-primary/10 text-primary">
-        <Icon size={18} />
-      </div>
-      <div className="flex-1">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-sm font-semibold">{value}</div>
-      </div>
-    </div>
-  );
-
   /** ---------- Autosave TVA ---------- */
   const [tvaState, setTvaState] = useState<{
     regime_tva: "reel_normal" | "simplifie" | "franchise";
@@ -365,7 +344,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
-      {/* Header sticky (sans actions) */}
+      {/* Header sticky */}
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-6 py-4 md:px-8 md:py-5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 md:gap-5 min-w-0">
@@ -387,7 +366,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
       {/* Body */}
       <div className="p-6 md:p-8 space-y-6 md:space-y-8">
-        {/* Vue d’ensemble + DateRangePicker */}
+        {/* Vue d’ensemble */}
         <div className="rounded-2xl border border-border/60 bg-background/50 p-4 md:p-5">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
             <div className="text-sm font-semibold">Vue d’ensemble</div>
@@ -602,7 +581,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         <div className="h-2" />
       </div>
 
-      {/* Footer sticky (inchangé) */}
+      {/* Footer sticky — contrôle avec `saving` */}
       <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
         {isEditing ? (
           <div className="flex gap-3 md:gap-4">
@@ -613,17 +592,18 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               onClick={() => {
                 if (client) {
                   setIsEditing(false);
+                  // réinitialise les champs visibles
                   reset();
                 } else {
                   onOpenChange(false);
                 }
               }}
-              disabled={isSubmitting}
+              disabled={saving}
             >
               Annuler
             </Button>
-            <Button className="flex-1" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            <Button className="flex-1" type="submit" disabled={saving}>
+              {saving ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </div>
         ) : (
