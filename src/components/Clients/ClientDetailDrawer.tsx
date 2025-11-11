@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
@@ -39,6 +41,12 @@ interface ClientDetailDrawerProps {
     address?: string;
     phone?: string;
     notes?: string;
+
+    // Champs TVA (présumés en base)
+    regime_tva?: "reel_normal" | "simplifie" | "franchise";
+    prorata_tva?: number | null;
+    vehicules?: string | null; // ex: "1 VP", "2 VU"
+    repas_deductibles?: number | null; // %
   } | null;
 }
 
@@ -314,6 +322,47 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     </div>
   );
 
+  /** ---------- Autosave TVA ---------- */
+  const [tvaState, setTvaState] = useState<{
+    regime_tva: "reel_normal" | "simplifie" | "franchise";
+    prorata_tva: number;
+    vehicules: string;
+    repas_deductibles: number;
+  }>({
+    regime_tva: client?.regime_tva ?? "reel_normal",
+    prorata_tva: typeof client?.prorata_tva === "number" ? client!.prorata_tva! : 100,
+    vehicules: client?.vehicules ?? "",
+    repas_deductibles: typeof client?.repas_deductibles === "number" ? client!.repas_deductibles! : 50,
+  });
+
+  const [justSaved, setJustSaved] = useState(false);
+
+  const autosaveTva = async (patch: Partial<typeof tvaState>) => {
+    if (!client?.id) return;
+    try {
+      const next = { ...tvaState, ...patch };
+      setTvaState(next);
+
+      const { error } = await (supabase as any)
+        .from("clients")
+        .update({
+          regime_tva: next.regime_tva,
+          prorata_tva: next.prorata_tva,
+          vehicules: next.vehicules,
+          repas_deductibles: next.repas_deductibles,
+        })
+        .eq("id", client.id);
+
+      if (error) throw error;
+
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2000);
+      await queryClient.invalidateQueries({ queryKey: ["clients"] });
+    } catch (e: any) {
+      toast.error(e.message || "Impossible d’enregistrer les règles TVA");
+    }
+  };
+
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
       {/* Header sticky (sans actions) */}
@@ -338,7 +387,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
       {/* Body */}
       <div className="p-6 md:p-8 space-y-6 md:space-y-8">
-        {/* KPI + DateRangePicker */}
+        {/* Vue d’ensemble + DateRangePicker */}
         <div className="rounded-2xl border border-border/60 bg-background/50 p-4 md:p-5">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
             <div className="text-sm font-semibold">Vue d’ensemble</div>
@@ -346,7 +395,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           </div>
 
-          {/* MOBILE -> 1 par ligne | DESKTOP -> 4 colonnes */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <KpiCard icon={Receipt} label="Reçus traités" value={loadingReceipts ? "…" : String(kpis.count)} />
             <KpiCard icon={Globe} label="Montant HT" value={loadingReceipts ? "…" : formatCurrency(kpis.ht)} />
@@ -422,7 +470,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Contact & relances — Email PUIS Téléphone (empilés) */}
+        {/* Contact & relances */}
         <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise.">
           <div className="grid grid-cols-1 gap-4 md:gap-5">
             <Field
@@ -444,32 +492,91 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Règles TVA (visuel) */}
+        {/* Règles TVA (éditable + autosave) */}
         <Section
-          title="Règles TVA (bientôt)"
-          subtitle="Configurez les règles d’éligibilité pour la récupération de TVA. (Visuel uniquement, pas encore connecté)"
+          title="Règles TVA"
+          subtitle="Définissez le régime et les paramètres qui s’appliquent automatiquement au calcul de TVA récupérable."
         >
-          <div className="grid md:grid-cols-2 gap-4 md:gap-5 opacity-80">
+          <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+            {/* Régime TVA */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Régime TVA</Label>
-              <Input disabled placeholder="Réal normal / Simplifié / Franchise (à venir)" />
+              <RadioGroup
+                value={tvaState.regime_tva}
+                onValueChange={(v: "reel_normal" | "simplifie" | "franchise") => autosaveTva({ regime_tva: v })}
+                className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+              >
+                <label className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2 cursor-pointer">
+                  <RadioGroupItem value="reel_normal" id="reg-reel" />
+                  <span className="text-sm">Réel normal</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2 cursor-pointer">
+                  <RadioGroupItem value="simplifie" id="reg-simplifie" />
+                  <span className="text-sm">Simplifié</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2 cursor-pointer">
+                  <RadioGroupItem value="franchise" id="reg-franchise" />
+                  <span className="text-sm">Franchise</span>
+                </label>
+              </RadioGroup>
+              {tvaState.regime_tva === "franchise" && (
+                <div className="text-xs text-red-500 mt-1">TVA non récupérable (franchise en base).</div>
+              )}
             </div>
+
+            {/* Prorata TVA (%) */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
-              <Input disabled placeholder="100 (à venir)" />
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={tvaState.prorata_tva}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+                  autosaveTva({ prorata_tva: v });
+                }}
+                placeholder="100"
+                className="h-11 md:h-12 bg-background"
+              />
             </div>
+
+            {/* Véhicules */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Véhicules</Label>
-              <Input disabled placeholder="VP / VU (à venir)" />
+              <Input
+                value={tvaState.vehicules}
+                onChange={(e) => autosaveTva({ vehicules: e.target.value })}
+                placeholder="ex. 1 VP / 2 VU"
+                className="h-11 md:h-12 bg-background"
+              />
             </div>
+
+            {/* Repas déductibles (%) */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
-              <Input disabled placeholder="100 (à venir)" />
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={tvaState.repas_deductibles}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+                  autosaveTva({ repas_deductibles: v });
+                }}
+                placeholder="50"
+                className="h-11 md:h-12 bg-background"
+              />
             </div>
           </div>
-          <p className="text-[11px] md:text-xs text-muted-foreground mt-3">
-            Astuce : ces règles s’appliqueront automatiquement à l’analyse des reçus pour calculer la TVA récupérable.
-          </p>
+
+          {justSaved && (
+            <div className="mt-3">
+              <Badge variant="secondary" className="text-xs">
+                Mis à jour
+              </Badge>
+            </div>
+          )}
         </Section>
 
         {/* Notes */}
@@ -495,7 +602,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         <div className="h-2" />
       </div>
 
-      {/* Footer sticky (actions uniques, pas de doublon) */}
+      {/* Footer sticky (inchangé) */}
       <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
         {isEditing ? (
           <div className="flex gap-3 md:gap-4">
