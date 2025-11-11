@@ -171,7 +171,9 @@ const Dashboard = () => {
       .channel("dashboard-receipts")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [refetchReceipts]);
 
   // --- Calculs KPI ---
