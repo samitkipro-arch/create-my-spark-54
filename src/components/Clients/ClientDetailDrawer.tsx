@@ -98,7 +98,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       reset({
         name: "",
         siret_siren: "",
-        legal_representative: "",
+        legal_representitative: "",
         address: "",
         email: "",
         phone: "",
@@ -341,7 +341,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         {/* KPI + DateRangePicker */}
         <div className="rounded-2xl border border-border/60 bg-background/50 p-4 md:p-5">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
-            <div className="text-sm font-semibold">Vue d'ensemble</div>
+            <div className="text-sm font-semibold">Vue d’ensemble</div>
             <div className="flex-1" />
             <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           </div>
@@ -423,7 +423,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         </Section>
 
         {/* Contact & relances — Email PUIS Téléphone (empilés) */}
-        <Section title="Contact & relances" subtitle="Coordonnées principales de l'entreprise.">
+        <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise.">
           <div className="grid grid-cols-1 gap-4 md:gap-5">
             <Field
               id="email"
@@ -447,92 +447,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         {/* Règles TVA (visuel) */}
         <Section
           title="Règles TVA (bientôt)"
-          subtitle="Configurez les règles d'éligibilité pour la récupération de TVA. (Visuel uniquement, pas encore connecté)"
+          subtitle="Configurez les règles d’éligibilité pour la récupération de TVA. (Visuel uniquement, pas encore connecté)"
         >
           <div className="grid md:grid-cols-2 gap-4 md:gap-5 opacity-80">
             <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Taux de TVA par défaut</Label>
-              <Input placeholder="20%" disabled className="bg-muted/50" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Seuil minimum de récupération</Label>
-              <Input placeholder="50 €" disabled className="bg-muted/50" />
-            </div>
-          </div>
-        </Section>
-
-        {/* Notes */}
-        <Section title="Notes & mémo" subtitle="Informations complémentaires ou mémos internes.">
-          <div className="space-y-2">
-            <Label htmlFor="notes" className="text-[13px] md:text-sm">
-              Notes privées (visibles uniquement par votre équipe)
-            </Label>
-            {isEditing ? (
-              <Textarea
-                id="notes"
-                placeholder="Remarques, mémos, particularités..."
-                className="min-h-[100px] bg-background"
-                {...register("notes")}
-              />
-            ) : (
-              <ReadonlyValue value={client?.notes} />
-            )}
-          </div>
-        </Section>
-      </div>
-
-      {/* Footer sticky */}
-      <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
-        <div className="flex items-center gap-3">
-          {isEditing ? (
-            <>
-              <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting ? "Enregistrement..." : client?.id ? "Enregistrer" : "Créer le client"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setIsEditing(false);
-                  reset();
-                  if (!client) onOpenChange(false);
-                }}
-                disabled={isSubmitting}
-                className="flex-1"
-              >
-                Annuler
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button type="button" onClick={() => setIsEditing(true)} className="flex-1">
-                Modifier
-              </Button>
-              <Button type="button" variant="outline" onClick={onRelance} className="flex-1">
-                Relancer
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-    </form>
-  );
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[95vh]">
-          <div className="overflow-y-auto">{content}</div>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl p-0 overflow-y-auto">
-        {content}
-      </SheetContent>
-    </Sheet>
-  );
-};
+              <Label className="te
