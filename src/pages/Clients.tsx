@@ -98,9 +98,9 @@ const Clients = () => {
   });
 
   // ---- KPI (RPC)
-  const { data: kpis, isLoading: isLoadingKpis } = useQuery<ClientKpis>({
+  const { data: kpis, isLoading: isLoadingKpis } = useQuery({
     queryKey: ["client-kpis"],
-    queryFn: async (): Promise<ClientKpis> => {
+    queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("client_kpis");
       if (error) throw error;
       const row = (data?.[0] ?? { total_clients: 0, active_30d: 0, to_remind_7d: 0 }) as ClientKpis;
@@ -108,6 +108,7 @@ const Clients = () => {
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,
+    keepPreviousData: true,
   });
 
   const totalClients = kpis?.total_clients ?? 0;
