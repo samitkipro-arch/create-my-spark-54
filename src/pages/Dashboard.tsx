@@ -234,11 +234,6 @@ const Dashboard = () => {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
-  const formatDateRange = () => {
-    if (!dateRange?.from || !dateRange?.to) return "";
-    return `${format(dateRange.from, "dd/MM")} - ${format(dateRange.to, "dd/MM")}`;
-  };
-
   return (
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
@@ -282,7 +277,7 @@ const Dashboard = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">TVA récupérée totale</p>
+                <p class1="text-sm opacity-90">TVA récupérée totale</p>
                 <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
               </div>
               <div className="flex items-center gap-1 text-sm">
@@ -330,7 +325,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique : FULL WIDTH – NO PADDING */}
+        {/* Graphique : FULL WIDTH + ESPACE ÉQUILIBRÉ */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -340,9 +335,16 @@ const Dashboard = () => {
               <Skeleton className="h-64 w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tvaEvolutionGraphData} margin={{ top: 10, right: 0, left: 0, bottom: 10 }}>
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                <LineChart
+                  data={tvaEvolutionGraphData}
+                  margin={{ top: 10, right: 20, left: 15, bottom: 10 }} // ESPACE À DROITE & GAUCHE
+                >
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                    tickMargin={8} // ESPACE ENTRE TICK ET BORD
+                  />
+                  <YAxis tick={{ fontSize: 12 }} tickMargin={8} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line
                     type="monotone"
