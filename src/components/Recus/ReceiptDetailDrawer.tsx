@@ -323,7 +323,20 @@ export const ReceiptDetailDrawer = ({
   }, [detail, clients]);
 
   /** ----------------- Actions ----------------- */
-  const handleValidate = async();
+  const handleValidate = async () => {
+    if (!detail?.id) return;
+    try {
+      const { error } = await (supabase as any)
+        .from("recus")
+        .update({ validated: true })
+        .eq("id", detail.id);
+      if (error) throw error;
+      onValidated?.(detail.id);
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Erreur lors de la validation:", err);
+    }
+  };
 
   const openReport = async () => {
     if (!detail?.id) return;
