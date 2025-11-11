@@ -255,7 +255,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   );
 
   const ReadonlyValue = ({ value }: { value?: string }) => (
-    <div className="min-h-[44px] flex items-center rounded-md border border-border/60 bg-muted/20 px-3 text-sm">
+    <div className="min-h-[44px] flex items-center rounded-md border border-border/60 bg-muted/20 px-3 text-sm break-all whitespace-normal">
       {value && value.trim().length > 0 ? value : "—"}
     </div>
   );
@@ -316,7 +316,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
-      {/* Header sticky */}
+      {/* Header sticky (sans actions) */}
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-6 py-4 md:px-8 md:py-5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 md:gap-5">
@@ -332,19 +332,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {client && (
-              <Button type="button" variant="outline" onClick={onRelance}>
-                Relancer
-              </Button>
-            )}
-            {client && (
-              <Button type="button" variant={isEditing ? "outline" : "default"} onClick={() => setIsEditing((v) => !v)}>
-                {isEditing ? "Annuler" : "Modifier"}
-              </Button>
-            )}
-          </div>
+          {/* Plus de boutons ici (desktop & mobile) */}
+          <div className="hidden" />
         </div>
       </div>
 
@@ -434,8 +423,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Contact & relances */}
-        <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise et actions rapides.">
+        {/* Contact & relances (sans boutons d'action pour éviter doublon) */}
+        <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise.">
           <div className="grid md:grid-cols-2 gap-4 md:gap-5">
             <Field
               id="email"
@@ -454,28 +443,9 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               readOnlyValue={client?.phone}
             />
           </div>
-          {!isEditing && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={onRelance}>
-                Relancer ce client
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  if (client?.email) {
-                    navigator.clipboard.writeText(client.email);
-                    toast.success("E-mail copié dans le presse-papiers.");
-                  }
-                }}
-              >
-                Copier l’e-mail
-              </Button>
-            </div>
-          )}
         </Section>
 
-        {/* Règles TVA (visuel, sans modifier ta base) */}
+        {/* Règles TVA (visuel) */}
         <Section
           title="Règles TVA (bientôt)"
           subtitle="Configurez les règles d’éligibilité pour la récupération de TVA. (Visuel uniquement, pas encore connecté)"
@@ -526,7 +496,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         <div className="h-2" />
       </div>
 
-      {/* Footer sticky (actions) */}
+      {/* Footer sticky (actions uniques, pas de doublon) */}
       <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
         {isEditing ? (
           <div className="flex gap-3 md:gap-4">
@@ -551,11 +521,16 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             </Button>
           </div>
         ) : (
-          <div className="flex justify-end">
+          <div className="flex gap-3 md:gap-4 justify-end">
             {client ? (
-              <Button type="button" onClick={() => setIsEditing(true)}>
-                Modifier
-              </Button>
+              <>
+                <Button type="button" variant="outline" onClick={onRelance}>
+                  Relancer ce client
+                </Button>
+                <Button type="button" onClick={() => setIsEditing(true)}>
+                  Modifier
+                </Button>
+              </>
             ) : null}
           </div>
         )}
@@ -566,8 +541,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50">
-          <div className="overflow-y-auto h-full">{content}</div>
+        <DrawerContent className="mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-x-hidden">
+          <div className="overflow-y-auto overflow-x-hidden h-full">{content}</div>
         </DrawerContent>
       </Drawer>
     );
