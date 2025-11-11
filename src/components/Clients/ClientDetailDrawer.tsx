@@ -25,7 +25,7 @@ import {
   endOfMonth,
 } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Receipt, Globe, FileText, ShoppingCart, AlertCircle } from "lucide-react";
+import { Receipt, Globe, FileText, ShoppingCart, AlertCircle, X } from "lucide-react";
 
 interface ClientDetailDrawerProps {
   open: boolean;
@@ -196,12 +196,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     );
     const ttc = receipts.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0);
     const tva = receipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
-    return {
-      count: receipts.length,
-      ht,
-      tva,
-      ttc,
-    };
+    return { count: receipts.length, ht, tva, ttc };
   }, [receipts]);
 
   const formatCurrency = (value: number) =>
@@ -218,10 +213,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         const rows = receipts.filter(
           (r) => format(new Date(r.date_traitement || r.created_at), "yyyy-MM-dd") === format(day, "yyyy-MM-dd"),
         );
-        return {
-          x: format(day, "dd/MM", { locale: fr }),
-          y: rows.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0),
-        };
+        return { x: format(day, "dd/MM", { locale: fr }), y: rows.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0) };
       });
     } else {
       const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -232,10 +224,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           const d = new Date(r.date_traitement || r.created_at);
           return d >= mStart && d <= mEnd;
         });
-        return {
-          x: format(m, "MMM yy", { locale: fr }),
-          y: rows.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0),
-        };
+        return { x: format(m, "MMM yy", { locale: fr }), y: rows.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0) };
       });
     }
   };
@@ -332,7 +321,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               </p>
             </div>
           </div>
-          <div className="hidden" />
         </div>
       </div>
 
@@ -362,7 +350,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 : "—"}
             </div>
           ) : (
-            <div className="mt-3 flex items-center gap-2 text-[11px] md:text-xs text-muted-foreground">
+            <div className="mt-3 flex items-centered gap-2 text-[11px] md:text-xs text-muted-foreground">
               <AlertCircle size={14} /> Aucune donnée sur la période sélectionnée.
             </div>
           )}
@@ -387,185 +375,4 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               )}
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4 md:gap-5">
-              <Field
-                id="siret-siren"
-                label="SIRET / SIREN (optionnel)"
-                placeholder="123 456 789 00010"
-                registerKey="siret_siren"
-                readOnlyValue={client?.siret_siren}
-              />
-              <Field
-                id="representative"
-                label="Nom complet du dirigeant / représentant légal"
-                placeholder="Prénom Nom"
-                registerKey="legal_representative"
-                readOnlyValue={client?.legal_representative}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address" className="text-[13px] md:text-sm">
-                Adresse complète du siège social (optionnel)
-              </Label>
-              {isEditing ? (
-                <Input
-                  id="address"
-                  placeholder="Numéro, rue, ville, code postal"
-                  className="h-11 md:h-12 bg-background w-full min-w-0"
-                  {...register("address")}
-                />
-              ) : (
-                <ReadonlyValue value={client?.address} />
-              )}
-            </div>
-          </div>
-        </Section>
-
-        {/* Contact & relances (sans boutons d'action pour éviter doublon) */}
-        <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise.">
-          <div className="grid md:grid-cols-2 gap-4 md:gap-5">
-            <Field
-              id="email"
-              label="E-mail de contact de l'entreprise"
-              type="email"
-              placeholder="contact@entreprise.fr"
-              registerKey="email"
-              readOnlyValue={client?.email}
-            />
-            <Field
-              id="phone"
-              label="Téléphone de contact de l'entreprise (optionnel)"
-              type="tel"
-              placeholder="+33 1 23 45 67 89"
-              registerKey="phone"
-              readOnlyValue={client?.phone}
-            />
-          </div>
-        </Section>
-
-        {/* Règles TVA (visuel) */}
-        <Section
-          title="Règles TVA (bientôt)"
-          subtitle="Configurez les règles d’éligibilité pour la récupération de TVA. (Visuel uniquement, pas encore connecté)"
-        >
-          <div className="grid md:grid-cols-2 gap-4 md:gap-5 opacity-80">
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Régime TVA</Label>
-              <Input disabled placeholder="Réal normal / Simplifié / Franchise (à venir)" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
-              <Input disabled placeholder="100 (à venir)" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Véhicules</Label>
-              <Input disabled placeholder="VP / VU (à venir)" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
-              <Input disabled placeholder="100 (à venir)" />
-            </div>
-          </div>
-          <p className="text-[11px] md:text-xs text-muted-foreground mt-3">
-            Astuce : ces règles s’appliqueront automatiquement à l’analyse des reçus pour calculer la TVA récupérable.
-          </p>
-        </Section>
-
-        {/* Notes */}
-        <Section title="Notes internes" subtitle="Informations utiles pour votre équipe (non visibles par le client).">
-          <div className="space-y-2">
-            <Label htmlFor="notes" className="text-[13px] md:text-sm">
-              Commentaire
-            </Label>
-            {isEditing ? (
-              <Textarea
-                id="notes"
-                placeholder="Notes internes sur ce client..."
-                rows={5}
-                className="resize-none bg-background"
-                {...register("notes")}
-              />
-            ) : (
-              <ReadonlyValue value={client?.notes} />
-            )}
-          </div>
-        </Section>
-
-        <div className="h-2" />
-      </div>
-
-      {/* Footer sticky (actions uniques, pas de doublon) */}
-      <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
-        {isEditing ? (
-          <div className="flex gap-3 md:gap-4">
-            <Button
-              variant="outline"
-              className="flex-1"
-              type="button"
-              onClick={() => {
-                if (client) {
-                  setIsEditing(false);
-                  reset();
-                } else {
-                  onOpenChange(false);
-                }
-              }}
-              disabled={isSubmitting}
-            >
-              Annuler
-            </Button>
-            <Button className="flex-1" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-3 md:gap-4 justify-end">
-            {client ? (
-              <>
-                <Button type="button" variant="outline" onClick={onRelance}>
-                  Relancer ce client
-                </Button>
-                <Button type="button" onClick={() => setIsEditing(true)}>
-                  Modifier
-                </Button>
-              </>
-            ) : null}
-          </div>
-        )}
-      </div>
-    </form>
-  );
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        {/* z-index ↑ et scroll wrapper pour supprimer l’excédent bas */}
-        <DrawerContent className="relative z-[60] mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-hidden">
-          <div className="max-h-[85vh] h-full overflow-y-auto overscroll-contain overflow-x-hidden">{content}</div>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="
-          z-[60]
-          m-4 h-[calc(100vh-2rem)]
-          !max-w-none !w-[min(96vw,1440px)]
-          rounded-2xl bg-card/95 backdrop-blur-lg
-          shadow-[0_10px_40px_rgba(0,0,0,0.40)]
-          border border-border/60 p-0 overflow-hidden
-        "
-      >
-        <SheetHeader className="sr-only">
-          <SheetTitle>Détail client</SheetTitle>
-        </SheetHeader>
-        <div className="h-full overflow-y-auto">{content}</div>
-      </SheetContent>
-    </Sheet>
-  );
-};
+           
