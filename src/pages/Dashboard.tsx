@@ -277,7 +277,7 @@ const Dashboard = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p class1="text-sm opacity-90">TVA récupérée totale</p>
+                <p className="text-sm opacity-90">TVA récupérée totale</p>
                 <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
               </div>
               <div className="flex items-center gap-1 text-sm">
@@ -325,7 +325,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique : FULL WIDTH + ESPACE ÉQUILIBRÉ */}
+        {/* Graphique : ÉQUILIBRE PARFAIT – SYMÉTRIE TOTALE */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -337,14 +337,10 @@ const Dashboard = () => {
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart
                   data={tvaEvolutionGraphData}
-                  margin={{ top: 10, right: 20, left: 15, bottom: 10 }} // ESPACE À DROITE & GAUCHE
+                  margin={{ top: 10, right: 20, left: 20, bottom: 10 }} // ÉQUILIBRE PARFAIT
                 >
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 12 }}
-                    tickMargin={8} // ESPACE ENTRE TICK ET BORD
-                  />
-                  <YAxis tick={{ fontSize: 12 }} tickMargin={8} />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} tickMargin={10} />
+                  <YAxis tick={{ fontSize: 12 }} tickMargin={10} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line
                     type="monotone"
