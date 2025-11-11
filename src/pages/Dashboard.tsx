@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { DateRangePicker } from "@/components/Dashboard/DateRangePicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -138,7 +138,9 @@ const Dashboard = () => {
       .channel("dashboard-receipts")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [refetchReceipts]);
 
   // --- Calculs ---
