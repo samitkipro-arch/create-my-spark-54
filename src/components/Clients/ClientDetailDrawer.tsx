@@ -61,6 +61,7 @@ type ClientFormData = {
 export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
   // Date range pour Vue d'ensemble
@@ -80,7 +81,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     register,
     handleSubmit,
     reset,
-    formState: { isDirty, isSubmitting },
+    formState: { isDirty },
   } = useForm<ClientFormData>({
     defaultValues: {
       name: "",
@@ -118,6 +119,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       });
       setIsEditing(true);
     }
+    setSaving(false);
   }, [client, reset]);
 
   const initials = client?.name
@@ -135,6 +137,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       toast.info("Aucune modification à enregistrer.");
       return;
     }
+
+    setSaving(true);
 
     try {
       const {
@@ -187,7 +191,10 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       setIsEditing(false);
     } catch (error: any) {
+      console.error("Erreur lors de l'enregistrement:", error);
       toast.error(error.message || "Une erreur est survenue");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -679,11 +686,11 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
         {isEditing ? (
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" type="button" onClick={handleCancel} disabled={isSubmitting}>
+            <Button variant="outline" type="button" onClick={handleCancel} disabled={saving}>
               Annuler
             </Button>
-            <Button type="submit" disabled={!isDirty || isSubmitting}>
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            <Button type="submit" disabled={!isDirty || saving}>
+              {saving ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </div>
         ) : (
