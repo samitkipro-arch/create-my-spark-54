@@ -284,7 +284,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           id={id}
           type={type}
           placeholder={placeholder}
-          className="h-11 md:h-12 bg-background"
+          className="h-11 md:h-12 bg-background w-full min-w-0"
           {...register(registerKey)}
         />
       ) : (
@@ -319,20 +319,19 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       {/* Header sticky (sans actions) */}
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-6 py-4 md:px-8 md:py-5">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 md:gap-5">
-            <Avatar className="h-12 w-12 md:h-14 md:w-14 ring-2 ring-primary/10">
+          <div className="flex items-center gap-4 md:gap-5 min-w-0">
+            <Avatar className="h-12 w-12 md:h-14 md:w-14 ring-2 ring-primary/10 shrink-0">
               <AvatarFallback className="bg-primary/15 text-primary font-semibold">{initials}</AvatarFallback>
             </Avatar>
-            <div>
-              <SheetTitle className="text-lg md:text-2xl font-bold tracking-tight">
+            <div className="min-w-0">
+              <SheetTitle className="text-lg md:text-2xl font-bold tracking-tight truncate">
                 {client?.name || "Nouveau client"}
               </SheetTitle>
-              <p className="text-xs md:text-sm text-muted-foreground">
+              <p className="text-xs md:text-sm text-muted-foreground break-all">
                 {client?.email || "Renseignez les informations ci-dessous"}
               </p>
             </div>
           </div>
-          {/* Plus de boutons ici (desktop & mobile) */}
           <div className="hidden" />
         </div>
       </div>
@@ -380,7 +379,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 <Input
                   id="company-name"
                   placeholder="Nom de l'entreprise"
-                  className="h-11 md:h-12 bg-background"
+                  className="h-11 md:h-12 bg-background w-full min-w-0"
                   {...register("name")}
                 />
               ) : (
@@ -413,7 +412,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 <Input
                   id="address"
                   placeholder="Numéro, rue, ville, code postal"
-                  className="h-11 md:h-12 bg-background"
+                  className="h-11 md:h-12 bg-background w-full min-w-0"
                   {...register("address")}
                 />
               ) : (
@@ -552,7 +551,13 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 h-[calc(100vh-2rem)] w-full max-w-[1200px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.40)] border border-border/60 p-0 overflow-hidden"
+        className="
+          m-4 h-[calc(100vh-2rem)]
+          !max-w-none !w-[min(96vw,1440px)]
+          rounded-2xl bg-card/95 backdrop-blur-lg
+          shadow-[0_10px_40px_rgba(0,0,0,0.40)]
+          border border-border/60 p-0 overflow-hidden
+        "
       >
         <SheetHeader className="sr-only">
           <SheetTitle>Détail client</SheetTitle>
