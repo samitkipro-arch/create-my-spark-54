@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { subDays, format, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
+import { subDays, format, startOfDay, endOfDay, eachDayOfInterval, differenceInDays } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
@@ -184,7 +184,7 @@ const Dashboard = () => {
     return { count: receipts.length, tva, ht, ttc };
   }, [receipts]);
 
-  // --- Évolution TVA ---
+  // --- Évolution TVA avec logique intelligente ---
   const tvaEvolutionGraphData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -203,6 +203,20 @@ const Dashboard = () => {
       };
     });
   }, [receipts, dateRange]);
+
+  // --- Logique XAxis : 7 jours max pour dates détaillées ---
+  const daysCount = dateRange?.from && dateRange?.to ? differenceInDays(dateRange.to, dateRange.from) + 1 : 0;
+  const showDetailedDates = daysCount <= 7;
+
+  // --- YAxis : ticks arrondis en 25 ---
+  const maxTva = Math.max(...tvaEvolutionGraphData.map((d) => d.tva), 0);
+  const yTickStep = 25;
+  const yMax = Math.ceil(maxTva / yTickStep) * yTickStep + yTickStep; // +1 step pour respirer
+  const yTicks = Array.from({ length: Math.floor(yMax / yTickStep) + 1 }, (_, i) => i * yTickStep);
+
+  // --- Format XAxis : début/fin si >7 jours ---
+  const xAxisLabelLeft = dateRange?.from ? format(dateRange.from, "dd/MM/yyyy") : "";
+  const xAxisLabelRight = dateRange?.to ? format(dateRange.to, "dd/MM/yyyy") : "";
 
   // --- Top catégories ---
   const topCategories = useMemo(() => {
@@ -327,7 +341,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* GRAPHIQUE DÉCALÉ VERS LA GAUCHE */}
+        {/* GRAPHIQUE INTELLIGENT – ESTHÉTIQUE 2025 */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -338,8 +352,25 @@ const Dashboard = () => {
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={tvaEvolutionGraphData} margin={{ top: 10, right: 35, left: 0, bottom: 10 }}>
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} tickMargin={8} padding={{ left: 0, right: 0 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickMargin={8} domain={[0, "dataMax + 10"]} />
+                  <XAxis
+                    dataKey={showDetailedDates ? "date" : undefined}
+                    tick={{ fontSize: 12 }}
+                    tickMargin={8}
+                    padding={{ left: 0, right: 0 }}
+                    // Afficher seulement début/fin si >7 jours
+                    ticks={showDetailedDates ? undefined : [0, tvaEvolutionGraphData.length - 1]}
+                    domain={["dataMin", "dataMax"]}
+                    type="number"
+                    // Label manuel
+                    tickFormatter={(value) => {
+                      if (!showDetailedDates) {
+                        if (value === 0) return xAxisLabelLeft;
+                        if (value === tvaEvolutionGraphData.length - 1) return xAxisLabelRight;
+                      }
+                      return "";
+                    }}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} tickMargin={8} ticks={yTicks} domain={[0, yMax]} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line
                     type="monotone"
