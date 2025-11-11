@@ -14,7 +14,7 @@ import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-// Tooltip personnalisé : exactement comme ton exemple
+// Tooltip compact, pro, clair
 const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (active && payload && payload[0]) {
     const data = payload[0].payload;
@@ -25,10 +25,10 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>)
     }).format(data.tva);
 
     return (
-      <div className="bg-gray-900 text-white p-4 rounded-lg shadow-xl border border-gray-700">
-        <p className="text-base font-semibold text-blue-400">{fullDate}</p>
-        <p className="text-sm mt-1">{data.count} reçus traités</p>
-        <p className="text-lg font-bold text-white mt-1">{tvaFormatted}</p>
+      <div className="bg-gray-900 text-white p-2.5 rounded-md shadow-lg border border-gray-700 text-xs">
+        <p className="font-medium text-blue-400">{fullDate}</p>
+        <p className="mt-0.5">{data.count} reçus traités</p>
+        <p className="font-semibold text-white mt-0.5">TVA récupérée : {tvaFormatted}</p>
       </div>
     );
   }
@@ -183,7 +183,7 @@ const Dashboard = () => {
       const dayTva = dayReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
       return {
         date: format(day, "dd/MM"),
-        fullDate: day, // pour le tooltip
+        fullDate: day,
         tva: dayTva,
         count: dayReceipts.length,
       };
@@ -305,7 +305,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique : sans grille, tooltip parfait */}
+        {/* Graphique : sans grille, tooltip compact & pro */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
