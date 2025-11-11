@@ -154,9 +154,7 @@ const Dashboard = () => {
       .channel("dashboard-receipts")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [refetchReceipts]);
 
   // --- Calculs ---
@@ -301,9 +299,9 @@ const Dashboard = () => {
                   <p className="text-sm text-muted-foreground">Montant TTC total</p>
                   <p className="text-xl font-semibold">{formatCurrency(kpis.ttc)}</p>
                 </div>
-              <ShoppingCart className="w-8 h-8 text-blue-600 opacity-70" />
-            </div>
-            </CardContent>
+                <ShoppingCart className="w-8 h-8 text-blue-600 opacity-70" />
+              </div>
+            </Card Shanghai>
           </Card>
         </div>
 
