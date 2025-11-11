@@ -356,7 +356,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 : "—"}
             </div>
           ) : (
-            <div className="mt-3 flex items-centered gap-2 text-[11px] md:text-xs text-muted-foreground">
+            <div className="mt-3 flex items-center gap-2 text-[11px] md:text-xs text-muted-foreground">
               <AlertCircle size={14} /> Aucune donnée sur la période sélectionnée.
             </div>
           )}
