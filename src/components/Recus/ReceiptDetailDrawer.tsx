@@ -17,13 +17,12 @@ interface ReceiptDetailDrawerProps {
   detail: any;
   loading: boolean;
   error: string | null;
-  clients?: Array<{ id: string; name: string }>;
+  clients?: Array<{ id: string; name: string; regime?: string }>;
   members?: Array<{ id: string; name: string }>;
   onValidated?: (id: number) => void;
 }
 
 type Member = { id: string; name: string };
-
 type EditedData = {
   enseigne: string;
   numero_recu: string;
@@ -48,7 +47,6 @@ export const ReceiptDetailDrawer = ({
   onValidated,
 }: ReceiptDetailDrawerProps) => {
   const isMobile = useIsMobile();
-
   const [isEditing, setIsEditing] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
 
@@ -207,14 +205,12 @@ export const ReceiptDetailDrawer = ({
     const orgId = detail?.org_id as string | undefined;
     loadMembers(orgId);
     lastOrgIdRef.current = orgId ?? null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, detail?.org_id, members?.length]);
 
   useEffect(() => {
     if (!open) return;
     const orgId = (detail?.org_id as string) || null;
     if (!orgId || members.length > 0) return;
-
     const orgChan = (supabase as any)
       .channel(`recus-drawer-org-members-${orgId}`)
       .on(
@@ -229,14 +225,12 @@ export const ReceiptDetailDrawer = ({
                 .select("user_id, first_name, last_name")
                 .eq("user_id", newUserId)
                 .maybeSingle();
-
               const newMember: Member = prof
                 ? {
                     id: prof.user_id,
                     name: `${prof.first_name || ""} ${prof.last_name || ""}`.trim() || "Membre sans nom",
                   }
                 : { id: newUserId, name: "Membre sans nom" };
-
               setOrgScopedMembers((prev) => {
                 const exists = prev.some((m) => m.id === newMember.id);
                 return exists ? prev : [...prev, newMember].sort((a, b) => a.name.localeCompare(b.name));
@@ -256,7 +250,6 @@ export const ReceiptDetailDrawer = ({
         const uid = payload.new?.user_id as string | undefined;
         if (!uid) return;
         const name = `${payload.new?.first_name || ""} ${payload.new?.last_name || ""}`.trim() || "Membre sans nom";
-
         setOrgScopedMembers((prev) => {
           const idx = prev.findIndex((m) => m.id === uid);
           if (idx === -1) return prev;
@@ -280,7 +273,6 @@ export const ReceiptDetailDrawer = ({
         (supabase as any).removeChannel?.(profilesChan);
       } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, detail?.org_id, members?.length]);
 
   const effectiveMembers: Member[] =
@@ -292,6 +284,53 @@ export const ReceiptDetailDrawer = ({
     effectiveMembers.length === 0 && membersLoadNote ? (
       <div className="text-[10px] md:text-xs text-amber-500 mt-1 text-right">{membersLoadNote}</div>
     ) : null;
+
+  /** ----------------- KPI TVA Récupérable ----------------- */
+  const { tvaRecuperable, tvaNonRecuperable, percentRecup, regleTva } = useMemo(() => {
+    if (!detail?.tva || !detail?.client_id) {
+      return {
+        tvaRecuperable: 0,
+        tvaNonRecuperable: detail?.tva || 0,
+        percentRecup: 0,
+        regleTva: "—",
+      };
+    }
+
+    const client = clients.find((c) => c.id === detail.client_id);
+    const categorie = (detail.categorie || "").toLowerCase();
+
+    const regles: Record<string, (client: any) => number> = {
+      restauration: (c) => (c?.regime === "reel" ? 1.0 : 0.0),
+      hôtellerie: () => 1.0,
+      alimentation: () => 1.0,
+      transport: () => 1.0,
+      "frais généraux": () => 1.0,
+      tabac: () => 0.0,
+      alcool: () => 0.0,
+      cadeaux: () => 0.0,
+    };
+
+    let taux = 1.0;
+    let regle = "TVA déductible";
+
+    for (const [key, fn] of Object.entries(regles)) {
+      if (categorie.includes(key)) {
+        taux = fn(client);
+        regle = taux === 1.0 ? "TVA déductible" : "TVA non déductible";
+        break;
+      }
+    }
+
+    const tvaRecup = detail.tva * taux;
+    const tvaNonRecup = detail.tva - tvaRecup;
+
+    return {
+      tvaRecuperable: tvaRecup,
+      tvaNonRecuperable: tvaNonRecup,
+      percentRecup: Math.round(taux * 100),
+      regleTva: regle,
+    };
+  }, [detail, clients]);
 
   /** ----------------- Actions ----------------- */
   const handleValidate = async () => {
@@ -341,7 +380,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
   };
 
   const handleSave = async () => {
-    if (!detail?.id || !isDirty) return; // rien à faire si aucune modif
+    if (!detail?.id || !isDirty) return;
     try {
       const { error: e } = await (supabase as any)
         .from("recus")
@@ -359,8 +398,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         })
         .eq("id", detail.id);
       if (e) throw e;
-
-      // reset base
       initialDataRef.current = { ...editedData };
       setIsEditing(false);
       setActiveField(null);
@@ -464,7 +501,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </div>
               </div>
             </SheetHeader>
-
             <div className="mt-4 md:mt-6 space-y-4 md:space-y-6">
               {/* Montant TTC */}
               <div className="w-full flex items-center justify-center">
@@ -547,6 +583,24 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </Card>
               </div>
 
+              {/* KPI TVA Récupérable */}
+              <div className="grid grid-cols-2 gap-3 md:gap-4 mt-4">
+                <Card className="border-green-500/20">
+                  <CardContent className="pt-4 pb-3">
+                    <p className="text-xs text-muted-foreground mb-1">TVA récupérable</p>
+                    <p className="text-lg md:text-2xl font-bold text-green-600">{formatCurrency(tvaRecuperable)}</p>
+                    <p className="text-[10px] text-green-600 mt-1">{percentRecup}% récupéré</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-red-500/20">
+                  <CardContent className="pt-4 pb-3">
+                    <p className="text-xs text-muted-foreground mb-1">TVA non récupérable</p>
+                    <p className="text-lg md:text-2xl font-bold text-red-600">{formatCurrency(tvaNonRecuperable)}</p>
+                    <p className="text-[10px] text-red-600 mt-1">{regleTva}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
               {/* Infos détaillées */}
               <div className="space-y-2 md:space-y-4">
                 <Row label="Date de traitement">
@@ -554,7 +608,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                     {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
                   </span>
                 </Row>
-
                 <EditableText
                   label="Moyen de paiement"
                   field="moyen_paiement"
@@ -583,8 +636,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   value={editedData.categorie}
                   onChange={(v) => setEditedData({ ...editedData, categorie: v })}
                 />
-
-                {/* Traité par */}
                 <Row label="Traité par">
                   <div className="text-right">
                     {isEditing ? (
@@ -614,8 +665,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                     )}
                   </div>
                 </Row>
-
-                {/* Client assigné */}
                 <Row label="Client assigné">
                   <div className="text-right">
                     {isEditing ? (
@@ -735,7 +784,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           </Button>
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
           {/* Montants */}
@@ -816,6 +864,24 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
             </Card>
           </div>
 
+          {/* KPI TVA Récupérable (mobile) */}
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <Card className="border-green-500/20">
+              <CardContent className="pt-3 pb-2">
+                <p className="text-xs text-muted-foreground mb-1">TVA récupérable</p>
+                <p className="text-base font-bold text-green-600">{formatCurrency(tvaRecuperable)}</p>
+                <p className="text-[9px] text-green-600">{percentRecup}% récupéré</p>
+              </CardContent>
+            </Card>
+            <Card className="border-red-500/20">
+              <CardContent className="pt-3 pb-2">
+                <p className="text-xs text-muted-foreground mb-1">TVA non récup.</p>
+                <p className="text-base font-bold text-red-600">{formatCurrency(tvaNonRecuperable)}</p>
+                <p className="text-[9px] text-red-600">{regleTva}</p>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Infos */}
           <div className="space-y-2">
             <RowMobile label="Date de traitement">
@@ -823,7 +889,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 {formatDateTime(detail?.date_traitement ?? detail?.created_at)}
               </span>
             </RowMobile>
-
             <RowMobile label="Moyen de paiement">
               {isEditing ? (
                 <input
@@ -837,7 +902,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 <span className="text-xs font-medium">{editedData.moyen_paiement || "—"}</span>
               )}
             </RowMobile>
-
             <RowMobile label="Ville">
               {isEditing ? (
                 <input
@@ -851,7 +915,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 <span className="text-xs font-medium">{editedData.ville || "—"}</span>
               )}
             </RowMobile>
-
             <RowMobile label="Adresse">
               {isEditing ? (
                 <input
@@ -865,7 +928,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 <span className="text-xs font-medium">{editedData.adresse || "—"}</span>
               )}
             </RowMobile>
-
             <RowMobile label="Catégorie">
               {isEditing ? (
                 <input
@@ -879,8 +941,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 <span className="text-xs font-medium">{editedData.categorie || "—"}</span>
               )}
             </RowMobile>
-
-            {/* Traité par */}
             <RowMobile label="Traité par">
               <div className="text-right">
                 {isEditing ? (
@@ -910,8 +970,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 )}
               </div>
             </RowMobile>
-
-            {/* Client assigné */}
             <RowMobile label="Client assigné">
               {isEditing ? (
                 <Select
@@ -978,7 +1036,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </Drawer>
     );
   }
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
