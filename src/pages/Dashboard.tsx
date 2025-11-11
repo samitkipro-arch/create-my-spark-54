@@ -202,7 +202,7 @@ const Dashboard = () => {
     });
   }, [receipts, dateRange]);
 
-  // --- Top catégories : tri par nombre de reçus (décroissant) ---
+  // --- Top catégories ---
   const topCategories = useMemo(() => {
     const map = new Map();
     receipts.forEach((r) => {
@@ -220,7 +220,7 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [receipts]);
 
-  // --- Performance équipe : tri par nombre de reçus (décroissant) ---
+  // --- Performance équipe ---
   const teamPerformance = useMemo(() => {
     return members
       .map((m) => {
@@ -325,9 +325,9 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique : ÉQUILIBRE PARFAIT – SYMÉTRIE TOTALE */}
+        {/* GRAPHIQUE DÉCALÉ VERS LA GAUCHE */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -335,12 +335,9 @@ const Dashboard = () => {
               <Skeleton className="h-64 w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart
-                  data={tvaEvolutionGraphData}
-                  margin={{ top: 10, right: 20, left: 20, bottom: 10 }} // ÉQUILIBRE PARFAIT
-                >
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} tickMargin={10} />
-                  <YAxis tick={{ fontSize: 12 }} tickMargin={10} />
+                <LineChart data={tvaEvolutionGraphData} margin={{ top: 10, right: 35, left: 0, bottom: 10 }}>
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} tickMargin={8} padding={{ left: 0, right: 0 }} />
+                  <YAxis tick={{ fontSize: 12 }} tickMargin={8} domain={[0, "dataMax + 10"]} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line
                     type="monotone"
