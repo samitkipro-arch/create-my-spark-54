@@ -23,7 +23,6 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>)
       style: "currency",
       currency: "EUR",
     }).format(data.tva);
-
     return (
       <div className="bg-gray-900 text-white p-2.5 rounded-md shadow-lg border border-gray-700 text-xs">
         <p className="font-medium text-blue-400">{fullDate}</p>
@@ -124,13 +123,21 @@ const Dashboard = () => {
     enabled: !roleLoading && role !== "enterprise",
   });
 
-  // --- Reçus ---
+  // --- Reçus : queryKey avec dateRange.from/to pour forcer le refetch ---
   const {
     data: receipts = [],
     isLoading: isLoadingReceipts,
     refetch: refetchReceipts,
   } = useQuery({
-    queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId, role, enterpriseClientId],
+    queryKey: [
+      "receipts-dashboard",
+      dateRange?.from?.toISOString(),
+      dateRange?.to?.toISOString(),
+      storedClientId,
+      storedMemberId,
+      role,
+      enterpriseClientId,
+    ],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
       let query = (supabase as any)
@@ -146,6 +153,7 @@ const Dashboard = () => {
         if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
         if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
       }
+
       const { data, error } = await query;
       if (error) throw error;
       return data || [];
@@ -153,6 +161,11 @@ const Dashboard = () => {
     enabled:
       !!dateRange?.from && !!dateRange?.to && !roleLoading && (role !== "enterprise" || enterpriseClientId !== null),
   });
+
+  // --- Forcer le refetch quand dateRange change ---
+  useEffect(() => {
+    refetchReceipts();
+  }, [dateRange?.from, dateRange?.to, refetchReceipts]);
 
   useEffect(() => {
     const channel = supabase
@@ -171,7 +184,7 @@ const Dashboard = () => {
   }, [receipts]);
 
   // --- Évolution TVA + compteur de reçus par jour ---
-  const tvaEvolutionData = useMemo(() => {
+  const tvaEvolutionGraphData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
     return days.map((day) => {
@@ -305,7 +318,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique : sans grille, tooltip compact & pro */}
+        {/* Graphique */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -315,7 +328,7 @@ const Dashboard = () => {
               <Skeleton className="h-64 w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tvaEvolutionData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <LineChart data={tvaEvolutionGraphData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip content={<CustomTooltip />} />
