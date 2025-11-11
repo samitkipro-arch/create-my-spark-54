@@ -154,7 +154,9 @@ const Dashboard = () => {
       .channel("dashboard-receipts")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [refetchReceipts]);
 
   // --- Calculs ---
@@ -301,7 +303,7 @@ const Dashboard = () => {
                 </div>
                 <ShoppingCart className="w-8 h-8 text-blue-600 opacity-70" />
               </div>
-            </Card Shanghai>
+            </CardContent>
           </Card>
         </div>
 
