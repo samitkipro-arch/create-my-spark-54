@@ -2,26 +2,27 @@ import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { DateRangePicker } from "@/components/Dashboard/DateRangePicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Receipt, FileText, ShoppingCart, TrendingUp, TrendingDown, Download, ChevronDown } from "lucide-react";
+import { Receipt, FileText, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { subDays, format, startOfDay, endOfDay, eachDayOfInterval, subMonths } from "date-fns";
+import { subDays, format, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 
-// === TOOLTIP COMPACT & PRO ===
-const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+// Tooltip compact, pro, clair
+const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (active && payload && payload[0]) {
     const data = payload[0].payload;
     const fullDate = format(new Date(data.fullDate), "dd/MM/yyyy");
-    const tvaFormatted = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(data.tva);
+    const tvaFormatted = new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+    }).format(data.tva);
 
     return (
       <div className="bg-gray-900 text-white p-2.5 rounded-md shadow-lg border border-gray-700 text-xs">
@@ -123,7 +124,7 @@ const Dashboard = () => {
     enabled: !roleLoading && role !== "enterprise",
   });
 
-  // --- Reçus actuels ---
+  // --- Reçus ---
   const {
     data: receipts = [],
     isLoading: isLoadingReceipts,
@@ -137,6 +138,7 @@ const Dashboard = () => {
         .select("*")
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
+
       if (role === "enterprise") {
         if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
         query = query.eq("client_id", enterpriseClientId);
@@ -152,37 +154,6 @@ const Dashboard = () => {
       !!dateRange?.from && !!dateRange?.to && !roleLoading && (role !== "enterprise" || enterpriseClientId !== null),
   });
 
-  // --- Reçus mois précédent (pour comparaison) ---
-  const previousMonthRange = useMemo(() => {
-    if (!dateRange?.from || !dateRange?.to) return null;
-    const prevFrom = subMonths(dateRange.from, 1);
-    const prevTo = subMonths(dateRange.to, 1);
-    return { from: startOfDay(prevFrom), to: endOfDay(prevTo) };
-  }, [dateRange]);
-
-  const { data: previousReceipts = [] } = useQuery({
-    queryKey: ["receipts-previous", previousMonthRange, storedClientId, storedMemberId, role, enterpriseClientId],
-    queryFn: async () => {
-      if (!previousMonthRange?.from || !previousMonthRange?.to) return [];
-      let query = (supabase as any)
-        .from("recus")
-        .select("*")
-        .gte("date_traitement", previousMonthRange.from.toISOString())
-        .lte("date_traitement", previousMonthRange.to.toISOString());
-      if (role === "enterprise") {
-        if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
-        query = query.eq("client_id", enterpriseClientId);
-      } else {
-        if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
-        if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!previousMonthRange?.from && !!previousMonthRange?.to && !roleLoading,
-  });
-
   useEffect(() => {
     const channel = supabase
       .channel("dashboard-receipts")
@@ -191,7 +162,7 @@ const Dashboard = () => {
     return () => supabase.removeChannel(channel);
   }, [refetchReceipts]);
 
-  // --- Calculs KPI ---
+  // --- Calculs ---
   const kpis = useMemo(() => {
     const tva = receipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
     const ht = receipts.reduce((sum, r) => sum + ((Number(r.montant_ttc) || 0) - (Number(r.tva) || 0)), 0);
@@ -199,16 +170,7 @@ const Dashboard = () => {
     return { count: receipts.length, tva, ht, ttc };
   }, [receipts]);
 
-  const previousKpis = useMemo(() => {
-    const tva = previousReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
-    return { tva };
-  }, [previousReceipts]);
-
-  const tvaGrowth = previousKpis.tva > 0 ? ((kpis.tva - previousKpis.tva) / previousKpis.tva) * 100 : 0;
-  const receiptGoal = 48;
-  const receiptProgress = Math.round((kpis.count / receiptGoal) * 100);
-
-  // --- Évolution TVA ---
+  // --- Évolution TVA + compteur de reçus par jour ---
   const tvaEvolutionData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -246,18 +208,16 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [receipts]);
 
-  // --- Performance équipe (avec comparaison M-1) ---
+  // --- Performance équipe ---
   const teamPerformance = useMemo(() => {
     return members
       .map((m) => {
         const userReceipts = receipts.filter((r) => r.processed_by === m.id);
         const tva = userReceipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
-        const prevReceipts = previousReceipts.filter((r) => r.processed_by === m.id);
-        const prevTva = prevReceipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
-        return { ...m, tva, count: userReceipts.length, prevTva, diff: tva - prevTva };
+        return { ...m, tva, count: userReceipts.length };
       })
       .sort((a, b) => b.tva - a.tva);
-  }, [members, receipts, previousReceipts]);
+  }, [members, receipts]);
 
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
@@ -265,8 +225,8 @@ const Dashboard = () => {
   return (
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
-        {/* Filtres + Export */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        {/* Filtres */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           {role !== "enterprise" && !roleLoading && (
             <>
@@ -298,29 +258,13 @@ const Dashboard = () => {
               </Select>
             </>
           )}
-          <Button variant="outline" size="sm" className="gap-2">
-            <Download className="w-4 h-4" />
-            Exporter
-          </Button>
         </div>
 
-        {/* KPI Principal + Croissance */}
+        {/* KPI Principal */}
         <Card className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-90">TVA récupérée totale</p>
-                <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs opacity-75">vs mois précédent</p>
-                <p className="text-lg font-bold flex items-center gap-1 justify-end">
-                  {tvaGrowth > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                  {tvaGrowth > 0 ? "+" : ""}
-                  {tvaGrowth.toFixed(1)} %
-                </p>
-              </div>
-            </div>
+            <p className="text-sm opacity-90">TVA récupérée totale</p>
+            <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
           </CardContent>
         </Card>
 
@@ -329,15 +273,11 @@ const Dashboard = () => {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
-                <div className="flex-1">
+                <div>
                   <p className="text-sm text-muted-foreground">Reçus traités</p>
-                  <p className="text-xl font-semibold">
-                    {kpis.count} / {receiptGoal}
-                  </p>
-                  <Progress value={receiptProgress} className="mt-2 h-2" />
-                  <p className="text-xs text-muted-foreground mt-1">{receiptProgress}% de l'objectif</p>
+                  <p className="text-xl font-semibold">{kpis.count}</p>
                 </div>
-                <Receipt className="w-8 h-8 text-blue-600 opacity-70 ml-4" />
+                <Receipt className="w-8 h-8 text-blue-600 opacity-70" />
               </div>
             </CardContent>
           </Card>
@@ -365,13 +305,10 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique */}
+        {/* Graphique : sans grille, tooltip compact & pro */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
-            <Button variant="ghost" size="sm">
-              Voir le détail <ChevronDown className="w-4 h-4 ml-1" />
-            </Button>
           </CardHeader>
           <CardContent>
             {isLoadingReceipts ? (
@@ -406,9 +343,7 @@ const Dashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="cursor-pointer">
-                      Catégorie <ChevronDown className="inline w-3 h-3 ml-1" />
-                    </TableHead>
+                    <TableHead>Catégorie</TableHead>
                     <TableHead className="text-right">Reçus</TableHead>
                     <TableHead className="text-right">TTC</TableHead>
                     <TableHead className="text-right">TVA récup</TableHead>
@@ -442,7 +377,6 @@ const Dashboard = () => {
                     <TableHead>Membre</TableHead>
                     <TableHead className="text-right">Reçus</TableHead>
                     <TableHead className="text-right">TVA récup</TableHead>
-                    <TableHead className="text-right text-xs text-muted-foreground">vs M-1</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -451,15 +385,6 @@ const Dashboard = () => {
                       <TableCell>{m.name}</TableCell>
                       <TableCell className="text-right">{m.count}</TableCell>
                       <TableCell className="text-right font-medium text-blue-600">{formatCurrency(m.tva)}</TableCell>
-                      <TableCell className="text-right text-xs">
-                        {m.diff > 0 ? (
-                          <span className="text-green-400">+{formatCurrency(m.diff)}</span>
-                        ) : m.diff < 0 ? (
-                          <span className="text-red-400">{formatCurrency(m.diff)}</span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
