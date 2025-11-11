@@ -25,7 +25,7 @@ import {
   endOfMonth,
 } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Receipt, Globe, FileText, ShoppingCart, AlertCircle } from "lucide-react";
+import { Receipt, Globe, FileText, ShoppingCart, AlertCircle, X } from "lucide-react"; // + X
 
 interface ClientDetailDrawerProps {
   open: boolean;
@@ -196,12 +196,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     );
     const ttc = receipts.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0);
     const tva = receipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
-    return {
-      count: receipts.length,
-      ht,
-      tva,
-      ttc,
-    };
+    return { count: receipts.length, ht, tva, ttc };
   }, [receipts]);
 
   const formatCurrency = (value: number) =>
@@ -540,7 +535,17 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-x-hidden">
+        <DrawerContent className="relative mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-x-hidden">
+          {/* Bouton close (mobile) */}
+          <button
+            type="button"
+            aria-label="Fermer"
+            onClick={() => onOpenChange(false)}
+            className="absolute right-3 top-3 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/90 hover:bg-background"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
           <div className="overflow-y-auto overflow-x-hidden h-full">{content}</div>
         </DrawerContent>
       </Drawer>
@@ -552,6 +557,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       <SheetContent
         side="right"
         className="
+          relative
           m-4 h-[calc(100vh-2rem)]
           !max-w-none !w-[min(96vw,1440px)]
           rounded-2xl bg-card/95 backdrop-blur-lg
@@ -559,6 +565,16 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           border border-border/60 p-0 overflow-hidden
         "
       >
+        {/* Bouton close (desktop) */}
+        <button
+          type="button"
+          aria-label="Fermer"
+          onClick={() => onOpenChange(false)}
+          className="absolute right-3 top-3 z-50 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/90 hover:bg-background"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
         <SheetHeader className="sr-only">
           <SheetTitle>Détail client</SheetTitle>
         </SheetHeader>
