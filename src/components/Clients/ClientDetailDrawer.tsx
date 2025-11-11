@@ -362,7 +362,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 : "—"}
             </div>
           ) : (
-            <div className="mt-3 flex items-center gap-2 text-[11px] md:text-xs text-muted-foreground">
+            <div className="mt-3 flex items-centered gap-2 text-[11px] md:text-xs text-muted-foreground">
               <AlertCircle size={14} /> Aucune donnée sur la période sélectionnée.
             </div>
           )}
@@ -422,9 +422,9 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Contact & relances (sans boutons d'action pour éviter doublon) */}
+        {/* Contact & relances — Email PUIS Téléphone (empilés) */}
         <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise.">
-          <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+          <div className="grid grid-cols-1 gap-4 md:gap-5">
             <Field
               id="email"
               label="E-mail de contact de l'entreprise"
