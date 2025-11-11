@@ -69,7 +69,6 @@ export const ReceiptDetailDrawer = ({
     processed_by: "",
   });
 
-  // Dirty state calculé
   const isDirty = useMemo(() => {
     const init = initialDataRef.current;
     if (!init) return false;
@@ -87,7 +86,6 @@ export const ReceiptDetailDrawer = ({
     );
   }, [editedData]);
 
-  // Sync depuis detail à l’ouverture / changement de reçu
   useEffect(() => {
     if (!detail) return;
     const next: EditedData = {
@@ -243,7 +241,6 @@ export const ReceiptDetailDrawer = ({
         },
       )
       .subscribe();
-
     const profilesChan = (supabase as any)
       .channel(`recus-drawer-profiles-${orgId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload: any) => {
@@ -266,7 +263,6 @@ export const ReceiptDetailDrawer = ({
         });
       })
       .subscribe();
-
     return () => {
       try {
         (supabase as any).removeChannel?.(orgChan);
@@ -295,10 +291,8 @@ export const ReceiptDetailDrawer = ({
         regleTva: "—",
       };
     }
-
     const client = clients.find((c) => c.id === detail.client_id);
     const categorie = (detail.categorie || "").toLowerCase();
-
     const regles: Record<string, (client: any) => number> = {
       restauration: (c) => (c?.regime === "reel" ? 1.0 : 0.0),
       hôtellerie: () => 1.0,
@@ -309,10 +303,8 @@ export const ReceiptDetailDrawer = ({
       alcool: () => 0.0,
       cadeaux: () => 0.0,
     };
-
     let taux = 1.0;
     let regle = "TVA déductible";
-
     for (const [key, fn] of Object.entries(regles)) {
       if (categorie.includes(key)) {
         taux = fn(client);
@@ -320,10 +312,8 @@ export const ReceiptDetailDrawer = ({
         break;
       }
     }
-
     const tvaRecup = detail.tva * taux;
     const tvaNonRecup = detail.tva - tvaRecup;
-
     return {
       tvaRecuperable: tvaRecup,
       tvaNonRecuperable: tvaNonRecup,
@@ -333,21 +323,11 @@ export const ReceiptDetailDrawer = ({
   }, [detail, clients]);
 
   /** ----------------- Actions ----------------- */
-  const handleValidate = async () => {
-    if (!detail?.id) return;
-    try {
-      onValidated?.(detail.id);
-      const { error: e } = await (supabase as any).from("recus").update({ status: "traite" }).eq("id", detail.id);
-      if (e) throw e;
-      onOpenChange(false);
-    } catch (err) {
-      console.error("Erreur lors de la validation:", err);
-    }
-  };
+  const handleValidate = async();
 
   const openReport = async () => {
     if (!detail?.id) return;
-    const win = window.open("", "_blank");
+    const win = window.open("", "rapport-analyse", "noopener,noreferrer");
     if (!win) {
       alert("Autorisez les pop-ups pour afficher le rapport.");
       return;
@@ -422,6 +402,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </div>
     );
   }
+
   function RowMobile({ label, children }: { label: string; children: React.ReactNode }) {
     return (
       <div className="flex justify-between items-center py-1.5 border-b border-border">
@@ -430,6 +411,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </div>
     );
   }
+
   function EditableText({
     label,
     field,
@@ -536,7 +518,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   )}
                 </div>
               </div>
-
               {/* Cartes HT / TVA */}
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 <Card>
@@ -582,7 +563,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   </CardContent>
                 </Card>
               </div>
-
               {/* KPI TVA Récupérable */}
               <div className="grid grid-cols-2 gap-3 md:gap-4 mt-4">
                 <Card className="border-green-500/20">
@@ -600,7 +580,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   </CardContent>
                 </Card>
               </div>
-
               {/* Infos détaillées */}
               <div className="space-y-2 md:space-y-4">
                 <Row label="Date de traitement">
@@ -693,7 +672,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                 </Row>
               </div>
 
-              {/* Boutons */}
+              {/* BOUTONS : Valider / Corriger en 50/50 + Rapport pleine largeur */}
               <div className="pt-4 md:pt-6">
                 {isEditing ? (
                   <div className="flex items-center justify-end gap-2">
@@ -706,11 +685,11 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="outline" className="h-10 px-4" onClick={handleValidate}>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button variant="outline" className="h-10" onClick={handleValidate}>
                         Valider
                       </Button>
-                      <Button variant="outline" className="h-10 px-4" onClick={() => setIsEditing(true)}>
+                      <Button variant="outline" className="h-10" onClick={() => setIsEditing(true)}>
                         Corriger
                       </Button>
                     </div>
@@ -819,7 +798,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               )}
             </div>
           </div>
-
           {/* HT/TVA */}
           <div className="grid grid-cols-2 gap-3">
             <Card>
@@ -863,7 +841,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               </CardContent>
             </Card>
           </div>
-
           {/* KPI TVA Récupérable (mobile) */}
           <div className="grid grid-cols-2 gap-3 mt-2">
             <Card className="border-green-500/20">
@@ -881,7 +858,6 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
               </CardContent>
             </Card>
           </div>
-
           {/* Infos */}
           <div className="space-y-2">
             <RowMobile label="Date de traitement">
@@ -996,7 +972,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
         </div>
       </div>
 
-      {/* Footer */}
+      {/* FOOTER MOBILE : Valider / Corriger 50/50 + Rapport pleine largeur */}
       <div className="flex-shrink-0 p-4 border-t border-border bg-card/95">
         {isEditing ? (
           <div className="flex gap-3">
@@ -1009,11 +985,11 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="flex gap-3">
-              <Button variant="outline" className="h-10 flex-1" onClick={handleValidate}>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" className="h-10" onClick={handleValidate}>
                 Valider
               </Button>
-              <Button variant="outline" className="h-10 flex-1" onClick={() => setIsEditing(true)}>
+              <Button variant="outline" className="h-10" onClick={() => setIsEditing(true)}>
                 Corriger
               </Button>
             </div>
@@ -1036,6 +1012,7 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font:16px/1.6 -apple-sys
       </Drawer>
     );
   }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
