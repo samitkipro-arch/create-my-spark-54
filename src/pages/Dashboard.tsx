@@ -1,31 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { DateRangePicker } from "@/components/Dashboard/DateRangePicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Receipt, TrendingUp, FileText, ShoppingCart } from "lucide-react";
+import { Receipt, FileText, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  subDays,
-  format,
-  startOfDay,
-  endOfDay,
-  differenceInDays,
-  eachDayOfInterval,
-  startOfMonth,
-  endOfMonth,
-  isWithinInterval,
-} from "date-fns";
-import { fr } from "date-fns/locale";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { subDays, format, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowUpIcon, ArrowDownIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 const Dashboard = () => {
   const { role, loading: roleLoading } = useUserRole();
@@ -72,7 +59,7 @@ const Dashboard = () => {
     if (storedDateRange.from && storedDateRange.to) {
       return { from: new Date(storedDateRange.from), to: new Date(storedDateRange.to) };
     }
-    return { from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) }; // 7 jours par défaut
+    return { from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) };
   }, [storedDateRange]);
 
   useEffect(() => {
@@ -143,10 +130,7 @@ const Dashboard = () => {
       return data || [];
     },
     enabled:
-      !!dateRange?.from &&
-      !!dateRange?.to &&
-      !roleLoading &&
-      (role !== "enterprise" || enterpriseClientId !== null),
+      !!dateRange?.from && !!dateRange?.to && !roleLoading && (role !== "enterprise" || enterpriseClientId !== null),
   });
 
   useEffect(() => {
@@ -154,9 +138,7 @@ const Dashboard = () => {
       .channel("dashboard-receipts")
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [refetchReceipts]);
 
   // --- Calculs ---
@@ -167,14 +149,14 @@ const Dashboard = () => {
     return { count: receipts.length, tva, ht, ttc };
   }, [receipts]);
 
-  // --- Évolution TVA (7 derniers jours) ---
+  // --- Évolution TVA ---
   const tvaEvolutionData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-    return days.map(day => {
+    return days.map((day) => {
       const dayStr = format(day, "yyyy-MM-dd");
       const dayTva = receipts
-        .filter(r => {
+        .filter((r) => {
           const d = format(new Date(r.date_traitement || r.created_at), "yyyy-MM-dd");
           return d === dayStr;
         })
@@ -183,10 +165,10 @@ const Dashboard = () => {
     });
   }, [receipts, dateRange]);
 
-  // --- Top 5 catégories (TVA récupérée) ---
+  // --- Top 5 catégories ---
   const topCategories = useMemo(() => {
     const map = new Map();
-    receipts.forEach(r => {
+    receipts.forEach((r) => {
       const cat = r.categorie || "Sans catégorie";
       const tva = Number(r.tva) || 0;
       const ttc = Number(r.montant_ttc) || 0;
@@ -201,29 +183,13 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [receipts]);
 
-  // --- Performance équipe ---
-  const teamPerformance = useMemo(() => {
-    return members.map(m => {
-      const userReceipts = receipts.filter(r => r.processed_by === m.id);
-      const tva = userReceipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
-      return { ...m, tva, count: userReceipts.length };
-    }).sort((a, b) => b.tva - a.tva);
-  }, [members, receipts]);
-
-  const formatCurrency = (v: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
-
-  // --- % évolution TVA (vs période précédente) ---
-  const tvaEvolutionPercent = useMemo(() => {
-    const prevFrom = subDays(dateRange?.from || new Date(), 7);
-    const prevTo = subDays(dateRange?.to || new Date(), 7);
-    // Simplifié : on suppose pas de données passées → +18% fictif
-    return 18;
-  }, [dateRange]);
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
   return (
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
-        {/* Filtres en ligne */}
+        {/* Filtres */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           {role !== "enterprise" && !roleLoading && (
@@ -234,8 +200,10 @@ const Dashboard = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les clients</SelectItem>
-                  {clients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -245,8 +213,10 @@ const Dashboard = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toute l'équipe</SelectItem>
-                  {members.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  {members.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -257,16 +227,8 @@ const Dashboard = () => {
         {/* KPI Principal */}
         <Card className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-90">TVA récupérée totale</p>
-                <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
-              </div>
-              <div className="flex items-center gap-1 text-green-300">
-                <ArrowUpIcon className="w-5 h-5" />
-                <span className="text-xl font-semibold">+{tvaEvolutionPercent}%</span>
-              </div>
-            </div>
+            <p className="text-sm opacity-90">TVA récupérée totale</p>
+            <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
           </CardContent>
         </Card>
 
@@ -277,7 +239,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Reçus traités</p>
-                  <p className="text-xl font-semibold">44 / 48 <span className="text-sm text-green-600">(92%)</span></p>
+                  <p className="text-xl font-semibold">{kpis.count}</p>
                 </div>
                 <Receipt className="w-8 h-8 text-blue-600 opacity-70" />
               </div>
@@ -307,7 +269,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique TVA */}
+        {/* Graphique SANS GRILLE */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -317,8 +279,7 @@ const Dashboard = () => {
               <Skeleton className="h-64 w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tvaEvolutionData}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                <LineChart data={tvaEvolutionData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v) => formatCurrency(Number(v))} />
@@ -330,7 +291,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Top 5 catégories */}
-        {role !== "enterprise" && (
+        {role !== "enterprise" && topCategories.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Top 5 catégories (TVA récupérée)</CardTitle>
@@ -351,40 +312,7 @@ const Dashboard = () => {
                       <TableCell className="font-medium">{c.cat}</TableCell>
                       <TableCell className="text-right">{c.count}</TableCell>
                       <TableCell className="text-right">{formatCurrency(c.ttc)}</TableCell>
-                      <TableCell className="text-right font-semibold text-blue-600">
-                        {formatCurrency(c.tva)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Performance équipe */}
-        {role !== "enterprise" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Performance équipe (TVA récupérée)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Membre</TableHead>
-                    <TableHead className="text-right">Reçus</TableHead>
-                    <TableHead className="text-right">TVA récup</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {teamPerformance.map((m, i) => (
-                    <TableRow key={m.id}>
-                      <TableCell>{m.name}</TableCell>
-                      <TableCell className="text-right">{m.count}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(m.tva)}
-                      </TableCell>
+                      <TableCell className="text-right font-semibold text-blue-600">{formatCurrency(c.tva)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
