@@ -357,14 +357,15 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             <div className="flex-1" />
             <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+
+          {/* MOBILE -> 1 par ligne | DESKTOP -> 4 colonnes */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <KpiCard icon={Receipt} label="Reçus traités" value={loadingReceipts ? "…" : String(kpis.count)} />
             <KpiCard icon={Globe} label="Montant HT" value={loadingReceipts ? "…" : formatCurrency(kpis.ht)} />
             <KpiCard icon={FileText} label="TVA récupérable" value={loadingReceipts ? "…" : formatCurrency(kpis.tva)} />
             <KpiCard icon={ShoppingCart} label="Montant TTC" value={loadingReceipts ? "…" : formatCurrency(kpis.ttc)} />
           </div>
 
-          {/* mini sparkline textuel (fallback simple, pas de lib ajoutée) */}
           {buildSparkData().length > 0 ? (
             <div className="mt-3 text-[11px] md:text-xs text-muted-foreground">
               Période :{" "}
@@ -576,7 +577,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 h-[calc(100vh-2rem)] w-full max-w-[960px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.40)] border border-border/60 p-0 overflow-hidden"
+        className="m-4 h-[calc(100vh-2rem)] w-full max-w-[1200px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.40)] border border-border/60 p-0 overflow-hidden"
       >
         <SheetHeader className="sr-only">
           <SheetTitle>Détail client</SheetTitle>
