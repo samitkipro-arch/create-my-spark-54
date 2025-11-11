@@ -62,7 +62,7 @@ type ClientFormData = {
 export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailDrawerProps) => {
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false); // <-- contrôle explicite du bouton Enregistrer
+  const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
   // ----- Date range pour Vue d’ensemble -----
@@ -74,7 +74,12 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     if (range?.from && range?.to) setDateRange({ from: startOfDay(range.from), to: endOfDay(range.to) });
   };
 
-  const { register, handleSubmit, reset } = useForm<ClientFormData>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { isDirty },
+  } = useForm<ClientFormData>({
     defaultValues: {
       name: client?.name || "",
       siret_siren: client?.siret_siren || "",
@@ -97,6 +102,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         phone: client.phone || "",
         notes: client.notes || "",
       });
+      setIsEditing(false);
     } else {
       reset({
         name: "",
@@ -107,8 +113,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         phone: "",
         notes: "",
       });
+      setIsEditing(true);
     }
-    setIsEditing(!client);
     setSaving(false);
   }, [client, reset]);
 
@@ -123,7 +129,12 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
   const onSubmit = async (data: ClientFormData) => {
     try {
+      if (!isDirty) {
+        toast.info("Aucune modification à enregistrer.");
+        return;
+      }
       setSaving(true);
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -353,7 +364,15 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   };
 
   const content = (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      onKeyDown={(e) => {
+        // Empêche Enter de soumettre le formulaire par accident
+        if (e.key === "Enter" && (e.target as HTMLElement).tagName.toLowerCase() !== "textarea") {
+          e.preventDefault();
+        }
+      }}
+    >
       {/* Header sticky */}
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-6 py-4 md:px-8 md:py-5">
         <div className="flex items-center justify-between gap-4">
@@ -381,7 +400,9 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
             <div className="text-sm font-semibold">Vue d’ensemble</div>
             <div className="flex-1" />
-            <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
+            <div aria-hidden>
+              <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -487,7 +508,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           subtitle="Définissez le régime et les paramètres qui s’appliquent automatiquement au calcul de TVA récupérable."
         >
           <div className="grid md:grid-cols-2 gap-4 md:gap-5">
-            {/* Régime TVA */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Régime TVA</Label>
               <RadioGroup
@@ -513,7 +533,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               )}
             </div>
 
-            {/* Prorata TVA (%) */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
               <Input
@@ -530,7 +549,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               />
             </div>
 
-            {/* Véhicules */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Véhicules</Label>
               <Input
@@ -541,7 +559,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               />
             </div>
 
-            {/* Repas déductibles (%) */}
             <div className="space-y-2">
               <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
               <Input
@@ -591,7 +608,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         <div className="h-2" />
       </div>
 
-      {/* Footer sticky — contrôle avec `saving` */}
+      {/* Footer sticky — contrôle avec `saving` et `isDirty` */}
       <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
         {isEditing ? (
           <div className="flex gap-3 md:gap-4">
@@ -602,8 +619,15 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               onClick={() => {
                 if (client) {
                   setIsEditing(false);
-                  // réinitialise les champs visibles
-                  reset();
+                  reset({
+                    name: client.name || "",
+                    siret_siren: client.siret_siren || "",
+                    legal_representative: client.legal_representative || "",
+                    address: client.address || "",
+                    email: client.email || "",
+                    phone: client.phone || "",
+                    notes: client.notes || "",
+                  });
                 } else {
                   onOpenChange(false);
                 }
@@ -612,7 +636,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             >
               Annuler
             </Button>
-            <Button className="flex-1" type="submit" disabled={saving}>
+            <Button className="flex-1" type="submit" disabled={saving || !isDirty}>
               {saving ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </div>
