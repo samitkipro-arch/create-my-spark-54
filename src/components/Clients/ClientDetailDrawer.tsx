@@ -98,12 +98,12 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       reset({
         name: "",
         siret_siren: "",
-        legal_representative: "",
+        legal_representitative: "",
         address: "",
         email: "",
         phone: "",
         notes: "",
-      });
+      } as any);
     }
     setIsEditing(!client);
   }, [client, reset]);
@@ -341,7 +341,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         {/* KPI + DateRangePicker */}
         <div className="rounded-2xl border border-border/60 bg-background/50 p-4 md:p-5">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
-            <div className="text-sm font-semibold">Vue d’ensemble (période)</div>
+            <div className="text-sm font-semibold">Vue d’ensemble</div>
             <div className="flex-1" />
             <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           </div>
@@ -451,119 +451,4 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         >
           <div className="grid md:grid-cols-2 gap-4 md:gap-5 opacity-80">
             <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Régime TVA</Label>
-              <Input disabled placeholder="Réal normal / Simplifié / Franchise (à venir)" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
-              <Input disabled placeholder="100 (à venir)" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Véhicules</Label>
-              <Input disabled placeholder="VP / VU (à venir)" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
-              <Input disabled placeholder="100 (à venir)" />
-            </div>
-          </div>
-          <p className="text-[11px] md:text-xs text-muted-foreground mt-3">
-            Astuce : ces règles s’appliqueront automatiquement à l’analyse des reçus pour calculer la TVA récupérable.
-          </p>
-        </Section>
-
-        {/* Notes */}
-        <Section title="Notes internes" subtitle="Informations utiles pour votre équipe (non visibles par le client).">
-          <div className="space-y-2">
-            <Label htmlFor="notes" className="text-[13px] md:text-sm">
-              Commentaire
-            </Label>
-            {isEditing ? (
-              <Textarea
-                id="notes"
-                placeholder="Notes internes sur ce client..."
-                rows={5}
-                className="resize-none bg-background"
-                {...register("notes")}
-              />
-            ) : (
-              <ReadonlyValue value={client?.notes} />
-            )}
-          </div>
-        </Section>
-
-        <div className="h-2" />
-      </div>
-
-      {/* Footer sticky (actions uniques, pas de doublon) */}
-      <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
-        {isEditing ? (
-          <div className="flex gap-3 md:gap-4">
-            <Button
-              variant="outline"
-              className="flex-1"
-              type="button"
-              onClick={() => {
-                if (client) {
-                  setIsEditing(false);
-                  reset();
-                } else {
-                  onOpenChange(false);
-                }
-              }}
-              disabled={isSubmitting}
-            >
-              Annuler
-            </Button>
-            <Button className="flex-1" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-3 md:gap-4 justify-end">
-            {client ? (
-              <>
-                <Button type="button" variant="outline" onClick={onRelance}>
-                  Relancer ce client
-                </Button>
-                <Button type="button" onClick={() => setIsEditing(true)}>
-                  Modifier
-                </Button>
-              </>
-            ) : null}
-          </div>
-        )}
-      </div>
-    </form>
-  );
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="mx-4 mb-4 h-[85vh] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.4)] border border-border/50 overflow-x-hidden">
-          <div className="overflow-y-auto overflow-x-hidden h-full">{content}</div>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="
-          m-4 h-[calc(100vh-2rem)]
-          !max-w-none !w-[min(96vw,1440px)]
-          rounded-2xl bg-card/95 backdrop-blur-lg
-          shadow-[0_10px_40px_rgba(0,0,0,0.40)]
-          border border-border/60 p-0 overflow-hidden
-        "
-      >
-        <SheetHeader className="sr-only">
-          <SheetTitle>Détail client</SheetTitle>
-        </SheetHeader>
-        <div className="h-full overflow-y-auto">{content}</div>
-      </SheetContent>
-    </Sheet>
-  );
-};
+              <Label className="te
