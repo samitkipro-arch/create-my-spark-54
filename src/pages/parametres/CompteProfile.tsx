@@ -41,13 +41,13 @@ const CompteProfile = () => {
 
   const loadProfile = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("profiles")
         .select("first_name,last_name,email,phone,org_id")
         .eq("user_id", user?.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error; // ignore "No rows"
+      if (error) throw error;
       if (data) {
         setProfile({
           first_name: data.first_name ?? "",
