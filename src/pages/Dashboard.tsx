@@ -25,10 +25,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const Dashboard = () => {
   const { role, loading: roleLoading } = useUserRole();
-
   const {
     dateRange: storedDateRange,
     clientId: storedClientId,
@@ -46,29 +46,24 @@ const Dashboard = () => {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
       if (!userId) return;
-
       const { data: ent } = await (supabase as any)
         .from("entreprises")
         .select("name")
         .eq("user_id", userId)
         .maybeSingle();
-
       const companyName = ent?.name?.trim();
       if (!companyName) {
         setEnterpriseClientId("__none__");
         return;
       }
-
       const { data: cli } = await supabase
         .from("clients")
         .select("id, name")
         .ilike("name", companyName)
         .limit(1)
         .maybeSingle();
-
       setEnterpriseClientId(cli?.id ?? "__none__");
     };
-
     if (!roleLoading) resolve();
   }, [role, roleLoading]);
 
@@ -86,7 +81,6 @@ const Dashboard = () => {
       const to = endOfDay(new Date());
       setStoredDateRange(from.toISOString(), to.toISOString());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
@@ -131,13 +125,11 @@ const Dashboard = () => {
     queryKey: ["receipts-dashboard", dateRange, storedClientId, storedMemberId, role, enterpriseClientId],
     queryFn: async () => {
       if (!dateRange?.from || !dateRange?.to) return [];
-
       let query = (supabase as any)
         .from("recus")
         .select("*")
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
-
       if (role === "enterprise") {
         if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
         query = query.eq("client_id", enterpriseClientId);
@@ -145,7 +137,6 @@ const Dashboard = () => {
         if (storedClientId && storedClientId !== "all") query = query.eq("client_id", storedClientId);
         if (storedMemberId && storedMemberId !== "all") query = query.eq("processed_by", storedMemberId);
       }
-
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as any[];
@@ -170,15 +161,16 @@ const Dashboard = () => {
   }, [refetchReceipts]);
 
   // -------- KPIs & dérivés --------
-  const kpis = {
-    count: receipts.length,
-    ht: receipts.reduce(
+  const kpis = useMemo(() => {
+    const count = receipts.length;
+    const ht = receipts.reduce(
       (sum, r) => sum + (Number(r.montant_ht) || (Number(r.montant_ttc) || 0) - (Number(r.tva) || 0)),
       0,
-    ),
-    tva: receipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0),
-    ttc: receipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0),
-  };
+    );
+    const tva = receipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
+    const ttc = receipts.reduce((sum, r) => sum + (Number(r.montant_ttc) || 0), 0);
+    return { count, ht, tva, ttc };
+  }, [receipts]);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
@@ -194,7 +186,6 @@ const Dashboard = () => {
     if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
     const daysDiff = differenceInDays(dateRange.to, dateRange.from);
     const groupByDay = daysDiff <= 31;
-
     if (groupByDay) {
       const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
       return days.map((day) => {
@@ -267,7 +258,6 @@ const Dashboard = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-fade-in-up">
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 transition-all duration-300">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
-
           {/* Filtres visibles seulement côté Comptable */}
           {!roleLoading && role !== "enterprise" && (
             <>
@@ -284,7 +274,6 @@ const Dashboard = () => {
                   ))}
                 </SelectContent>
               </Select>
-
               <Select value={storedMemberId ?? "all"} onValueChange={setMemberId}>
                 <SelectTrigger className="w-full md:w-[250px]">
                   <SelectValue placeholder="Tous les membres" />
@@ -301,7 +290,6 @@ const Dashboard = () => {
             </>
           )}
         </div>
-
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
           {stats.map((stat, index) => (
             <div key={stat.title} className="animate-fade-in-scale" style={{ animationDelay: `${index * 0.1}s` }}>
@@ -309,7 +297,6 @@ const Dashboard = () => {
             </div>
           ))}
         </div>
-
         <Card
           className="bg-card border-border shadow-[var(--shadow-soft)] animate-fade-in-scale"
           style={{ animationDelay: "0.2s" }}
@@ -405,7 +392,6 @@ const Dashboard = () => {
             )}
           </CardContent>
         </Card>
-
         {/* Top catégories & activité membres : visibles seulement côté Comptable */}
         {!roleLoading && role !== "enterprise" && (
           <Card
@@ -457,7 +443,6 @@ const Dashboard = () => {
                       </div>
                     ))}
                   </div>
-
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -491,7 +476,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         )}
-
         {!roleLoading && role !== "enterprise" && (
           <div className="space-y-4 animate-fade-in-up" style={{ animationDelay: "0.4s" }}>
             <h2 className="text-base md:text-lg font-semibold">Suivi de l'activité et part des reçus par membre</h2>
