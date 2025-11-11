@@ -6,11 +6,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { DateRangePicker } from "@/components/Dashboard/DateRangePicker";
+import type { DateRange } from "react-day-picker";
+import {
+  subDays,
+  startOfDay,
+  endOfDay,
+  format,
+  differenceInDays,
+  eachDayOfInterval,
+  eachMonthOfInterval,
+  startOfMonth,
+  endOfMonth,
+} from "date-fns";
+import { fr } from "date-fns/locale";
+import { Receipt, Globe, FileText, ShoppingCart, AlertCircle } from "lucide-react";
 
 interface ClientDetailDrawerProps {
   open: boolean;
@@ -41,6 +56,15 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   const isMobile = useIsMobile();
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
+
+  // ----- Date range pour KPI -----
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfDay(subDays(new Date(), 29)),
+    to: endOfDay(new Date()),
+  });
+  const handleDateRangeChange = (range?: DateRange) => {
+    if (range?.from && range?.to) setDateRange({ from: startOfDay(range.from), to: endOfDay(range.to) });
+  };
 
   const {
     register,
@@ -148,6 +172,74 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     }
   };
 
+  /** ---------- Data KPI pour CE client ---------- */
+  const { data: receipts = [], isLoading: loadingReceipts } = useQuery({
+    queryKey: ["client-receipts", client?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryFn: async () => {
+      if (!client?.id || !dateRange?.from || !dateRange?.to) return [];
+      const { data, error } = await (supabase as any)
+        .from("recus")
+        .select("*")
+        .eq("client_id", client.id)
+        .gte("date_traitement", dateRange.from.toISOString())
+        .lte("date_traitement", dateRange.to.toISOString());
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!client?.id && !!dateRange?.from && !!dateRange?.to && open,
+  });
+
+  const kpis = useMemo(() => {
+    const ht = receipts.reduce(
+      (sum, r) => sum + (Number(r.montant_ht) || (Number(r.montant_ttc) || 0) - (Number(r.tva) || 0)),
+      0,
+    );
+    const ttc = receipts.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0);
+    const tva = receipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
+    return {
+      count: receipts.length,
+      ht,
+      tva,
+      ttc,
+    };
+  }, [receipts]);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+
+  const buildSparkData = () => {
+    if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
+    const daysDiff = differenceInDays(dateRange.to, dateRange.from);
+    const groupByDay = daysDiff <= 31;
+
+    if (groupByDay) {
+      const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
+      return days.map((day) => {
+        const rows = receipts.filter(
+          (r) => format(new Date(r.date_traitement || r.created_at), "yyyy-MM-dd") === format(day, "yyyy-MM-dd"),
+        );
+        return {
+          x: format(day, "dd/MM", { locale: fr }),
+          y: rows.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0),
+        };
+      });
+    } else {
+      const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
+      return months.map((m) => {
+        const mStart = startOfMonth(m);
+        const mEnd = endOfMonth(m);
+        const rows = receipts.filter((r) => {
+          const d = new Date(r.date_traitement || r.created_at);
+          return d >= mStart && d <= mEnd;
+        });
+        return {
+          x: format(m, "MMM yy", { locale: fr }),
+          y: rows.reduce((s, r) => s + (Number(r.montant_ttc) || 0), 0),
+        };
+      });
+    }
+  };
+
   /** ---------- UI Helpers ---------- */
 
   const Section = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
@@ -201,6 +293,27 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     </div>
   );
 
+  const onRelance = () => {
+    if (!client?.email) {
+      toast.info("Ajoutez un e-mail de contact pour relancer ce client.");
+      return;
+    }
+    toast.success("Relance envoyée (démo) — branche n8n à connecter.");
+  };
+
+  // ----- KPI Card inline -----
+  const KpiCard = ({ icon: Icon, label, value }: { icon: any; label: string; value: string }) => (
+    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3.5 py-3">
+      <div className="p-2 rounded-lg bg-primary/10 text-primary">
+        <Icon size={18} />
+      </div>
+      <div className="flex-1">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-sm font-semibold">{value}</div>
+      </div>
+    </div>
+  );
+
   const content = (
     <form onSubmit={handleSubmit(onSubmit)}>
       {/* Header sticky */}
@@ -220,26 +333,50 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             </div>
           </div>
 
-          {client && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {client && (
+              <Button type="button" variant="outline" onClick={onRelance}>
+                Relancer
+              </Button>
+            )}
+            {client && (
               <Button type="button" variant={isEditing ? "outline" : "default"} onClick={() => setIsEditing((v) => !v)}>
                 {isEditing ? "Annuler" : "Modifier"}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Body */}
       <div className="p-6 md:p-8 space-y-6 md:space-y-8">
-        {/* Synthèse compacte */}
-        <div className="rounded-xl border border-border/60 bg-emerald-500/5 text-emerald-900 dark:text-emerald-300">
-          <div className="px-4 py-3 md:px-5 md:py-4 text-sm md:text-[15px]">
-            <span className="font-medium">Conseil : </span>
-            Renseignez d’abord l’<span className="font-medium">identité</span> puis les
-            <span className="font-medium"> contacts</span>. Les
-            <span className="font-medium"> notes internes</span> vous aident pour les relances.
+        {/* KPI + DateRangePicker */}
+        <div className="rounded-2xl border border-border/60 bg-background/50 p-4 md:p-5">
+          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
+            <div className="text-sm font-semibold">KPI (période)</div>
+            <div className="flex-1" />
+            <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
           </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard icon={Receipt} label="Reçus traités" value={loadingReceipts ? "…" : String(kpis.count)} />
+            <KpiCard icon={Globe} label="Montant HT" value={loadingReceipts ? "…" : formatCurrency(kpis.ht)} />
+            <KpiCard icon={FileText} label="TVA récupérable" value={loadingReceipts ? "…" : formatCurrency(kpis.tva)} />
+            <KpiCard icon={ShoppingCart} label="Montant TTC" value={loadingReceipts ? "…" : formatCurrency(kpis.ttc)} />
+          </div>
+
+          {/* mini sparkline textuel (fallback simple, pas de lib ajoutée) */}
+          {buildSparkData().length > 0 ? (
+            <div className="mt-3 text-[11px] md:text-xs text-muted-foreground">
+              Période :{" "}
+              {dateRange?.from && dateRange?.to
+                ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`
+                : "—"}
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center gap-2 text-[11px] md:text-xs text-muted-foreground">
+              <AlertCircle size={14} /> Aucune donnée sur la période sélectionnée.
+            </div>
+          )}
         </div>
 
         {/* Identité */}
@@ -296,8 +433,8 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Contact */}
-        <Section title="Contact" subtitle="Coordonnées principales de l’entreprise.">
+        {/* Contact & relances */}
+        <Section title="Contact & relances" subtitle="Coordonnées principales de l’entreprise et actions rapides.">
           <div className="grid md:grid-cols-2 gap-4 md:gap-5">
             <Field
               id="email"
@@ -316,6 +453,53 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               readOnlyValue={client?.phone}
             />
           </div>
+          {!isEditing && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={onRelance}>
+                Relancer ce client
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  if (client?.email) {
+                    navigator.clipboard.writeText(client.email);
+                    toast.success("E-mail copié dans le presse-papiers.");
+                  }
+                }}
+              >
+                Copier l’e-mail
+              </Button>
+            </div>
+          )}
+        </Section>
+
+        {/* Règles TVA (visuel, sans modifier ta base) */}
+        <Section
+          title="Règles TVA (bientôt)"
+          subtitle="Configurez les règles d’éligibilité pour la récupération de TVA. (Visuel uniquement, pas encore connecté)"
+        >
+          <div className="grid md:grid-cols-2 gap-4 md:gap-5 opacity-80">
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Régime TVA</Label>
+              <Input disabled placeholder="Réal normal / Simplifié / Franchise (à venir)" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
+              <Input disabled placeholder="100 (à venir)" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Véhicules</Label>
+              <Input disabled placeholder="VP / VU (à venir)" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
+              <Input disabled placeholder="100 (à venir)" />
+            </div>
+          </div>
+          <p className="text-[11px] md:text-xs text-muted-foreground mt-3">
+            Astuce : ces règles s’appliqueront automatiquement à l’analyse des reçus pour calculer la TVA récupérable.
+          </p>
         </Section>
 
         {/* Notes */}
@@ -338,7 +522,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Action bar */}
         <div className="h-2" />
       </div>
 
@@ -393,7 +576,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="m-4 h-[calc(100vh-2rem)] w-full max-w-[560px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.40)] border border-border/60 p-0 overflow-hidden"
+        className="m-4 h-[calc(100vh-2rem)] w-full max-w-[960px] rounded-2xl bg-card/95 backdrop-blur-lg shadow-[0_10px_40px_rgba(0,0,0,0.40)] border border-border/60 p-0 overflow-hidden"
       >
         <SheetHeader className="sr-only">
           <SheetTitle>Détail client</SheetTitle>
