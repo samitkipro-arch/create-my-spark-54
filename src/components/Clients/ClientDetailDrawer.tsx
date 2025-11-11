@@ -242,6 +242,16 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
 
   /** ---------- UI Helpers ---------- */
 
+  const KpiCard = ({ icon: Icon, label, value }: { icon: any; label: string; value: string }) => (
+    <div className="rounded-lg border border-border/60 bg-background/30 p-3 md:p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+      <div className="text-lg md:text-xl font-semibold">{value}</div>
+    </div>
+  );
+
   const Section = ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) => (
     <div className="rounded-2xl border border-border/60 bg-background/50">
       <div className="flex items-start justify-between p-4 md:p-5 border-b border-border/60">
