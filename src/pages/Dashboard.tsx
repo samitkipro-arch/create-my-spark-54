@@ -123,7 +123,7 @@ const Dashboard = () => {
     enabled: !roleLoading && role !== "enterprise",
   });
 
-  // --- Reçus : queryKey avec dateRange.from/to pour forcer le refetch ---
+  // --- Reçus ---
   const {
     data: receipts = [],
     isLoading: isLoadingReceipts,
@@ -162,7 +162,6 @@ const Dashboard = () => {
       !!dateRange?.from && !!dateRange?.to && !roleLoading && (role !== "enterprise" || enterpriseClientId !== null),
   });
 
-  // --- Forcer le refetch quand dateRange change ---
   useEffect(() => {
     refetchReceipts();
   }, [dateRange?.from, dateRange?.to, refetchReceipts]);
@@ -175,7 +174,7 @@ const Dashboard = () => {
     return () => supabase.removeChannel(channel);
   }, [refetchReceipts]);
 
-  // --- Calculs ---
+  // --- Calculs KPI ---
   const kpis = useMemo(() => {
     const tva = receipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
     const ht = receipts.reduce((sum, r) => sum + ((Number(r.montant_ttc) || 0) - (Number(r.tva) || 0)), 0);
@@ -183,7 +182,7 @@ const Dashboard = () => {
     return { count: receipts.length, tva, ht, ttc };
   }, [receipts]);
 
-  // --- Évolution TVA + compteur de reçus par jour ---
+  // --- Évolution TVA ---
   const tvaEvolutionGraphData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -203,7 +202,7 @@ const Dashboard = () => {
     });
   }, [receipts, dateRange]);
 
-  // --- Top 5 catégories ---
+  // --- Top catégories : tri par nombre de reçus (décroissant) ---
   const topCategories = useMemo(() => {
     const map = new Map();
     receipts.forEach((r) => {
@@ -217,11 +216,11 @@ const Dashboard = () => {
       entry.tva += tva;
     });
     return Array.from(map.values())
-      .sort((a, b) => b.tva - a.tva)
+      .sort((a, b) => b.count - a.count)
       .slice(0, 5);
   }, [receipts]);
 
-  // --- Performance équipe ---
+  // --- Performance équipe : tri par nombre de reçus (décroissant) ---
   const teamPerformance = useMemo(() => {
     return members
       .map((m) => {
@@ -229,7 +228,7 @@ const Dashboard = () => {
         const tva = userReceipts.reduce((s, r) => s + (Number(r.tva) || 0), 0);
         return { ...m, tva, count: userReceipts.length };
       })
-      .sort((a, b) => b.tva - a.tva);
+      .sort((a, b) => b.count - a.count);
   }, [members, receipts]);
 
   const formatCurrency = (v: number) =>
@@ -318,7 +317,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique */}
+        {/* Graphique : full width + sans points sur mobile */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
@@ -328,7 +327,7 @@ const Dashboard = () => {
               <Skeleton className="h-64 w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tvaEvolutionGraphData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <LineChart data={tvaEvolutionGraphData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip content={<CustomTooltip />} />
@@ -337,7 +336,7 @@ const Dashboard = () => {
                     dataKey="tva"
                     stroke="#2563eb"
                     strokeWidth={3}
-                    dot={{ r: 4 }}
+                    dot={false}
                     activeDot={{ r: 6 }}
                   />
                 </LineChart>
@@ -346,11 +345,11 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Top 5 catégories */}
+        {/* Top catégories */}
         {role !== "enterprise" && topCategories.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Top 5 catégories (TVA récupérée)</CardTitle>
+              <CardTitle className="text-lg">Top catégories</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -377,11 +376,11 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Performance équipe */}
+        {/* Performance de votre équipe */}
         {role !== "enterprise" && teamPerformance.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Performance équipe (TVA récupérée)</CardTitle>
+              <CardTitle className="text-lg">Performance de votre équipe</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
