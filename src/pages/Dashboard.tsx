@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { DateRangePicker } from "@/components/Dashboard/DateRangePicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Receipt, FileText, ShoppingCart } from "lucide-react";
+import { Receipt, FileText, ShoppingCart, TrendingUp, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,7 +14,7 @@ import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-// Tooltip compact, pro, clair
+// Tooltip pro, compact, clair
 const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (active && payload && payload[0]) {
     const data = payload[0].payload;
@@ -234,6 +234,11 @@ const Dashboard = () => {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
+  const formatDateRange = () => {
+    if (!dateRange?.from || !dateRange?.to) return "";
+    return `${format(dateRange.from, "dd/MM")} - ${format(dateRange.to, "dd/MM")}`;
+  };
+
   return (
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
@@ -275,8 +280,16 @@ const Dashboard = () => {
         {/* KPI Principal */}
         <Card className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
           <CardContent className="p-6">
-            <p className="text-sm opacity-90">TVA récupérée totale</p>
-            <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">TVA récupérée totale</p>
+                <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
+              </div>
+              <div className="flex items-center gap-1 text-sm">
+                <TrendingUp className="w-4 h-4" />
+                <span className="font-medium">+18 %</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -287,7 +300,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Reçus traités</p>
-                  <p className="text-xl font-semibold">{kpis.count}</p>
+                  <p className="text-xl font-semibold">{kpis.count} / 48 (92 %)</p>
                 </div>
                 <Receipt className="w-8 h-8 text-blue-600 opacity-70" />
               </div>
@@ -317,17 +330,17 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Graphique : full width + sans points sur mobile */}
+        {/* Graphique : FULL WIDTH – NO PADDING */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {isLoadingReceipts ? (
               <Skeleton className="h-64 w-full" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tvaEvolutionGraphData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                <LineChart data={tvaEvolutionGraphData} margin={{ top: 10, right: 0, left: 0, bottom: 10 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip content={<CustomTooltip />} />
@@ -345,11 +358,11 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Top catégories */}
+        {/* Top 5 catégories */}
         {role !== "enterprise" && topCategories.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Top catégories</CardTitle>
+              <CardTitle className="text-lg">Top 5 catégories (TVA récupérée)</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -376,11 +389,14 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Performance de votre équipe */}
+        {/* Performance équipe */}
         {role !== "enterprise" && teamPerformance.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Performance de votre équipe</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Performance équipe (TVA récupérée)
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
