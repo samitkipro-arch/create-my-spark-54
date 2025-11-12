@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { X, Smartphone, ChevronDown } from "lucide-react";
+import { X, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
 
@@ -258,15 +258,14 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
             {/* === Les 2 boutons, texte centré === */}
             <div className="space-y-2 md:space-y-3">
-              {/* Assigner un client (obligatoire) — texte centré */}
+              {/* Assigner un client (obligatoire) — texte centré, sans chevron */}
               {clients.length > 0 ? (
                 <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
                   <SelectTrigger
                     className="relative w-full h-11 md:h-12 bg-white text-black hover:bg-white/90 font-medium rounded-md
-                               flex items-center justify-center px-10" /* px-10 pour laisser la place au chevron */
+                               flex items-center justify-center px-4"
                   >
                     <SelectValue placeholder="Assigner un client (obligatoire)" className="w-full text-center" />
-                    <ChevronDown className="absolute right-3 h-4 w-4 opacity-70 pointer-events-none" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((c) => (
@@ -282,7 +281,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                 </Button>
               )}
 
-              {/* Déposez votre reçu + — déjà centré */}
+              {/* Déposez votre reçu + */}
               <div className="relative">
                 <input
                   key={fileInputKey}
