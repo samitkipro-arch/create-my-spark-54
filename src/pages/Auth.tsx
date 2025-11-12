@@ -11,6 +11,30 @@ import { supabase } from "@/integrations/supabase/client";
 
 type RoleChoice = "cabinet" | "client";
 
+// 🔗 Webhook n8n (mode test)
+const WEBHOOK_URL = "https://samilzr.app.n8n.cloud/webhook-test/ac95c17b-5e9b-4810-96d1-a42555461ad8";
+
+// Envoi silencieux au webhook (ne bloque jamais l’UX)
+async function sendSignupWebhook(payload: {
+  orgName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: RoleChoice;
+}) {
+  try {
+    await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      // on ne lit pas la réponse volontairement : fire-and-forget
+    });
+  } catch (e) {
+    console.warn("Webhook signup failed (non-bloquant):", e);
+  }
+}
+
 const Auth = () => {
   // --- routing / query ---
   const [search] = useSearchParams();
@@ -85,6 +109,15 @@ const Auth = () => {
             }
           } else {
             toast.success("Compte créé avec succès !");
+            // 🔔 Envoi au webhook n8n (5 champs demandés)
+            sendSignupWebhook({
+              role: "cabinet",
+              orgName,
+              firstName,
+              lastName,
+              email,
+              phone: phoneCabinet,
+            });
           }
         } else {
           // Entreprise : Nom d’entreprise + Email + Téléphone + Mot de passe + ID d’organisation (obligatoire)
@@ -138,6 +171,15 @@ const Auth = () => {
             }
 
             toast.success("Compte créé avec succès !");
+            // 🔔 Envoi au webhook n8n (5 champs demandés, mappés côté client)
+            sendSignupWebhook({
+              role: "client",
+              orgName: companyName, // mapping pour garder la même clé que côté cabinet
+              firstName: "", // pas demandé pour ce rôle dans ton UI
+              lastName: "",
+              email,
+              phone: phoneClient,
+            });
           }
         }
       }
