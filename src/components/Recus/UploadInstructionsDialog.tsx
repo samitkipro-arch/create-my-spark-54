@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { X, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // ==== ICÔNES ====
-// (on garde tes icônes custom pour lumière + cadrage)
 import { IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
 
 interface UploadInstructionsDialogProps {
@@ -13,11 +13,69 @@ interface UploadInstructionsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type Client = { id: string; name: string };
+
 export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructionsDialogProps) => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [showAnalysisOverlay, setShowAnalysisOverlay] = useState(false);
   const [softError, setSoftError] = useState<string | null>(null);
+
+  // --- client selection ---
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | undefined>(undefined);
+  const [orgId, setOrgId] = useState<string | null>(null);
+
+  // Récup org_id + clients à l'ouverture du dialog
+  useEffect(() => {
+    const fetchOrgAndClients = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // 1) org_id (org_members prioritaire, sinon profiles)
+        let resolvedOrgId: string | null = null;
+
+        const { data: orgMember } = await (supabase as any)
+          .from("org_members")
+          .select("org_id")
+          .eq("user_id", user.id)
+          .single();
+
+        if (orgMember?.org_id) {
+          resolvedOrgId = orgMember.org_id;
+        } else {
+          const { data: profile } = await (supabase as any)
+            .from("profiles")
+            .select("org_id")
+            .eq("user_id", user.id)
+            .single();
+          if (profile?.org_id) resolvedOrgId = profile.org_id;
+        }
+
+        setOrgId(resolvedOrgId);
+
+        if (!resolvedOrgId) return;
+
+        // 2) Clients de l'org
+        const { data: rows } = await (supabase as any)
+          .from("clients")
+          .select("id, name")
+          .eq("org_id", resolvedOrgId)
+          .order("name", { ascending: true });
+
+        setClients((rows || []).map((r: any) => ({ id: r.id, name: r.name })));
+      } catch {
+        // silencieux : on ne bloque pas l'upload
+      }
+    };
+
+    if (open) {
+      fetchOrgAndClients();
+    }
+  }, [open]);
 
   // Écouter les INSERT sur la table des reçus : ferme l’overlay + le dialog quand le drawer s’ouvre
   useEffect(() => {
@@ -25,14 +83,10 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
     const channel = supabase
       .channel("recus-insert-listener")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "recus" }, // <- IMPORTANT: table "recus"
-        () => {
-          setShowAnalysisOverlay(false);
-          onOpenChange(false);
-        },
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, () => {
+        setShowAnalysisOverlay(false);
+        onOpenChange(false);
+      })
       .subscribe();
 
     return () => {
@@ -54,7 +108,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     setShowAnalysisOverlay(true);
 
     try {
-      // Auth
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -66,35 +119,33 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         throw new Error("Utilisateur non authentifié");
       }
 
-      // Récup org_id (org_members -> profiles)
-      let orgId: string | null = null;
-
-      const { data: orgMember } = await (supabase as any)
-        .from("org_members")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (orgMember?.org_id) {
-        orgId = orgMember.org_id;
-      } else {
-        const { data: profile } = await (supabase as any)
-          .from("profiles")
+      // org_id (si non chargé pour une raison X)
+      let effectiveOrgId = orgId;
+      if (!effectiveOrgId) {
+        const { data: orgMember } = await (supabase as any)
+          .from("org_members")
           .select("org_id")
           .eq("user_id", user.id)
           .single();
-        if (profile?.org_id) orgId = profile.org_id;
+        if (orgMember?.org_id) {
+          effectiveOrgId = orgMember.org_id;
+        } else {
+          const { data: profile } = await (supabase as any)
+            .from("profiles")
+            .select("org_id")
+            .eq("user_id", user.id)
+            .single();
+          if (profile?.org_id) effectiveOrgId = profile.org_id;
+        }
       }
-
-      if (!orgId) {
-        throw new Error("Organisation non trouvée.");
-      }
+      if (!effectiveOrgId) throw new Error("Organisation non trouvée.");
 
       // Envoi webhook n8n
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("org_id", orgId);
+      formData.append("org_id", effectiveOrgId);
       formData.append("user_id", user.id);
+      if (selectedClientId) formData.append("client_id", selectedClientId); // <-- assignation directe
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
@@ -107,10 +158,8 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         throw new Error(errorText || `Erreur ${response.status}`);
       }
 
-      // Pas de toast ici → on laisse l’overlay jusqu’à l’INSERT Supabase (drawer)
       setFileInputKey((prev) => prev + 1);
     } catch (err: any) {
-      // Pas d’erreur rouge : on affiche un message discret dans l’overlay + boutons
       setSoftError("L’envoi a échoué. Vous pouvez réessayer ou fermer cette fenêtre.");
       console.error("Upload error:", err?.message || err);
     } finally {
@@ -122,7 +171,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     setSoftError(null);
     setShowAnalysisOverlay(false);
     setTimeout(() => setShowAnalysisOverlay(true), 0);
-    // L’utilisateur doit re-choisir un fichier : on réinitialise l’input
     setFileInputKey((prev) => prev + 1);
   };
 
@@ -134,21 +182,16 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
             <div className="text-center space-y-4">
               <h3 className="text-xl md:text-2xl font-semibold text-foreground">Analyse IA en cours...</h3>
 
-              {/* Barre de progression indéterminée, style Finvisor */}
               <div className="w-full max-w-md px-4">
                 <div className="relative h-2 bg-[#1a2332] rounded-full overflow-hidden">
                   <div
                     className="absolute inset-0 translate-x-[-100%] h-full bg-gradient-to-r from-blue-500 to-blue-600 animate-[progress_1.4s_ease-in-out_infinite]"
-                    style={{
-                      // @ts-ignore – on utilise une keyframes utilitaire via tailwind config ou inline
-                      animationName: "progress",
-                    }}
+                    style={{ /* @ts-ignore */ animationName: "progress" }}
                   />
                 </div>
               </div>
 
-              {/* Message discret si erreur */}
-              {softError && (
+              {softError ? (
                 <div className="mt-4 text-center text-white/80 text-[13px]">
                   {softError}
                   <div className="mt-3 flex items-center justify-center gap-2">
@@ -167,9 +210,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                     </Button>
                   </div>
                 </div>
-              )}
-
-              {!softError && (
+              ) : (
                 <p className="mt-3 text-center text-white/80 text-[12px]">
                   Cette étape peut prendre quelques secondes. Le reçu s’ouvrira automatiquement.
                 </p>
@@ -185,7 +226,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-3 md:gap-8 mb-3 md:mb-8">
-              {/* Téléphone en paysage */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
                 <div className="relative">
                   <Smartphone className="w-10 h-10 md:w-16 md:h-16 text-white rotate-90" strokeWidth={1.5} />
@@ -206,7 +246,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                 </p>
               </div>
 
-              {/* Lumière / éclairage */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
                 <IconLightBulb className="w-10 h-10 md:w-16 md:h-16 text-white" />
                 <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
@@ -214,7 +253,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                 </p>
               </div>
 
-              {/* Reçu bien cadré */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
                 <IconScanFrame className="w-10 h-10 md:w-16 md:h-16 text-white" />
                 <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
@@ -222,7 +260,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                 </p>
               </div>
 
-              {/* Éviter texte/objets */}
               <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
                 <div className="relative">
                   <IconScanFrame className="w-10 h-10 md:w-16 md:h-16 text-white" />
@@ -235,6 +272,33 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                   Évitez tout texte ou objet autour du reçu pour une meilleure détection.
                 </p>
               </div>
+            </div>
+
+            {/* --- Sélecteur client / message si aucun client --- */}
+            <div className="space-y-1.5 md:space-y-2 mb-2">
+              {clients.length === 0 ? (
+                <p className="text-center text-xs md:text-sm text-muted-foreground">
+                  Veuillez ajouter votre premier client.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] md:text-xs text-muted-foreground">
+                    Assigner à un client (optionnel)
+                  </label>
+                  <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sélectionner un client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 md:space-y-6 pt-2 md:pt-4 border-t border-border">
