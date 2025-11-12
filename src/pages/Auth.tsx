@@ -11,8 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 type RoleChoice = "cabinet" | "client";
 
-// 🔗 Webhook n8n (mode test)
-const WEBHOOK_URL = "https://samilzr.app.n8n.cloud/webhook-test/ac95c17b-5e9b-4810-96d1-a42555461ad8";
+// 🔗 Webhook n8n
+const WEBHOOK_URL = "https://samilzr.app.n8n.cloud/webhook/ac95c17b-5e9b-4810-96d1-a42555461ad8";
 
 // Envoi silencieux au webhook (ne bloque jamais l’UX)
 async function sendSignupWebhook(payload: {
