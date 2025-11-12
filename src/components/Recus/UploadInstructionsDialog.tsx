@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { X, Smartphone } from "lucide-react";
+import { X, Smartphone, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // ==== ICÔNES ====
@@ -68,7 +68,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
 
         setClients((rows || []).map((r: any) => ({ id: r.id, name: r.name })));
       } catch {
-        // silencieux : on ne bloque pas l'upload
+        // silencieux
       }
     };
 
@@ -77,7 +77,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     }
   }, [open]);
 
-  // Écouter les INSERT sur la table des reçus : ferme l’overlay + le dialog quand le drawer s’ouvre
+  // Écoute INSERT reçus -> fermer overlay + dialog
   useEffect(() => {
     if (!showAnalysisOverlay) return;
 
@@ -102,6 +102,10 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!selectedClientId) {
+      // sécurité UI: on ne devrait pas pouvoir cliquer si pas de client choisi
+      return;
+    }
 
     setIsUploading(true);
     setSoftError(null);
@@ -119,7 +123,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         throw new Error("Utilisateur non authentifié");
       }
 
-      // org_id (si non chargé pour une raison X)
+      // org_id fallback
       let effectiveOrgId = orgId;
       if (!effectiveOrgId) {
         const { data: orgMember } = await (supabase as any)
@@ -145,7 +149,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       formData.append("file", file);
       formData.append("org_id", effectiveOrgId);
       formData.append("user_id", user.id);
-      if (selectedClientId) formData.append("client_id", selectedClientId); // <-- assignation directe
+      formData.append("client_id", selectedClientId); // <-- obligatoire
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
@@ -274,59 +278,60 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
               </div>
             </div>
 
-            {/* --- Sélecteur client / message si aucun client --- */}
-            <div className="space-y-1.5 md:space-y-2 mb-2">
-              {clients.length === 0 ? (
-                <p className="text-center text-xs md:text-sm text-muted-foreground">
-                  Veuillez ajouter votre premier client.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] md:text-xs text-muted-foreground">
-                    Assigner à un client (optionnel)
-                  </label>
-                  <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sélectionner un client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3 md:space-y-6 pt-2 md:pt-4 border-t border-border">
-              <p className="text-center text-[10px] md:text-sm text-muted-foreground">
-                Choisissez un fichier (image ou PDF) de votre reçu à analyser.
+            {/* --- Bandeau info si aucun client --- */}
+            {clients.length === 0 && (
+              <p className="text-center text-xs md:text-sm text-muted-foreground mb-2">
+                Veuillez ajouter votre premier client.
               </p>
+            )}
 
-              <div className="space-y-2 md:space-y-4">
-                <div className="relative">
-                  <input
-                    key={fileInputKey}
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.pdf"
-                    onChange={handleFileSelect}
-                    disabled={isUploading}
-                    className="hidden"
-                    id="receipt-upload"
-                  />
-                  <Button
-                    asChild
-                    disabled={isUploading}
-                    className="w-full bg-white text-black hover:bg-white/90 font-medium disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base h-8 md:h-11"
-                  >
-                    <label htmlFor="receipt-upload" className="cursor-pointer">
-                      {isUploading ? "Envoi en cours..." : "Choisir un fichier"}
-                    </label>
-                  </Button>
-                </div>
+            {/* --- Les 2 boutons, sans texte entre eux --- */}
+            <div className="space-y-2 md:space-y-3">
+              {/* Bouton / Select : Assigner un client (obligatoire) */}
+              {clients.length > 0 ? (
+                <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
+                  <SelectTrigger className="w-full h-11 md:h-12 bg-white text-black hover:bg-white/90 font-medium rounded-md flex items-center justify-between px-4">
+                    <div className="truncate">
+                      {selectedClientId
+                        ? clients.find((c) => c.id === selectedClientId)?.name
+                        : "Assigner un client (obligatoire)"}
+                    </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Button className="w-full h-11 md:h-12 bg-white text-black hover:bg-white/90" disabled>
+                  Assigner un client (obligatoire)
+                </Button>
+              )}
+
+              {/* Bouton : Déposez votre reçu + */}
+              <div className="relative">
+                <input
+                  key={fileInputKey}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={handleFileSelect}
+                  disabled={isUploading || !selectedClientId || clients.length === 0}
+                  className="hidden"
+                  id="receipt-upload"
+                />
+                <Button
+                  asChild
+                  disabled={isUploading || !selectedClientId || clients.length === 0}
+                  className="w-full bg-white text-black hover:bg-white/90 font-medium disabled:opacity-50 disabled:cursor-not-allowed h-11 md:h-12"
+                >
+                  <label htmlFor="receipt-upload" className="cursor-pointer">
+                    {isUploading ? "Envoi en cours..." : "Déposez votre reçu +"}
+                  </label>
+                </Button>
               </div>
             </div>
           </>
