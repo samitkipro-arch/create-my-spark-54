@@ -56,6 +56,10 @@ type ClientFormData = {
   email: string;
   phone: string;
   notes: string;
+  regime_tva: "reel_normal" | "simplifie" | "franchise";
+  prorata_tva: number;
+  vehicules: string;
+  repas_deductibles: number;
 };
 
 export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailDrawerProps) => {
@@ -64,7 +68,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
-  // Date range pour Vue d'ensemble
+  // --- Date range pour Vue d'ensemble ---
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(subDays(new Date(), 29)),
     to: endOfDay(new Date()),
@@ -76,7 +80,7 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     }
   };
 
-  // Formulaire principal avec react-hook-form
+  // --- Formulaire principal (inclut TVA) ---
   const {
     register,
     handleSubmit,
@@ -91,10 +95,14 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
       email: "",
       phone: "",
       notes: "",
+      regime_tva: "reel_normal",
+      prorata_tva: 100,
+      vehicules: "",
+      repas_deductibles: 50,
     },
   });
 
-  // Reset du formulaire quand client change
+  // --- Reset du formulaire quand client change ---
   useEffect(() => {
     if (client) {
       reset({
@@ -105,6 +113,10 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         email: client.email || "",
         phone: client.phone || "",
         notes: client.notes || "",
+        regime_tva: client.regime_tva ?? "reel_normal",
+        prorata_tva: typeof client.prorata_tva === "number" ? client.prorata_tva : 100,
+        vehicules: client.vehicules ?? "",
+        repas_deductibles: typeof client.repas_deductibles === "number" ? client.repas_deductibles : 50,
       });
       setIsEditing(false);
     } else {
@@ -116,6 +128,10 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         email: "",
         phone: "",
         notes: "",
+        regime_tva: "reel_normal",
+        prorata_tva: 100,
+        vehicules: "",
+        repas_deductibles: 50,
       });
       setIsEditing(true);
     }
@@ -131,15 +147,13 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         .slice(0, 2)
     : "NC";
 
-  // Submit du formulaire principal
+  // --- Submit du formulaire (création ou mise à jour) ---
   const onSubmit = async (data: ClientFormData) => {
     if (!isDirty) {
       toast.info("Aucune modification à enregistrer.");
       return;
     }
-
     setSaving(true);
-
     try {
       const {
         data: { user },
@@ -151,11 +165,10 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
         .select("org_id")
         .eq("user_id", user.id)
         .single();
-
       if (!profile?.org_id) throw new Error("Organisation introuvable");
 
       if (client?.id) {
-        // Update
+        // Mise à jour
         const { error } = await (supabase as any)
           .from("clients")
           .update({
@@ -166,13 +179,16 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             email: data.email,
             phone: data.phone,
             notes: data.notes,
+            regime_tva: data.regime_tva,
+            prorata_tva: data.prorata_tva,
+            vehicules: data.vehicules,
+            repas_deductibles: data.repas_deductibles,
           })
           .eq("id", client.id);
-
         if (error) throw error;
         toast.success("Client modifié avec succès");
       } else {
-        // Insert
+        // Création
         const { error } = await (supabase as any).from("clients").insert({
           org_id: profile.org_id,
           name: data.name,
@@ -182,12 +198,15 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           email: data.email,
           phone: data.phone,
           notes: data.notes,
+          regime_tva: data.regime_tva,
+          prorata_tva: data.prorata_tva,
+          vehicules: data.vehicules,
+          repas_deductibles: data.repas_deductibles,
         });
-
         if (error) throw error;
         toast.success("Client ajouté avec succès");
+        onOpenChange(false);
       }
-
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       setIsEditing(false);
     } catch (error: any) {
@@ -198,25 +217,17 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     }
   };
 
-  // Handler pour annuler
+  // --- Annuler ---
   const handleCancel = () => {
     if (client) {
-      reset({
-        name: client.name || "",
-        siret_siren: client.siret_siren || "",
-        legal_representative: client.legal_representative || "",
-        address: client.address || "",
-        email: client.email || "",
-        phone: client.phone || "",
-        notes: client.notes || "",
-      });
+      reset();
       setIsEditing(false);
     } else {
       onOpenChange(false);
     }
   };
 
-  // Data Vue d'ensemble pour CE client
+  // --- Reçus pour Vue d'ensemble ---
   const { data: receipts = [], isLoading: loadingReceipts } = useQuery({
     queryKey: ["client-receipts", client?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     queryFn: async () => {
@@ -250,7 +261,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     if (!dateRange?.from || !dateRange?.to || receipts.length === 0) return [];
     const daysDiff = differenceInDays(dateRange.to, dateRange.from);
     const groupByDay = daysDiff <= 31;
-
     if (groupByDay) {
       const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
       return days.map((day) => {
@@ -279,79 +289,30 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     }
   };
 
-  // --- Autosave TVA (indépendant du formulaire principal) ---
-  const [tvaState, setTvaState] = useState<{
-    regime_tva: "reel_normal" | "simplifie" | "franchise";
-    prorata_tva: number;
-    vehicules: string;
-    repas_deductibles: number;
-  }>({
-    regime_tva: "reel_normal",
-    prorata_tva: 100,
-    vehicules: "",
-    repas_deductibles: 50,
-  });
-
+  // --- Autosave TVA (uniquement si client existe) ---
   const [justSaved, setJustSaved] = useState(false);
   const [tvaDebounceTimeout, setTvaDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // Initialiser tvaState depuis client
-  useEffect(() => {
-    if (client) {
-      setTvaState({
-        regime_tva: client.regime_tva ?? "reel_normal",
-        prorata_tva: typeof client.prorata_tva === "number" ? client.prorata_tva : 100,
-        vehicules: client.vehicules ?? "",
-        repas_deductibles: typeof client.repas_deductibles === "number" ? client.repas_deductibles : 50,
-      });
-    }
-  }, [client]);
-
-  // Fonction autosave avec debounce
-  const autosaveTva = (patch: Partial<typeof tvaState>) => {
-    const next = { ...tvaState, ...patch };
-    setTvaState(next);
-
-    // Clear timeout précédent
-    if (tvaDebounceTimeout) {
-      clearTimeout(tvaDebounceTimeout);
-    }
-
-    // Debounce 600ms
+  const autosaveTva = (patch: Partial<ClientFormData>) => {
+    if (!client?.id) return;
     const timeout = setTimeout(async () => {
-      if (!client?.id) return;
-
       try {
-        const { error } = await (supabase as any)
-          .from("clients")
-          .update({
-            regime_tva: next.regime_tva,
-            prorata_tva: next.prorata_tva,
-            vehicules: next.vehicules,
-            repas_deductibles: next.repas_deductibles,
-          })
-          .eq("id", client.id);
-
+        const { error } = await (supabase as any).from("clients").update(patch).eq("id", client.id);
         if (error) throw error;
-
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 2000);
         await queryClient.invalidateQueries({ queryKey: ["clients"] });
       } catch (e: any) {
-        console.error("Erreur autosave TVA:", e);
         toast.error(e.message || "Impossible d'enregistrer les règles TVA");
       }
     }, 600);
-
+    if (tvaDebounceTimeout) clearTimeout(tvaDebounceTimeout);
     setTvaDebounceTimeout(timeout);
   };
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
-      if (tvaDebounceTimeout) {
-        clearTimeout(tvaDebounceTimeout);
-      }
+      if (tvaDebounceTimeout) clearTimeout(tvaDebounceTimeout);
     };
   }, [tvaDebounceTimeout]);
 
@@ -430,13 +391,12 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
     <form
       onSubmit={handleSubmit(onSubmit)}
       onKeyDown={(e) => {
-        // Empêche Enter de soumettre par accident
         if (e.key === "Enter" && (e.target as HTMLElement).tagName.toLowerCase() !== "textarea") {
           e.preventDefault();
         }
       }}
     >
-      {/* Header sticky */}
+      {/* Header */}
       <div className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-b border-border px-6 py-4 md:px-8 md:py-5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 md:gap-5 min-w-0">
@@ -467,7 +427,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <KpiCard icon={Receipt} label="Reçus traités" value={loadingReceipts ? "…" : String(kpis.count)} />
               <KpiCard icon={Globe} label="Montant HT" value={loadingReceipts ? "…" : formatCurrency(kpis.ht)} />
@@ -482,7 +441,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 value={loadingReceipts ? "…" : formatCurrency(kpis.ttc)}
               />
             </div>
-
             {buildSparkData().length > 0 ? (
               <div className="mt-3 text-[11px] md:text-xs text-muted-foreground">
                 Période :{" "}
@@ -516,7 +474,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 <ReadonlyValue value={client?.name} />
               )}
             </div>
-
             <div className="grid md:grid-cols-2 gap-4 md:gap-5">
               <Field
                 id="siret-siren"
@@ -533,7 +490,6 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
                 readOnlyValue={client?.legal_representative}
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="address" className="text-[13px] md:text-sm">
                 Adresse complète du siège social (optionnel)
@@ -574,90 +530,114 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
           </div>
         </Section>
 
-        {/* Règles TVA (éditable + autosave) */}
-        {client?.id && (
-          <Section
-            title="Règles TVA"
-            subtitle="Définissez le régime et les paramètres qui s'appliquent automatiquement au calcul de TVA récupérable."
-          >
-            <div className="grid md:grid-cols-2 gap-4 md:gap-5">
-              <div className="space-y-2">
-                <Label className="text-[13px] md:text-sm">Régime TVA</Label>
+        {/* RÈGLES TVA – TOUJOURS VISIBLES */}
+        <Section
+          title="Règles TVA"
+          subtitle="Définissez le régime et les paramètres qui s'appliquent automatiquement au calcul de TVA récupérable."
+        >
+          <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Régime TVA</Label>
+              {isEditing ? (
                 <RadioGroup
-                  value={tvaState.regime_tva}
-                  onValueChange={(v: "reel_normal" | "simplifie" | "franchise") => autosaveTva({ regime_tva: v })}
+                  {...register("regime_tva")}
+                  onValueChange={(v: any) => {
+                    register("regime_tva").onChange({ target: { value: v } });
+                    if (client?.id) autosaveTva({ regime_tva: v });
+                  }}
                   className="grid grid-cols-1 sm:grid-cols-3 gap-2"
                 >
                   <label className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2 cursor-pointer">
-                    <RadioGroupItem value="reel_normal" id="reg-reel" />
+                    <RadioGroupItem value="reel_normal" />
                     <span className="text-sm">Réel normal</span>
                   </label>
                   <label className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2 cursor-pointer">
-                    <RadioGroupItem value="simplifie" id="reg-simplifie" />
+                    <RadioGroupItem value="simplifie" />
                     <span className="text-sm">Simplifié</span>
                   </label>
                   <label className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2 cursor-pointer">
-                    <RadioGroupItem value="franchise" id="reg-franchise" />
+                    <RadioGroupItem value="franchise" />
                     <span className="text-sm">Franchise</span>
                   </label>
                 </RadioGroup>
-                {tvaState.regime_tva === "franchise" && (
-                  <div className="text-xs text-red-500 mt-1">TVA non récupérable (franchise en base).</div>
-                )}
-              </div>
+              ) : (
+                <ReadonlyValue
+                  value={
+                    client?.regime_tva === "reel_normal"
+                      ? "Réel normal"
+                      : client?.regime_tva === "simplifie"
+                        ? "Simplifié"
+                        : "Franchise"
+                  }
+                />
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Prorata TVA (%)</Label>
+              {isEditing ? (
                 <Input
                   type="number"
                   min={0}
                   max={100}
-                  value={tvaState.prorata_tva}
-                  onChange={(e) => {
-                    const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
-                    autosaveTva({ prorata_tva: v });
-                  }}
-                  placeholder="100"
+                  {...register("prorata_tva", {
+                    valueAsNumber: true,
+                    onChange: (e) => {
+                      const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+                      if (client?.id) autosaveTva({ prorata_tva: v });
+                    },
+                  })}
                   className="h-11 md:h-12 bg-background"
                 />
-              </div>
+              ) : (
+                <ReadonlyValue value={String(client?.prorata_tva ?? 100)} />
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label className="text-[13px] md:text-sm">Véhicules</Label>
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Véhicules</Label>
+              {isEditing ? (
                 <Input
-                  value={tvaState.vehicules}
-                  onChange={(e) => autosaveTva({ vehicules: e.target.value })}
+                  {...register("vehicules", {
+                    onChange: (e) => client?.id && autosaveTva({ vehicules: e.target.value }),
+                  })}
                   placeholder="ex. 1 VP / 2 VU"
                   className="h-11 md:h-12 bg-background"
                 />
-              </div>
+              ) : (
+                <ReadonlyValue value={client?.vehicules} />
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
+            <div className="space-y-2">
+              <Label className="text-[13px] md:text-sm">Repas déductibles (%)</Label>
+              {isEditing ? (
                 <Input
                   type="number"
                   min={0}
                   max={100}
-                  value={tvaState.repas_deductibles}
-                  onChange={(e) => {
-                    const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
-                    autosaveTva({ repas_deductibles: v });
-                  }}
-                  placeholder="50"
+                  {...register("repas_deductibles", {
+                    valueAsNumber: true,
+                    onChange: (e) => {
+                      const v = Math.max(0, Math.min(100, Number(e.target.value || 0)));
+                      if (client?.id) autosaveTva({ repas_deductibles: v });
+                    },
+                  })}
                   className="h-11 md:h-12 bg-background"
                 />
-              </div>
+              ) : (
+                <ReadonlyValue value={String(client?.repas_deductibles ?? 50)} />
+              )}
             </div>
-
-            {justSaved && (
-              <div className="mt-3">
-                <Badge variant="secondary" className="text-xs">
-                  Mis à jour
-                </Badge>
-              </div>
-            )}
-          </Section>
-        )}
+          </div>
+          {justSaved && (
+            <div className="mt-3">
+              <Badge variant="secondary" className="text-xs">
+                Mis à jour
+              </Badge>
+            </div>
+          )}
+        </Section>
 
         {/* Notes */}
         <Section title="Notes internes" subtitle="Informations utiles pour votre équipe (non visibles par le client).">
@@ -678,11 +658,9 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
             )}
           </div>
         </Section>
-
-        <div className="h-2" />
       </div>
 
-      {/* Footer sticky — boutons compacts à droite */}
+      {/* Footer */}
       <div className="sticky bottom-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border-t border-border px-6 py-4 md:px-8 md:py-5">
         {isEditing ? (
           <div className="flex gap-2 justify-end">
@@ -690,12 +668,12 @@ export const ClientDetailDrawer = ({ open, onOpenChange, client }: ClientDetailD
               Annuler
             </Button>
             <Button type="submit" disabled={!isDirty || saving}>
-              {saving ? "Enregistrement..." : "Enregistrer"}
+              {saving ? "Enregistrement..." : client?.id ? "Enregistrer" : "Créer le client"}
             </Button>
           </div>
         ) : (
           <div className="flex gap-2 justify-end">
-            {client && (
+            {client?.id && (
               <>
                 <Button type="button" variant="outline" onClick={onRelance}>
                   Relancer ce client
