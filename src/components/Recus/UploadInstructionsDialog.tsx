@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { X, Smartphone, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-
-// ==== ICÔNES ====
 import { IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
 
 interface UploadInstructionsDialogProps {
@@ -21,12 +19,10 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
   const [showAnalysisOverlay, setShowAnalysisOverlay] = useState(false);
   const [softError, setSoftError] = useState<string | null>(null);
 
-  // --- client selection ---
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | undefined>(undefined);
   const [orgId, setOrgId] = useState<string | null>(null);
 
-  // Récup org_id + clients à l'ouverture du dialog
   useEffect(() => {
     const fetchOrgAndClients = async () => {
       try {
@@ -35,7 +31,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 1) org_id (org_members prioritaire, sinon profiles)
         let resolvedOrgId: string | null = null;
 
         const { data: orgMember } = await (supabase as any)
@@ -56,10 +51,8 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         }
 
         setOrgId(resolvedOrgId);
-
         if (!resolvedOrgId) return;
 
-        // 2) Clients de l'org
         const { data: rows } = await (supabase as any)
           .from("clients")
           .select("id, name")
@@ -67,20 +60,14 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           .order("name", { ascending: true });
 
         setClients((rows || []).map((r: any) => ({ id: r.id, name: r.name })));
-      } catch {
-        // silencieux
-      }
+      } catch {}
     };
 
-    if (open) {
-      fetchOrgAndClients();
-    }
+    if (open) fetchOrgAndClients();
   }, [open]);
 
-  // Écoute INSERT reçus -> fermer overlay + dialog
   useEffect(() => {
     if (!showAnalysisOverlay) return;
-
     const channel = supabase
       .channel("recus-insert-listener")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "recus" }, () => {
@@ -88,7 +75,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         onOpenChange(false);
       })
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
@@ -102,10 +88,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!selectedClientId) {
-      // sécurité UI: on ne devrait pas pouvoir cliquer si pas de client choisi
-      return;
-    }
+    if (!selectedClientId) return;
 
     setIsUploading(true);
     setSoftError(null);
@@ -119,11 +102,8 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!user || !session?.access_token) {
-        throw new Error("Utilisateur non authentifié");
-      }
+      if (!user || !session?.access_token) throw new Error("Utilisateur non authentifié");
 
-      // org_id fallback
       let effectiveOrgId = orgId;
       if (!effectiveOrgId) {
         const { data: orgMember } = await (supabase as any)
@@ -131,9 +111,8 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           .select("org_id")
           .eq("user_id", user.id)
           .single();
-        if (orgMember?.org_id) {
-          effectiveOrgId = orgMember.org_id;
-        } else {
+        if (orgMember?.org_id) effectiveOrgId = orgMember.org_id;
+        else {
           const { data: profile } = await (supabase as any)
             .from("profiles")
             .select("org_id")
@@ -144,23 +123,18 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       }
       if (!effectiveOrgId) throw new Error("Organisation non trouvée.");
 
-      // Envoi webhook n8n
       const formData = new FormData();
       formData.append("file", file);
       formData.append("org_id", effectiveOrgId);
       formData.append("user_id", user.id);
-      formData.append("client_id", selectedClientId); // <-- obligatoire
+      formData.append("client_id", selectedClientId);
 
       const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: formData,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Erreur ${response.status}`);
-      }
+      if (!response.ok) throw new Error((await response.text()) || `Erreur ${response.status}`);
 
       setFileInputKey((prev) => prev + 1);
     } catch (err: any) {
@@ -185,7 +159,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
           <div className="flex flex-col items-center justify-center py-16 md:py-24 space-y-6">
             <div className="text-center space-y-4">
               <h3 className="text-xl md:text-2xl font-semibold text-foreground">Analyse IA en cours...</h3>
-
               <div className="w-full max-w-md px-4">
                 <div className="relative h-2 bg-[#1a2332] rounded-full overflow-hidden">
                   <div
@@ -194,7 +167,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                   />
                 </div>
               </div>
-
               {softError ? (
                 <div className="mt-4 text-center text-white/80 text-[13px]">
                   {softError}
@@ -278,25 +250,23 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
               </div>
             </div>
 
-            {/* --- Bandeau info si aucun client --- */}
             {clients.length === 0 && (
               <p className="text-center text-xs md:text-sm text-muted-foreground mb-2">
                 Veuillez ajouter votre premier client.
               </p>
             )}
 
-            {/* --- Les 2 boutons, sans texte entre eux --- */}
+            {/* === Les 2 boutons, texte centré === */}
             <div className="space-y-2 md:space-y-3">
-              {/* Bouton / Select : Assigner un client (obligatoire) */}
+              {/* Assigner un client (obligatoire) — texte centré */}
               {clients.length > 0 ? (
                 <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
-                  <SelectTrigger className="w-full h-11 md:h-12 bg-white text-black hover:bg-white/90 font-medium rounded-md flex items-center justify-between px-4">
-                    <div className="truncate">
-                      {selectedClientId
-                        ? clients.find((c) => c.id === selectedClientId)?.name
-                        : "Assigner un client (obligatoire)"}
-                    </div>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+                  <SelectTrigger
+                    className="relative w-full h-11 md:h-12 bg-white text-black hover:bg-white/90 font-medium rounded-md
+                               flex items-center justify-center px-10" /* px-10 pour laisser la place au chevron */
+                  >
+                    <SelectValue placeholder="Assigner un client (obligatoire)" className="w-full text-center" />
+                    <ChevronDown className="absolute right-3 h-4 w-4 opacity-70 pointer-events-none" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((c) => (
@@ -312,7 +282,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                 </Button>
               )}
 
-              {/* Bouton : Déposez votre reçu + */}
+              {/* Déposez votre reçu + — déjà centré */}
               <div className="relative">
                 <input
                   key={fileInputKey}
