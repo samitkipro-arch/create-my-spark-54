@@ -8,31 +8,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { subDays, format, startOfDay, endOfDay, eachDayOfInterval, differenceInDays } from "date-fns";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DateRange } from "react-day-picker";
 import { useGlobalFilters } from "@/stores/useGlobalFilters";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-// Tooltip pro, compact, clair
-const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
-  if (active && payload && payload[0]) {
-    const data = payload[0].payload;
-    const fullDate = format(new Date(data.fullDate), "dd/MM/yyyy");
-    const tvaFormatted = new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-    }).format(data.tva);
-    return (
-      <div className="bg-gray-900 text-white p-2.5 rounded-md shadow-lg border border-gray-700 text-xs">
-        <p className="font-medium text-blue-400">{fullDate}</p>
-        <p className="mt-0.5">{data.count} reçus traités</p>
-        <p className="font-semibold text-white mt-0.5">TVA récupérée : {tvaFormatted}</p>
-      </div>
-    );
-  }
-  return null;
-};
+import { TvaChart } from "@/components/Dashboard/TvaChart"; // <-- Nouveau composant premium
+import { StatCard } from "@/components/Dashboard/StatCard"; // <-- Version premium
 
 const Dashboard = () => {
   const { role, loading: roleLoading } = useUserRole();
@@ -45,7 +26,7 @@ const Dashboard = () => {
     setMemberId,
   } = useGlobalFilters();
 
-  // --- Résolution client entreprise ---
+  /* ----------------------------- ENTREPRISE LOGIC ----------------------------- */
   const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
   useEffect(() => {
     const resolve = async () => {
@@ -74,7 +55,7 @@ const Dashboard = () => {
     if (!roleLoading) resolve();
   }, [role, roleLoading]);
 
-  // --- Période ---
+  /* ----------------------------- DATE LOGIC ----------------------------- */
   const dateRange = useMemo<DateRange | undefined>(() => {
     if (storedDateRange.from && storedDateRange.to) {
       return { from: new Date(storedDateRange.from), to: new Date(storedDateRange.to) };
@@ -96,7 +77,7 @@ const Dashboard = () => {
     }
   };
 
-  // --- Filtres ---
+  /* ----------------------------- CLIENTS ----------------------------- */
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -107,6 +88,7 @@ const Dashboard = () => {
     enabled: !roleLoading && role !== "enterprise",
   });
 
+  /* ----------------------------- TEAM MEMBERS ----------------------------- */
   const { data: members = [] } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
@@ -123,7 +105,7 @@ const Dashboard = () => {
     enabled: !roleLoading && role !== "enterprise",
   });
 
-  // --- Reçus ---
+  /* ----------------------------- RECEIPTS ----------------------------- */
   const {
     data: receipts = [],
     isLoading: isLoadingReceipts,
@@ -176,7 +158,7 @@ const Dashboard = () => {
     };
   }, [refetchReceipts]);
 
-  // --- Calculs KPI ---
+  /* ----------------------------- KPI ----------------------------- */
   const kpis = useMemo(() => {
     const tva = receipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
     const ht = receipts.reduce((sum, r) => sum + ((Number(r.montant_ttc) || 0) - (Number(r.tva) || 0)), 0);
@@ -184,7 +166,7 @@ const Dashboard = () => {
     return { count: receipts.length, tva, ht, ttc };
   }, [receipts]);
 
-  // --- Évolution TVA avec logique intelligente ---
+  /* ----------------------------- DAILY GRAPH DATA ----------------------------- */
   const tvaEvolutionGraphData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -204,21 +186,9 @@ const Dashboard = () => {
     });
   }, [receipts, dateRange]);
 
-  // --- Logique XAxis : 7 jours max pour dates détaillées ---
   const daysCount = dateRange?.from && dateRange?.to ? differenceInDays(dateRange.to, dateRange.from) + 1 : 0;
-  const showDetailedDates = daysCount <= 7;
 
-  // --- YAxis : ticks arrondis en 25 ---
-  const maxTva = Math.max(...tvaEvolutionGraphData.map((d) => d.tva), 0);
-  const yTickStep = 25;
-  const yMax = Math.ceil(maxTva / yTickStep) * yTickStep + yTickStep; // +1 step pour respirer
-  const yTicks = Array.from({ length: Math.floor(yMax / yTickStep) + 1 }, (_, i) => i * yTickStep);
-
-  // --- Format XAxis : début/fin si >7 jours ---
-  const xAxisLabelLeft = dateRange?.from ? format(dateRange.from, "dd/MM/yyyy") : "";
-  const xAxisLabelRight = dateRange?.to ? format(dateRange.to, "dd/MM/yyyy") : "";
-
-  // --- Top catégories ---
+  /* ----------------------------- TOP CATEGORIES ----------------------------- */
   const topCategories = useMemo(() => {
     const map = new Map();
     receipts.forEach((r) => {
@@ -236,7 +206,6 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [receipts]);
 
-  // --- Performance équipe ---
   const teamPerformance = useMemo(() => {
     return members
       .map((m) => {
@@ -250,16 +219,18 @@ const Dashboard = () => {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
 
+  /* ----------------------------- UI PREMIUM ----------------------------- */
   return (
     <MainLayout>
-      <div className="p-4 md:p-6 space-y-6">
-        {/* Filtres */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+      <div className="p-6 md:p-8 space-y-10 max-w-7xl mx-auto">
+        {/* 🔷 FILTRES PREMIUM */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
+
           {role !== "enterprise" && !roleLoading && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
-                <SelectTrigger className="w-full sm:w-48">
+                <SelectTrigger className="w-full lg:w-56 bg-card/60 backdrop-blur border-border">
                   <SelectValue placeholder="Tous les clients" />
                 </SelectTrigger>
                 <SelectContent>
@@ -271,8 +242,9 @@ const Dashboard = () => {
                   ))}
                 </SelectContent>
               </Select>
+
               <Select value={storedMemberId ?? "all"} onValueChange={setMemberId}>
-                <SelectTrigger className="w-full sm:w-48">
+                <SelectTrigger className="w-full lg:w-56 bg-card/60 backdrop-blur border-border">
                   <SelectValue placeholder="Toute l'équipe" />
                 </SelectTrigger>
                 <SelectContent>
@@ -288,111 +260,48 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* KPI Principal */}
-        <Card className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
-          <CardContent className="p-6">
+        {/* 🔷 KPI PRINCIPAL */}
+        <Card className="bg-gradient-to-r from-blue-600/90 to-blue-700 shadow-2xl rounded-xl">
+          <CardContent className="p-8">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm opacity-90">TVA récupérée totale</p>
-                <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
+                <p className="text-sm text-blue-100/90">TVA récupérée totale</p>
+                <p className="text-4xl font-bold text-white mt-1">{formatCurrency(kpis.tva)}</p>
               </div>
-              <div className="flex items-center gap-1 text-sm">
-                <TrendingUp className="w-4 h-4" />
-                <span className="font-medium">+18 %</span>
+              <div className="flex items-center gap-2 text-blue-100">
+                <TrendingUp className="w-5 h-5" />
+                <span className="font-semibold text-sm">+18 %</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* KPIs secondaires */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Reçus traités</p>
-                  <p className="text-xl font-semibold">{kpis.count} / 48 (92 %)</p>
-                </div>
-                <Receipt className="w-8 h-8 text-blue-600 opacity-70" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Montant HT total</p>
-                  <p className="text-xl font-semibold">{formatCurrency(kpis.ht)}</p>
-                </div>
-                <FileText className="w-8 h-8 text-blue-600 opacity-70" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Montant TTC total</p>
-                  <p className="text-xl font-semibold">{formatCurrency(kpis.ttc)}</p>
-                </div>
-                <ShoppingCart className="w-8 h-8 text-blue-600 opacity-70" />
-              </div>
-            </CardContent>
-          </Card>
+        {/* 🔷 STAT CARDS (3 colonnes) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard title="Reçus traités" value={`${kpis.count}`} icon={Receipt} />
+          <StatCard title="Montant HT total" value={formatCurrency(kpis.ht)} icon={FileText} />
+          <StatCard title="Montant TTC total" value={formatCurrency(kpis.ttc)} icon={ShoppingCart} />
         </div>
 
-        {/* GRAPHIQUE INTELLIGENT – ESTHÉTIQUE 2025 */}
-        <Card>
+        {/* 🔷 GRAPHIQUE PREMIUM */}
+        <Card className="bg-card/60 backdrop-blur border border-border rounded-xl shadow-xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Évolution TVA récupérée (par jour)</CardTitle>
+            <CardTitle className="text-lg font-semibold">Évolution TVA récupérée (par jour)</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent>
             {isLoadingReceipts ? (
-              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-72 w-full" />
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tvaEvolutionGraphData} margin={{ top: 10, right: 35, left: 0, bottom: 10 }}>
-                  {showDetailedDates ? (
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      tickMargin={8}
-                      padding={{ left: 0, right: 0 }}
-                    />
-                  ) : (
-                    <XAxis
-                      tick={{ fontSize: 12 }}
-                      tickMargin={8}
-                      padding={{ left: 0, right: 0 }}
-                      ticks={[0, tvaEvolutionGraphData.length - 1]}
-                      tickFormatter={(value) => {
-                        if (value === 0) return xAxisLabelLeft;
-                        if (value === tvaEvolutionGraphData.length - 1) return xAxisLabelRight;
-                        return "";
-                      }}
-                    />
-                  )}
-                  <YAxis tick={{ fontSize: 12 }} tickMargin={8} ticks={yTicks} domain={[0, yMax]} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="tva"
-                    stroke="#2563eb"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <TvaChart data={tvaEvolutionGraphData} daysCount={daysCount} dateRange={dateRange} />
             )}
           </CardContent>
         </Card>
 
-        {/* Top 5 catégories */}
+        {/* 🔷 TOP 5 CATÉGORIES */}
         {role !== "enterprise" && topCategories.length > 0 && (
-          <Card>
+          <Card className="bg-card/60 backdrop-blur border border-border rounded-xl shadow-xl">
             <CardHeader>
-              <CardTitle className="text-lg">Top 5 catégories (TVA récupérée)</CardTitle>
+              <CardTitle className="text-lg font-semibold">Top 5 catégories (TVA récupérée)</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
@@ -410,7 +319,7 @@ const Dashboard = () => {
                       <TableCell className="font-medium">{c.cat}</TableCell>
                       <TableCell className="text-right">{c.count}</TableCell>
                       <TableCell className="text-right">{formatCurrency(c.ttc)}</TableCell>
-                      <TableCell className="text-right font-semibold text-blue-600">{formatCurrency(c.tva)}</TableCell>
+                      <TableCell className="text-right font-semibold text-blue-500">{formatCurrency(c.tva)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -419,11 +328,11 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* Performance équipe */}
+        {/* 🔷 PERFORMANCE ÉQUIPE */}
         {role !== "enterprise" && teamPerformance.length > 0 && (
-          <Card>
+          <Card className="bg-card/60 backdrop-blur border border-border rounded-xl shadow-xl">
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
                 <Users className="w-5 h-5" />
                 Performance équipe (TVA récupérée)
               </CardTitle>
@@ -442,7 +351,7 @@ const Dashboard = () => {
                     <TableRow key={m.id}>
                       <TableCell>{m.name}</TableCell>
                       <TableCell className="text-right">{m.count}</TableCell>
-                      <TableCell className="text-right font-medium text-blue-600">{formatCurrency(m.tva)}</TableCell>
+                      <TableCell className="text-right font-semibold text-blue-500">{formatCurrency(m.tva)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
