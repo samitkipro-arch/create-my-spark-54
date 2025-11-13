@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Sidebar } from "./Sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -15,8 +14,8 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
-  const pageTitles: Record<string, string> = {
-    "/": "Tableau de bord",
+  const TITLES: Record<string, string> = {
+    "/dashboard": "Tableau de bord",
     "/recus": "Reçus",
     "/clients": "Clients",
     "/equipe": "Équipe",
@@ -24,8 +23,8 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     "/parametres": "Paramètres",
   };
 
-  const pageSubtitles: Record<string, string> = {
-    "/": "Suivez votre activité",
+  const SUBTITLES: Record<string, string> = {
+    "/dashboard": "Suivez votre activité",
     "/recus": "Gérez vos reçus et factures",
     "/clients": "Gérez vos clients et leur suivi",
     "/equipe": "Gérez les membres et autorisations",
@@ -33,70 +32,57 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     "/parametres": "Configurez votre espace",
   };
 
-  const currentTitle = pageTitles[location.pathname] || "Finvisor";
-  const currentSubtitle = pageSubtitles[location.pathname] || "";
+  const title = TITLES[location.pathname] || "Finvisor";
+  const subtitle = SUBTITLES[location.pathname] || "";
 
   return (
-    <div className="flex min-h-screen bg-background transition-all duration-200">
-      {/* Desktop Sidebar */}
+    <div className="flex min-h-screen bg-background">
+      {/* 🖥️ DESKTOP SIDEBAR — FULL FIXED SHADCN STYLE */}
       {!isMobile && (
-        <aside className="md:ml-6 md:my-6 transition-all duration-300 ease-in-out">
-          <div className="sticky top-6 h-[calc(100vh-3rem)] w-[260px] rounded-2xl border bg-card shadow-2xl overflow-hidden bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 transition-all duration-200">
-            <Sidebar />
-          </div>
+        <aside className="fixed inset-y-0 left-0 w-[260px] border-r border-sidebar-border bg-sidebar z-20">
+          <Sidebar />
         </aside>
       )}
 
-      {/* Desktop Page Title and Subtitle (Fixed) */}
+      {/* 🧭 DESKTOP HEADER */}
       {!isMobile && (
-        <div className="fixed top-0 left-[292px] right-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border px-8 py-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">{currentTitle}</h1>
-          {currentSubtitle && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {currentSubtitle}
-            </p>
-          )}
-        </div>
+        <header className="fixed top-0 left-[260px] right-0 h-20 border-b border-border bg-background/90 backdrop-blur z-10 flex flex-col justify-center px-8">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </header>
       )}
 
-      {/* Mobile Page Title and Subtitle (Fixed) */}
+      {/* 📱 MOBILE HEADER */}
       {isMobile && (
-        <div className="fixed top-0 left-0 right-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border flex flex-col items-center justify-center pt-4 pb-3">
-          <h1 className="text-lg font-bold text-foreground">{currentTitle}</h1>
-          {currentSubtitle && (
-            <p className="text-xs text-muted-foreground/70 mt-1 px-4 text-center">
-              {currentSubtitle}
-            </p>
-          )}
-        </div>
+        <header className="fixed inset-x-0 top-0 h-16 bg-background/90 backdrop-blur border-b border-border flex items-center justify-center z-30">
+          <h1 className="text-lg font-semibold">{title}</h1>
+        </header>
       )}
 
-      {/* Mobile Floating Hamburger Button */}
+      {/* 🍔 MOBILE MENU */}
       {isMobile && (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild>
-            <button 
-              className="fixed top-4 left-4 z-50 p-2 transition-all duration-200 pointer-events-auto"
-            >
+            <button className="fixed top-4 left-4 z-40 p-2">
               <Menu className="w-5 h-5 text-foreground" />
             </button>
           </SheetTrigger>
-          <SheetContent 
-            side="left" 
-            className="p-0 w-[280px] bg-sidebar/95 backdrop-blur-xl border-0 m-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.25)] h-auto overflow-hidden"
-            style={{
-              top: "16px",
-              left: "0px",
-              height: "auto",
-              maxHeight: "calc(100vh - 32px)",
-            }}
-          >
+
+          <SheetContent className="p-0 w-[260px] bg-sidebar/95 backdrop-blur-xl border-none" side="left">
             <Sidebar onNavigate={() => setIsOpen(false)} />
           </SheetContent>
         </Sheet>
       )}
 
-      <main className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${isMobile ? 'pt-20' : 'pt-24'}`}>
+      {/* 🧩 MAIN CONTENT */}
+      <main
+        className={`
+          flex-1 
+          ml-0 
+          ${!isMobile ? "ml-[260px] mt-20 p-8" : "pt-20 p-4"} 
+          min-h-screen 
+        `}
+      >
         {children}
       </main>
     </div>
