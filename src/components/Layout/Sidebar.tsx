@@ -29,20 +29,20 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const { signOut } = useAuth();
   const { role } = useUserRole();
 
-  // Évite le "flash" d’items : tant que le rôle n’est pas connu, on ne rend rien
+  // Loading skeleton (évite le flash)
   if (role === null) {
     return (
-      <div className="w-full bg-sidebar flex flex-col h-full md:border-r md:border-sidebar-border">
+      <div className="w-full bg-sidebar flex flex-col h-full border-r border-sidebar-border">
         <div className="p-6">
-          <h1 className="text-2xl font-bold text-primary">Finvisor</h1>
+          <div className="h-6 w-32 bg-sidebar-accent/40 rounded-md" />
         </div>
-        <nav className="flex-1 px-4 py-2" aria-hidden>
-          <div className="space-y-1">
-            <div className="h-9 rounded-lg bg-sidebar-accent/40" />
-            <div className="h-9 rounded-lg bg-sidebar-accent/40" />
-            <div className="h-9 rounded-lg bg-sidebar-accent/40" />
-          </div>
-        </nav>
+
+        <div className="flex-1 px-4 py-2 space-y-2">
+          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
+          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
+          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
+        </div>
+
         <div className="p-4">
           <div className="h-10 rounded-lg bg-sidebar-accent/40" />
         </div>
@@ -50,19 +50,21 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
     );
   }
 
-  // Si enterprise => ne garder que Dashboard, Reçus, Paramètres
-  const menuItems: MenuItem[] =
+  // Enterprise restrictions
+  const menuItems =
     role === "enterprise"
       ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))
       : ALL_ITEMS;
 
   return (
-    <div className="w-full bg-sidebar flex flex-col h-full md:border-r md:border-sidebar-border">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-primary">Finvisor</h1>
+    <div className="w-full h-full bg-sidebar flex flex-col border-r border-sidebar-border">
+      {/* HEADER */}
+      <div className="px-6 py-6 border-b border-sidebar-border">
+        <h1 className="text-xl font-bold tracking-tight text-foreground">Finvisor</h1>
       </div>
 
-      <nav className="flex-1 px-4 py-2">
+      {/* NAVIGATION */}
+      <nav className="flex-1 px-3 py-4">
         <div className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -74,22 +76,28 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
                 to={item.path}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
-                  isActive ? "bg-primary/10 text-primary" : "text-sidebar-foreground hover:bg-sidebar-accent",
+                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  isActive && "bg-sidebar-accent/50 text-primary border border-primary/20",
                 )}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{item.label}</span>
+                <Icon className={cn("w-5 h-5 transition", isActive ? "text-primary" : "text-muted-foreground")} />
+                {item.label}
               </Link>
             );
           })}
         </div>
       </nav>
 
-      <div className="p-4">
-        <Button variant="ghost" className="w-full justify-start gap-3" onClick={signOut}>
+      {/* LOGOUT */}
+      <div className="p-4 border-t border-sidebar-border">
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground"
+          onClick={signOut}
+        >
           <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Déconnexion</span>
+          Déconnexion
         </Button>
       </div>
     </div>
