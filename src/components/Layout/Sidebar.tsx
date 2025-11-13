@@ -39,6 +39,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
   useEffect(() => {
     const load = async () => {
       if (!user?.id) return;
+
       const { data } = await supabase
         .from("profiles")
         .select("first_name, last_name, email")
@@ -47,6 +48,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
       setProfile(data || {});
     };
+
     load();
   }, [user]);
 
@@ -60,7 +62,6 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
   /* ------------------------ SEARCH ------------------------ */
   const [search, setSearch] = useState("");
-
   const filteredItems = menuItems.filter((i) => i.label.toLowerCase().includes(search.toLowerCase()));
 
   /* ------------------------ LOADING ROLE ------------------------ */
@@ -145,7 +146,6 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
       {/* HELP + SETTINGS */}
       <div className="px-4 pb-4 space-y-2 border-t border-sidebar-border pt-4">
-        {/* 🔥 correction ici → /parametres/aide */}
         <Link
           to="/parametres/aide"
           onClick={onNavigate}
@@ -165,10 +165,10 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
         </Link>
       </div>
 
-      {/* PROFILE WIDGET */}
+      {/* PROFILE WIDGET → REDIRECTION /parametres/compte */}
       <div className="p-4 border-t border-sidebar-border">
         <Link
-          to="/compte-profile"
+          to="/parametres/compte"
           onClick={onNavigate}
           className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent transition"
         >
