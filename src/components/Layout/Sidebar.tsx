@@ -20,7 +20,7 @@ const ALL_ITEMS: MenuItem[] = [
   { icon: Users, label: "Clients", path: "/clients" },
   { icon: UserCog, label: "Équipe", path: "/equipe" },
   { icon: BarChart3, label: "Rapports & Exports", path: "/rapports" },
-  { icon: Settings, label: "Paramètres", path: "/parametres" },
+  // ❌ ON RETIRE LE BOUTON PARAMÈTRES ICI
 ];
 
 interface SidebarProps {
@@ -56,9 +56,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
   /* ------------------------ ENTREPRISE LIMIT ------------------------ */
   const menuItems =
-    role === "enterprise"
-      ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))
-      : ALL_ITEMS;
+    role === "enterprise" ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus"].includes(i.path)) : ALL_ITEMS;
 
   /* ------------------------ SEARCH ------------------------ */
   const [search, setSearch] = useState("");
@@ -92,7 +90,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
           />
         </div>
 
-        {/* SEARCH RESULTS */}
+        {/* RESULTS */}
         {search.length > 0 && (
           <div className="mt-2 bg-sidebar-accent border border-sidebar-border rounded-lg py-1 max-h-48 overflow-auto">
             {filteredItems.length === 0 && (
@@ -165,7 +163,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
         </Link>
       </div>
 
-      {/* PROFILE WIDGET → REDIRECTION /parametres/compte */}
+      {/* PROFILE → /parametres/compte */}
       <div className="p-4 border-t border-sidebar-border">
         <Link
           to="/parametres/compte"
