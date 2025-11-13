@@ -6,7 +6,6 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
 type MenuItem = {
@@ -53,13 +52,13 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
   const initials = `${profile?.first_name?.[0] || ""}${profile?.last_name?.[0] || ""}`.toUpperCase() || "?";
 
-  /* ------------------------ RESTRICTIF ENTREPRISE ------------------------ */
+  /* ------------------------ ENTREPRISE LIMIT ------------------------ */
   const menuItems =
     role === "enterprise"
       ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))
       : ALL_ITEMS;
 
-  /* ------------------------ RECHERCHE ------------------------ */
+  /* ------------------------ SEARCH ------------------------ */
   const [search, setSearch] = useState("");
 
   const filteredItems = menuItems.filter((i) => i.label.toLowerCase().includes(search.toLowerCase()));
@@ -92,7 +91,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
           />
         </div>
 
-        {/* Dropdown search results */}
+        {/* SEARCH RESULTS */}
         {search.length > 0 && (
           <div className="mt-2 bg-sidebar-accent border border-sidebar-border rounded-lg py-1 max-h-48 overflow-auto">
             {filteredItems.length === 0 && (
@@ -146,8 +145,9 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
       {/* HELP + SETTINGS */}
       <div className="px-4 pb-4 space-y-2 border-t border-sidebar-border pt-4">
+        {/* 🔥 correction ici → /parametres/aide */}
         <Link
-          to="/aide-support"
+          to="/parametres/aide"
           onClick={onNavigate}
           className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent text-sm"
         >
