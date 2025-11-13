@@ -2,22 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* ===========================================================================
+   🎨 FINVISOR PREMIUM DESIGN SYSTEM
+   Inspired by Vercel + Linear + Shadcn
+   All values must be HSL for Tailwind.
+   ========================================================================== */
 
 @layer base {
   :root {
+    /* Core Colors */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
+
+    /* Surfaces */
     --card: 220 39% 16%;
     --card-foreground: 210 40% 98%;
     --popover: 220 39% 16%;
     --popover-foreground: 210 40% 98%;
+
+    /* Accents */
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
     --secondary: 220 39% 20%;
     --secondary-foreground: 210 40% 98%;
+
+    /* Muted + Borders */
     --muted: 220 39% 20%;
     --muted-foreground: 215 20% 75%;
     --accent: 217 91% 60%;
@@ -27,56 +36,43 @@ All colors MUST be HSL.
     --border: 220 39% 22%;
     --input: 220 39% 20%;
     --ring: 217 91% 60%;
-    --radius: 0.5rem;
+
+    /* Sidebar (Shadcn-style docked layout) */
     --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 222 47% 11%;
     --sidebar-accent: 220 39% 16%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 39% 12%;
+    --sidebar-border: 220 39% 18%;
     --sidebar-ring: 217 91% 60%;
-    
-    /* Shadows */
-    --shadow-soft: 0 4px 16px -2px hsl(220 39% 8% / 0.4);
-    --shadow-hover: 0 6px 20px -2px hsl(220 39% 8% / 0.5);
+
+    --radius: 0.5rem;
+
+    /* Shadows (Vercel-style) */
+    --shadow-soft: 0 4px 16px -2px hsl(220 39% 8% / 0.35);
+    --shadow-hover: 0 6px 24px -2px hsl(220 39% 8% / 0.45);
   }
 }
+
+/* ===========================================================================
+   🌫  Global Styles + Motion
+   ========================================================================== */
 
 @layer base {
   * {
     @apply border-border;
-    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out;
+    transition:
+      background-color 0.15s ease-in-out,
+      border-color 0.15s ease-in-out,
+      color 0.15s ease-in-out;
   }
 
   body {
     @apply bg-background text-foreground;
   }
 
-  /* Smooth responsive transitions */
-  .responsive-transition {
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  /* Fluid spacing */
-  .fluid-spacing {
-    padding-left: clamp(1rem, 3vw, 1.5rem);
-    padding-right: clamp(1rem, 3vw, 1.5rem);
-  }
-
-  /* Smooth grid transitions */
-  .responsive-grid {
-    display: grid;
-    gap: clamp(0.75rem, 2vw, 1.5rem);
-    transition: grid-template-columns 0.3s ease-in-out, gap 0.2s ease-in-out;
-  }
-
-  /* Smooth card scaling */
-  .responsive-card {
-    transition: padding 0.2s ease-in-out, margin 0.2s ease-in-out, width 0.3s ease-in-out;
-  }
-
-  /* Page fade-in animation */
+  /* Animations */
   @keyframes fadeInUp {
     from {
       opacity: 0;
@@ -100,27 +96,40 @@ All colors MUST be HSL.
   }
 
   .animate-fade-in-up {
-    animation: fadeInUp 0.4s ease-in-out;
+    animation: fadeInUp 0.4s ease-out;
   }
-
   .animate-fade-in-scale {
-    animation: fadeInScale 0.3s ease-in-out;
+    animation: fadeInScale 0.3s ease-out;
   }
-
-  /* Staggered animation delays */
   .animation-delay-100 {
     animation-delay: 0.1s;
   }
-
   .animation-delay-200 {
     animation-delay: 0.2s;
   }
-
   .animation-delay-300 {
     animation-delay: 0.3s;
   }
-
   .animation-delay-400 {
     animation-delay: 0.4s;
+  }
+
+  /* Responsive helpers */
+  .responsive-transition {
+    transition: all 0.2s ease;
+  }
+  .fluid-spacing {
+    padding-left: clamp(1rem, 3vw, 1.5rem);
+    padding-right: clamp(1rem, 3vw, 1.5rem);
+  }
+  .responsive-grid {
+    display: grid;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+  }
+  .responsive-card {
+    transition:
+      padding 0.2s,
+      margin 0.2s,
+      width 0.3s;
   }
 }
