@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Receipt, Users, UserCog, BarChart3, Settings, LogOut } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -20,73 +21,59 @@ const ALL_ITEMS: MenuItem[] = [
   { icon: Settings, label: "Paramètres", path: "/parametres" },
 ];
 
-interface SidebarProps {
-  onNavigate?: () => void;
-}
-
-export const Sidebar = ({ onNavigate }: SidebarProps) => {
+export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const location = useLocation();
   const { signOut } = useAuth();
   const { role } = useUserRole();
 
-  // Loading skeleton (évite le flash)
   if (role === null) {
     return (
-      <div className="w-full bg-sidebar flex flex-col h-full border-r border-sidebar-border">
-        <div className="p-6">
-          <div className="h-6 w-32 bg-sidebar-accent/40 rounded-md" />
+      <div className="flex flex-col w-full h-full p-6 space-y-6">
+        <div className="h-6 w-32 bg-sidebar-accent/40 rounded-md" />
+        <div className="space-y-3">
+          <div className="h-10 bg-sidebar-accent/40 rounded-lg" />
+          <div className="h-10 bg-sidebar-accent/40 rounded-lg" />
+          <div className="h-10 bg-sidebar-accent/40 rounded-lg" />
         </div>
-
-        <div className="flex-1 px-4 py-2 space-y-2">
-          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
-          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
-          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
-        </div>
-
-        <div className="p-4">
-          <div className="h-10 rounded-lg bg-sidebar-accent/40" />
-        </div>
+        <div className="h-10 bg-sidebar-accent/40 rounded-lg mt-auto" />
       </div>
     );
   }
 
-  // Enterprise restrictions
-  const menuItems =
+  const items =
     role === "enterprise"
       ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))
       : ALL_ITEMS;
 
   return (
-    <div className="w-full h-full bg-sidebar flex flex-col border-r border-sidebar-border">
-      {/* HEADER */}
-      <div className="px-6 py-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold tracking-tight text-foreground">Finvisor</h1>
+    <div className="flex flex-col h-full w-full bg-sidebar text-sidebar-foreground">
+      {/* LOGO */}
+      <div className="p-6 border-b border-sidebar-border">
+        <h1 className="text-xl font-bold tracking-tight">Finvisor</h1>
       </div>
 
       {/* NAVIGATION */}
-      <nav className="flex-1 px-3 py-4">
-        <div className="space-y-1">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+      <nav className="flex-1 px-3 py-4 space-y-1">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path;
 
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={onNavigate}
-                className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
-                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  isActive && "bg-sidebar-accent/50 text-primary border border-primary/20",
-                )}
-              >
-                <Icon className={cn("w-5 h-5 transition", isActive ? "text-primary" : "text-muted-foreground")} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                isActive && "bg-primary/20 text-primary border border-primary/30 shadow-sm",
+              )}
+            >
+              <Icon className={cn("w-5 h-5", isActive ? "text-primary" : "text-muted-foreground")} />
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* LOGOUT */}
