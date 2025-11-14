@@ -38,7 +38,7 @@ const Dashboard = () => {
       const userId = auth?.user?.id;
       if (!userId) return;
 
-      const { data: cli } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
+      const { data: cli } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle() as any;
 
       setClientSelfId(cli?.id ?? "__none__");
     };
@@ -138,7 +138,9 @@ const Dashboard = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "recus" }, () => refetchReceipts())
       .subscribe();
 
-    return () => supabase.removeChannel(ch);
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, [refetchReceipts]);
 
   /** ------------------------------------------------------------------------------------------
@@ -186,7 +188,10 @@ const Dashboard = () => {
         {/* FILTRES = uniquement CABINET */}
         {role === "cabinet" && (
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <DateRangePicker value={dateRange} onChange={setStoredDateRange} />
+            <DateRangePicker 
+              value={dateRange} 
+              onChange={(range) => setStoredDateRange(range.from.toISOString(), range.to.toISOString())} 
+            />
 
             <Select value={storedClientId} onValueChange={setClientId}>
               <SelectTrigger className="w-full sm:w-48">
