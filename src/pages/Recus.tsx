@@ -189,35 +189,23 @@ const Recus = () => {
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       })) as Member[];
     },
-    enabled: !roleLoading && role !== "enterprise",
+    enabled: !roleLoading && role !== "client",
   });
 
-  // -------- Résolution client pour la vue Entreprise --------
+  // -------- Résolution client pour la vue Client (simplifié) --------
   const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
   useEffect(() => {
     const resolveEnterpriseClient = async () => {
-      if (role !== "enterprise") return;
+      if (role !== "client") return;
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
       if (!userId) return;
 
-      const { data: ent } = await (supabase as any)
-        .from("entreprises")
-        .select("name")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      const companyName = ent?.name?.trim();
-      if (!companyName) {
-        setEnterpriseClientId("__none__");
-        return;
-      }
-
-      const { data: cli } = await supabase
+      // Chercher directement le client_id où user_id correspond
+      const { data: cli } = await (supabase as any)
         .from("clients")
-        .select("id, name")
-        .ilike("name", companyName)
-        .limit(1)
+        .select("id")
+        .eq("user_id", userId)
         .maybeSingle();
 
       setEnterpriseClientId(cli?.id ?? "__none__");
@@ -257,7 +245,7 @@ const Recus = () => {
         query = query.lte("date_traitement", storedDateRange.to);
       }
 
-      if (role === "enterprise") {
+      if (role === "client") {
         if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
         query = query.eq("client_id", enterpriseClientId);
       } else {
@@ -282,7 +270,7 @@ const Recus = () => {
     enabled:
       !roleLoading &&
       role !== null &&
-      (role !== "enterprise" || (enterpriseClientId !== null && enterpriseClientId !== "")),
+      (role !== "client" || (enterpriseClientId !== null && enterpriseClientId !== "")),
   });
 
   const error = queryError ? (queryError as any).message : null;
@@ -417,7 +405,7 @@ const Recus = () => {
       <div className="p-4 md:p-8 space-y-6 md:space-y-8 transition-all duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200">
           <div className="flex gap-3 w-full md:w-auto transition-all duration-200">
-            {!roleLoading && role !== "enterprise" && (
+            {!roleLoading && role !== "client" && (
               <Button
                 variant="outline"
                 className="flex-1 md:flex-initial"
@@ -443,7 +431,7 @@ const Recus = () => {
               <span className="sm:hidden">Ajouter</span>
             </Button>
 
-            {!roleLoading && role !== "enterprise" && (
+            {!roleLoading && role !== "client" && (
               <Button className="gap-2 flex-1 md:flex-initial" onClick={() => setIsClientLinkOpen(true)}>
                 <Link2 className="w-4 h-4" />
                 <span className="hidden sm:inline">Créer un lien client</span>
@@ -465,7 +453,7 @@ const Recus = () => {
             </SelectContent>
           </Select>
 
-          {!roleLoading && role !== "enterprise" && (
+            {!roleLoading && role !== "client" && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full md:w-[220px]">

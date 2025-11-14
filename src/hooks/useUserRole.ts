@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserRole = "cabinet" | "enterprise" | null;
+export type UserRole = "cabinet" | "client" | null;
 
 type UseUserRoleResult = {
   role: UserRole;
@@ -29,7 +29,7 @@ export function useUserRole(): UseUserRoleResult {
         return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profileData, error } = await supabase
         .from("profiles")
         .select("account_type")
         .eq("user_id", userId)
@@ -37,8 +37,13 @@ export function useUserRole(): UseUserRoleResult {
 
       if (cancelled) return;
 
-      const type = (profile?.account_type ?? null) as UserRole;
-      setRole(type);
+      if (error) {
+        console.error("Error fetching profile:", error);
+        setRole(null);
+      } else {
+        const accountType = (profileData as any)?.account_type;
+        setRole((accountType as UserRole) ?? null);
+      }
 
       setLoading(false);
     };
