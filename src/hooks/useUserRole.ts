@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserRole = "cabinet" | "enterprise" | null;
+export type UserRole = "cabinet" | "client" | null;
 
 type UseUserRoleResult = {
   role: UserRole;
@@ -10,56 +10,63 @@ type UseUserRoleResult = {
 };
 
 export function useUserRole(): UseUserRoleResult {
-  // Hydratation ultra rapide pour éviter le "flash" au montage
   const initialRole = (sessionStorage.getItem("finvisor:userRole") as UserRole) ?? null;
   const initialEntName = sessionStorage.getItem("finvisor:enterpriseName");
 
   const [role, setRole] = useState<UserRole>(initialRole);
   const [enterpriseName, setEnterpriseName] = useState<string | null>(initialEntName);
-  const [loading, setLoading] = useState<boolean>(initialRole === null);
+  const [loading, setLoading] = useState<boolean>(!initialRole);
 
   useEffect(() => {
     let cancelled = false;
 
-    const resolveRole = async () => {
+    const resolve = async () => {
       setLoading(true);
+
+      // get user
       const { data } = await supabase.auth.getUser();
       const userId = data?.user?.id;
-
       if (!userId) {
-        if (cancelled) return;
-        setRole(null);
-        setEnterpriseName(null);
-        sessionStorage.removeItem("finvisor:userRole");
-        sessionStorage.removeItem("finvisor:enterpriseName");
-        setLoading(false);
+        if (!cancelled) {
+          setRole(null);
+          setEnterpriseName(null);
+          sessionStorage.clear();
+          setLoading(false);
+        }
         return;
       }
 
-      const { data: ent, error } = await (supabase as any)
-        .from("entreprises")
-        .select("name")
+      // get profile → account_type
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("account_type, first_name")
         .eq("user_id", userId)
-        .limit(1);
+        .maybeSingle();
 
       if (cancelled) return;
 
-      if (!error && ent && ent.length > 0) {
-        setRole("enterprise");
-        setEnterpriseName(ent[0].name || null);
-        sessionStorage.setItem("finvisor:userRole", "enterprise");
-        sessionStorage.setItem("finvisor:enterpriseName", ent[0].name || "");
+      const type = (profile?.account_type ?? null) as UserRole;
+      setRole(type);
+      sessionStorage.setItem("finvisor:userRole", type ?? "");
+
+      // if client → fetch entreprise name
+      if (type === "client") {
+        const { data: ent } = await supabase.from("entreprises").select("name").eq("user_id", userId).maybeSingle();
+
+        const name = ent?.name || null;
+        setEnterpriseName(name);
+        sessionStorage.setItem("finvisor:enterpriseName", name ?? "");
       } else {
-        setRole("cabinet");
         setEnterpriseName(null);
-        sessionStorage.setItem("finvisor:userRole", "cabinet");
         sessionStorage.removeItem("finvisor:enterpriseName");
       }
+
       setLoading(false);
     };
 
-    resolveRole();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => resolveRole());
+    resolve();
+    const { data: sub } = supabase.auth.onAuthStateChange(resolve);
+
     return () => {
       cancelled = true;
       sub?.subscription?.unsubscribe();
