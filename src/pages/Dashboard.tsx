@@ -38,9 +38,13 @@ const Dashboard = () => {
       const userId = auth?.user?.id;
       if (!userId) return;
 
-      const { data: cli } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle() as any;
+      const { data: clients } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1);
 
-      setClientSelfId(cli?.id ?? "__none__");
+      setClientSelfId(clients?.[0]?.id ?? "__none__");
     };
 
     if (!roleLoading) load();
