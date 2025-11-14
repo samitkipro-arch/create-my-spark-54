@@ -6,6 +6,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
 type MenuItem = {
@@ -20,6 +21,7 @@ const ALL_ITEMS: MenuItem[] = [
   { icon: Users, label: "Clients", path: "/clients" },
   { icon: UserCog, label: "Équipe", path: "/equipe" },
   { icon: BarChart3, label: "Rapports & Exports", path: "/rapports" },
+  { icon: Settings, label: "Paramètres", path: "/parametres" },
 ];
 
 interface SidebarProps {
@@ -32,13 +34,12 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
   const { user } = useAuth();
   const { role } = useUserRole();
 
-  /* ------------------------- PROFIL ------------------------- */
+  /* ------------------------ PROFIL ------------------------ */
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
-    const loadProfile = async () => {
+    const load = async () => {
       if (!user?.id) return;
-
       const { data } = await supabase
         .from("profiles")
         .select("first_name, last_name, email")
@@ -47,21 +48,23 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
 
       setProfile(data || {});
     };
-
-    loadProfile();
+    load();
   }, [user]);
 
-  const initials = ((profile?.first_name?.[0] || "") + (profile?.last_name?.[0] || "")).toUpperCase() || "?";
+  const initials = `${profile?.first_name?.[0] || ""}${profile?.last_name?.[0] || ""}`.toUpperCase() || "?";
 
-  /* ------------------------- ROLE LOGIC ------------------------- */
-  // IMPORTANT : client = entreprise
-  const menuItems = role === "client" ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus"].includes(i.path)) : ALL_ITEMS;
+  /* ------------------------ RESTRICTIF ENTREPRISE ------------------------ */
+  const menuItems =
+    role === "enterprise"
+      ? ALL_ITEMS.filter((i) => ["/dashboard", "/recus", "/parametres"].includes(i.path))
+      : ALL_ITEMS;
 
-  /* --------------------------- SEARCH --------------------------- */
+  /* ------------------------ RECHERCHE ------------------------ */
   const [search, setSearch] = useState("");
+
   const filteredItems = menuItems.filter((i) => i.label.toLowerCase().includes(search.toLowerCase()));
 
-  /* ----------------------- LOADING ROLE ------------------------ */
+  /* ------------------------ LOADING ROLE ------------------------ */
   if (role === null) {
     return (
       <div className="w-full bg-sidebar flex flex-col h-full p-6">
@@ -77,7 +80,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
         <h1 className="text-xl font-bold tracking-tight text-primary">Finvisor</h1>
       </div>
 
-      {/* SEARCH */}
+      {/* SEARCH BAR */}
       <div className="px-4 pt-4">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-2 top-3 text-muted-foreground" />
@@ -89,6 +92,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
           />
         </div>
 
+        {/* Dropdown search results */}
         {search.length > 0 && (
           <div className="mt-2 bg-sidebar-accent border border-sidebar-border rounded-lg py-1 max-h-48 overflow-auto">
             {filteredItems.length === 0 && (
@@ -120,7 +124,7 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
       <nav className="flex-1 px-3 mt-4 space-y-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname.startsWith(item.path);
+          const isActive = location.pathname === item.path;
 
           return (
             <Link
@@ -141,9 +145,9 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
       </nav>
 
       {/* HELP + SETTINGS */}
-      <div className="px-4 pb-4 border-t border-sidebar-border pt-4 space-y-2">
+      <div className="px-4 pb-4 space-y-2 border-t border-sidebar-border pt-4">
         <Link
-          to="/parametres/aide"
+          to="/aide-support"
           onClick={onNavigate}
           className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent text-sm"
         >
@@ -161,10 +165,10 @@ export const Sidebar = ({ onNavigate }: SidebarProps) => {
         </Link>
       </div>
 
-      {/* PROFILE */}
+      {/* PROFILE WIDGET */}
       <div className="p-4 border-t border-sidebar-border">
         <Link
-          to="/parametres/compte"
+          to="/compte-profile"
           onClick={onNavigate}
           className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent transition"
         >
