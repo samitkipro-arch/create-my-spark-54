@@ -1,21 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserRole = "cabinet" | "client" | null;
+export type UserRole = "cabinet" | "enterprise" | null;
 
 type UseUserRoleResult = {
   role: UserRole;
   loading: boolean;
-  enterpriseName: string | null;
 };
 
 export function useUserRole(): UseUserRoleResult {
-  const initialRole = (sessionStorage.getItem("finvisor:userRole") as UserRole) ?? null;
-  const initialEntName = sessionStorage.getItem("finvisor:enterpriseName");
-
-  const [role, setRole] = useState<UserRole>(initialRole);
-  const [enterpriseName, setEnterpriseName] = useState<string | null>(initialEntName);
-  const [loading, setLoading] = useState<boolean>(!initialRole);
+  const [role, setRole] = useState<UserRole>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,23 +18,20 @@ export function useUserRole(): UseUserRoleResult {
     const resolve = async () => {
       setLoading(true);
 
-      // get user
       const { data } = await supabase.auth.getUser();
       const userId = data?.user?.id;
+
       if (!userId) {
         if (!cancelled) {
           setRole(null);
-          setEnterpriseName(null);
-          sessionStorage.clear();
           setLoading(false);
         }
         return;
       }
 
-      // get profile → account_type
       const { data: profile } = await supabase
         .from("profiles")
-        .select("account_type, first_name")
+        .select("account_type")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -47,19 +39,6 @@ export function useUserRole(): UseUserRoleResult {
 
       const type = (profile?.account_type ?? null) as UserRole;
       setRole(type);
-      sessionStorage.setItem("finvisor:userRole", type ?? "");
-
-      // if client → fetch entreprise name
-      if (type === "client") {
-        const { data: ent } = await supabase.from("entreprises").select("name").eq("user_id", userId).maybeSingle();
-
-        const name = ent?.name || null;
-        setEnterpriseName(name);
-        sessionStorage.setItem("finvisor:enterpriseName", name ?? "");
-      } else {
-        setEnterpriseName(null);
-        sessionStorage.removeItem("finvisor:enterpriseName");
-      }
 
       setLoading(false);
     };
@@ -73,5 +52,5 @@ export function useUserRole(): UseUserRoleResult {
     };
   }, []);
 
-  return { role, loading, enterpriseName };
+  return { role, loading };
 }
