@@ -188,7 +188,7 @@ const Dashboard = () => {
   const tvaEvolutionGraphData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-    return days.map((day) => {
+    return days.map((day, index) => {
       const dayStr = format(day, "yyyy-MM-dd");
       const dayReceipts = receipts.filter((r) => {
         const d = format(new Date(r.date_traitement || r.created_at), "yyyy-MM-dd");
@@ -196,6 +196,7 @@ const Dashboard = () => {
       });
       const dayTva = dayReceipts.reduce((sum, r) => sum + (Number(r.tva) || 0), 0);
       return {
+        index,
         date: format(day, "dd/MM"),
         fullDate: day,
         tva: dayTva,
@@ -361,11 +362,14 @@ const Dashboard = () => {
                     />
                   ) : (
                     <XAxis
+                      dataKey="index"
+                      type="number"
                       tick={{ fontSize: 12 }}
                       tickMargin={8}
                       padding={{ left: 0, right: 0 }}
-                      ticks={[0, tvaEvolutionGraphData.length - 1]}
+                      ticks={tvaEvolutionGraphData.length > 0 ? [0, tvaEvolutionGraphData.length - 1] : [0]}
                       tickFormatter={(value) => {
+                        if (tvaEvolutionGraphData.length === 0) return "";
                         if (value === 0) return xAxisLabelLeft;
                         if (value === tvaEvolutionGraphData.length - 1) return xAxisLabelRight;
                         return "";
