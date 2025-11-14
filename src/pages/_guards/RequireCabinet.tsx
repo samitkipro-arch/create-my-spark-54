@@ -6,7 +6,7 @@ export default function RequireCabinet({ children }: { children: JSX.Element }) 
 
   if (role === null) return null; // loading
 
-  if (role === "enterprise") return <Navigate to="/dashboard" replace />;
+  if (role === "client") return <Navigate to="/dashboard" replace />;
 
   return children;
 }

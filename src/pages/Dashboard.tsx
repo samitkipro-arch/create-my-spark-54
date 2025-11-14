@@ -45,30 +45,22 @@ const Dashboard = () => {
     setMemberId,
   } = useGlobalFilters();
 
-  // --- Résolution client entreprise ---
+  // --- Résolution client entreprise (simplifié) ---
   const [enterpriseClientId, setEnterpriseClientId] = useState<string | null>(null);
   useEffect(() => {
     const resolve = async () => {
-      if (role !== "enterprise") return;
+      if (role !== "client") return;
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth?.user?.id;
       if (!userId) return;
-      const { data: ent } = await (supabase as any)
-        .from("entreprises")
-        .select("name")
+      
+      // Chercher directement le client_id où user_id correspond
+      const { data: cli } = await (supabase as any)
+        .from("clients")
+        .select("id")
         .eq("user_id", userId)
         .maybeSingle();
-      const companyName = ent?.name?.trim();
-      if (!companyName) {
-        setEnterpriseClientId("__none__");
-        return;
-      }
-      const { data: cli } = await supabase
-        .from("clients")
-        .select("id, name")
-        .ilike("name", companyName)
-        .limit(1)
-        .maybeSingle();
+      
       setEnterpriseClientId(cli?.id ?? "__none__");
     };
     if (!roleLoading) resolve();
@@ -104,7 +96,7 @@ const Dashboard = () => {
       if (error) throw error;
       return data || [];
     },
-    enabled: !roleLoading && role !== "enterprise",
+    enabled: !roleLoading && role !== "client",
   });
 
   const { data: members = [] } = useQuery({
@@ -120,7 +112,7 @@ const Dashboard = () => {
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.email || "Membre sans nom",
       }));
     },
-    enabled: !roleLoading && role !== "enterprise",
+    enabled: !roleLoading && role !== "client",
   });
 
   // --- Reçus ---
@@ -146,7 +138,7 @@ const Dashboard = () => {
         .gte("date_traitement", dateRange.from.toISOString())
         .lte("date_traitement", dateRange.to.toISOString());
 
-      if (role === "enterprise") {
+      if (role === "client") {
         if (!enterpriseClientId || enterpriseClientId === "__none__") return [];
         query = query.eq("client_id", enterpriseClientId);
       } else {
@@ -159,7 +151,7 @@ const Dashboard = () => {
       return data || [];
     },
     enabled:
-      !!dateRange?.from && !!dateRange?.to && !roleLoading && (role !== "enterprise" || enterpriseClientId !== null),
+      !!dateRange?.from && !!dateRange?.to && !roleLoading && (role !== "client" || enterpriseClientId !== null),
   });
 
   useEffect(() => {
@@ -256,7 +248,7 @@ const Dashboard = () => {
         {/* Filtres */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
-          {role !== "enterprise" && !roleLoading && (
+          {role !== "client" && !roleLoading && (
             <>
               <Select value={storedClientId} onValueChange={setClientId}>
                 <SelectTrigger className="w-full sm:w-48">
@@ -296,10 +288,7 @@ const Dashboard = () => {
                 <p className="text-sm opacity-90">TVA récupérée totale</p>
                 <p className="text-3xl font-bold">{formatCurrency(kpis.tva)}</p>
               </div>
-              <div className="flex items-center gap-1 text-sm">
-                <TrendingUp className="w-4 h-4" />
-                <span className="font-medium">+18 %</span>
-              </div>
+              <TrendingUp className="w-8 h-8 opacity-70" />
             </div>
           </CardContent>
         </Card>
@@ -311,7 +300,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Reçus traités</p>
-                  <p className="text-xl font-semibold">{kpis.count} / 48 (92 %)</p>
+                  <p className="text-xl font-semibold">{kpis.count}</p>
                 </div>
                 <Receipt className="w-8 h-8 text-blue-600 opacity-70" />
               </div>
@@ -389,7 +378,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Top 5 catégories */}
-        {role !== "enterprise" && topCategories.length > 0 && (
+        {role !== "client" && topCategories.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Top 5 catégories (TVA récupérée)</CardTitle>
@@ -420,7 +409,7 @@ const Dashboard = () => {
         )}
 
         {/* Performance équipe */}
-        {role !== "enterprise" && teamPerformance.length > 0 && (
+        {role !== "client" && teamPerformance.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
