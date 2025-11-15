@@ -25,9 +25,13 @@ export type Database = {
           notes: string | null
           org_id: string
           phone: string | null
+          prorata_tva: number
+          regime_tva: string | null
+          repas_deductibles: number
           siret_siren: string | null
           updated_at: string | null
           vat_number: string | null
+          vehicules: string | null
         }
         Insert: {
           address?: string | null
@@ -39,9 +43,13 @@ export type Database = {
           notes?: string | null
           org_id: string
           phone?: string | null
+          prorata_tva?: number
+          regime_tva?: string | null
+          repas_deductibles?: number
           siret_siren?: string | null
           updated_at?: string | null
           vat_number?: string | null
+          vehicules?: string | null
         }
         Update: {
           address?: string | null
@@ -53,13 +61,55 @@ export type Database = {
           notes?: string | null
           org_id?: string
           phone?: string | null
+          prorata_tva?: number
+          regime_tva?: string | null
+          repas_deductibles?: number
           siret_siren?: string | null
           updated_at?: string | null
           vat_number?: string | null
+          vehicules?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "clients_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entreprises: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string | null
+          org_id: string | null
+          phone: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          org_id?: string | null
+          phone?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          org_id?: string | null
+          phone?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entreprises_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
@@ -140,29 +190,35 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_type: string | null
           created_at: string | null
           email: string | null
           first_name: string | null
           last_name: string | null
           org_id: string | null
+          phone: string | null
           receipts_credits: number
           user_id: string
         }
         Insert: {
+          account_type?: string | null
           created_at?: string | null
           email?: string | null
           first_name?: string | null
           last_name?: string | null
           org_id?: string | null
+          phone?: string | null
           receipts_credits?: number
           user_id: string
         }
         Update: {
+          account_type?: string | null
           created_at?: string | null
           email?: string | null
           first_name?: string | null
           last_name?: string | null
           org_id?: string | null
+          phone?: string | null
           receipts_credits?: number
           user_id?: string
         }
@@ -183,12 +239,18 @@ export type Database = {
           categorie: string | null
           category_id: string | null
           client_id: string | null
+          corr_total_ht: number | null
+          corr_total_ttc: number | null
+          corr_total_tva: number | null
+          corrected_at: string | null
+          corrected_by: string | null
+          country_code: string | null
           created_at: string
-          date: string | null
           date_recu: string | null
           date_traitement: string
           enseigne: string | null
           id: number
+          is_corrected: boolean
           montant_ht: number | null
           montant_ttc: number | null
           moyen_paiement: string | null
@@ -199,6 +261,8 @@ export type Database = {
           source: string | null
           status: Database["public"]["Enums"]["receipt_status"]
           tva: number | null
+          tva_rate: number | null
+          tva_recuperable: number | null
           updated_at: string
           user_id: string | null
           ville: string | null
@@ -209,12 +273,18 @@ export type Database = {
           categorie?: string | null
           category_id?: string | null
           client_id?: string | null
+          corr_total_ht?: number | null
+          corr_total_ttc?: number | null
+          corr_total_tva?: number | null
+          corrected_at?: string | null
+          corrected_by?: string | null
+          country_code?: string | null
           created_at?: string
-          date?: string | null
           date_recu?: string | null
           date_traitement?: string
           enseigne?: string | null
           id?: number
+          is_corrected?: boolean
           montant_ht?: number | null
           montant_ttc?: number | null
           moyen_paiement?: string | null
@@ -225,6 +295,8 @@ export type Database = {
           source?: string | null
           status?: Database["public"]["Enums"]["receipt_status"]
           tva?: number | null
+          tva_rate?: number | null
+          tva_recuperable?: number | null
           updated_at?: string
           user_id?: string | null
           ville?: string | null
@@ -235,12 +307,18 @@ export type Database = {
           categorie?: string | null
           category_id?: string | null
           client_id?: string | null
+          corr_total_ht?: number | null
+          corr_total_ttc?: number | null
+          corr_total_tva?: number | null
+          corrected_at?: string | null
+          corrected_by?: string | null
+          country_code?: string | null
           created_at?: string
-          date?: string | null
           date_recu?: string | null
           date_traitement?: string
           enseigne?: string | null
           id?: number
+          is_corrected?: boolean
           montant_ht?: number | null
           montant_ttc?: number | null
           moyen_paiement?: string | null
@@ -251,11 +329,20 @@ export type Database = {
           source?: string | null
           status?: Database["public"]["Enums"]["receipt_status"]
           tva?: number | null
+          tva_rate?: number | null
+          tva_recuperable?: number | null
           updated_at?: string
           user_id?: string | null
           ville?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "recus_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "recus_org_id_fkey"
             columns: ["org_id"]
@@ -318,13 +405,40 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _split_ht_tva: {
+        Args: { p_rate: number; p_ttc: number }
+        Returns: {
+          ht: number
+          tva: number
+        }[]
+      }
+      client_kpis: {
+        Args: never
+        Returns: {
+          active_30d: number
+          to_remind_7d: number
+          total_clients: number
+        }[]
+      }
       decrement_receipt_credits: {
         Args: { p_user_id: string }
         Returns: number
       }
       get_next_receipt_number: { Args: { p_org_id: string }; Returns: number }
+      get_org_members: {
+        Args: { p_org_id: string }
+        Returns: {
+          name: string
+          user_id: string
+        }[]
+      }
       get_receipt_credits: { Args: { p_user_id: string }; Returns: number }
       get_user_org_id: { Args: { p_user_id: string }; Returns: string }
+      is_member_of_org: { Args: { target_org: string }; Returns: boolean }
+      recus_apply_vat_rules: {
+        Args: { p_receipt_id: number }
+        Returns: undefined
+      }
     }
     Enums: {
       receipt_status: "en_cours" | "traite" | "erreur"
