@@ -129,7 +129,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       formData.append("user_id", user.id);
       formData.append("client_id", selectedClientId);
 
-      const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
+      const response = await fetch("http://localhost:5678/webhook-test/d3d984a7-e98d-4310-aec1-dd7df92306b5", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: formData,
