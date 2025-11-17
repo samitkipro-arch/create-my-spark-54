@@ -129,7 +129,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       formData.append("user_id", user.id);
       formData.append("client_id", selectedClientId);
 
-      const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Finvisor", {
+      const response = await fetch("https://samilzr.app.n8n.cloud/webhook-test/Wizeenn-processing", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: formData,
