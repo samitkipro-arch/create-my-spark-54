@@ -5,6 +5,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { X, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
+import { N8N_CONFIG, validateN8nConfig } from "@/config/n8n";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -95,6 +96,8 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     setShowAnalysisOverlay(true);
 
     try {
+      // Validate n8n configuration
+      validateN8nConfig();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -129,7 +132,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       formData.append("user_id", user.id);
       formData.append("client_id", selectedClientId);
 
-      const response = await fetch("http://62.84.190.215:5678/webhook-test/b9bdd19b-6e33-485c-8190-7c53ee4f088e", {
+      const response = await fetch(N8N_CONFIG.WEBHOOK_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: formData,
