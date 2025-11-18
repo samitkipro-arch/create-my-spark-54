@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+impoimport { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { X, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { IconLightBulb, IconScanFrame } from "@/components/Recus/icons";
-import { N8N_CONFIG, validateN8nConfig } from "@/config/n8n";
 
 interface UploadInstructionsDialogProps {
   open: boolean;
@@ -13,6 +12,10 @@ interface UploadInstructionsDialogProps {
 }
 
 type Client = { id: string; name: string };
+
+// 🔥 Webhook fixé ici :
+const FIXED_N8N_WEBHOOK =
+  "https://n8n.wizeenn.com:5678/webhook-test/b5a5520e-f103-43f0-a2e6-c48ac3a461d4";
 
 export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructionsDialogProps) => {
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -81,11 +84,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     };
   }, [showAnalysisOverlay, onOpenChange]);
 
-  const cleanupAfterUpload = () => {
-    setIsUploading(false);
-    setShowAnalysisOverlay(false);
-  };
-
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -96,8 +94,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     setShowAnalysisOverlay(true);
 
     try {
-      // Validate n8n configuration
-      validateN8nConfig();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -132,11 +128,13 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       formData.append("user_id", user.id);
       formData.append("client_id", selectedClientId);
 
-      const response = await fetch(N8N_CONFIG.WEBHOOK_URL, {
+      // 🔥 Appel direct au webhook fixe
+      const response = await fetch(FIXED_N8N_WEBHOOK, {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: formData,
       });
+
       if (!response.ok) throw new Error((await response.text()) || `Erreur ${response.status}`);
 
       setFileInputKey((prev) => prev + 1);
@@ -146,13 +144,6 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
     } finally {
       setIsUploading(false);
     }
-  };
-
-  const retry = () => {
-    setSoftError(null);
-    setShowAnalysisOverlay(false);
-    setTimeout(() => setShowAnalysisOverlay(true), 0);
-    setFileInputKey((prev) => prev + 1);
   };
 
   return (
@@ -166,23 +157,25 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
                 <div className="relative h-2 bg-[#1a2332] rounded-full overflow-hidden">
                   <div
                     className="absolute inset-0 translate-x-[-100%] h-full bg-gradient-to-r from-blue-500 to-blue-600 animate-[progress_1.4s_ease-in-out_infinite]"
-                    style={{ /* @ts-ignore */ animationName: "progress" }}
+                    style={{ animationName: "progress" }}
                   />
                 </div>
               </div>
+
               {softError ? (
                 <div className="mt-4 text-center text-white/80 text-[13px]">
                   {softError}
                   <div className="mt-3 flex items-center justify-center gap-2">
-                    <Button onClick={retry} className="bg-white text-black hover:bg-white/90 h-8 px-3">
+                    <Button
+                      onClick={() => window.location.reload()}
+                      className="bg-white text-black hover:bg-white/90 h-8 px-3"
+                    >
                       Réessayer
                     </Button>
+
                     <Button
                       variant="secondary"
-                      onClick={() => {
-                        onOpenChange(false);
-                        cleanupAfterUpload();
-                      }}
+                      onClick={() => onOpenChange(false)}
                       className="h-8 px-3"
                     >
                       Fermer
@@ -205,106 +198,83 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-3 md:gap-8 mb-3 md:mb-8">
-              <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
+              <div className="flex flex-col items-center text-center space-y-3">
                 <div className="relative">
-                  <Smartphone className="w-10 h-10 md:w-16 md:h-16 text-white rotate-90" strokeWidth={1.5} />
-                  <div className="absolute -bottom-0.5 -right-0.5 md:-bottom-2 md:-right-2">
-                    <svg
-                      className="w-5 h-5 md:w-8 md:h-8 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M17 8l4 4m0 0l-4 4m4-4H3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
+                  <Smartphone className="w-16 h-16 text-white rotate-90" strokeWidth={1.5} />
                 </div>
-                <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
-                  Prenez la photo de votre reçu en orientant votre téléphone en mode paysage.
+                <p className="text-sm text-muted-foreground">
+                  Prenez la photo en mode paysage.
                 </p>
               </div>
 
-              <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
-                <IconLightBulb className="w-10 h-10 md:w-16 md:h-16 text-white" />
-                <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
-                  Prenez la photo dans un endroit bien éclairé, sans ombre sur le reçu.
+              <div className="flex flex-col items-center text-center space-y-3">
+                <IconLightBulb className="w-16 h-16 text-white" />
+                <p className="text-sm text-muted-foreground">
+                  Prenez la photo dans un endroit bien éclairé.
                 </p>
               </div>
 
-              <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
-                <IconScanFrame className="w-10 h-10 md:w-16 md:h-16 text-white" />
-                <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
-                  Le reçu doit être entièrement visible et bien cadré dans l&apos;image.
+              <div className="flex flex-col items-center text-center space-y-3">
+                <IconScanFrame className="w-16 h-16 text-white" />
+                <p className="text-sm text-muted-foreground">
+                  Le reçu doit être bien cadré.
                 </p>
               </div>
 
-              <div className="flex flex-col items-center text-center space-y-1.5 md:space-y-3">
+              <div className="flex flex-col items-center text-center space-y-3">
                 <div className="relative">
-                  <IconScanFrame className="w-10 h-10 md:w-16 md:h-16 text-white" />
+                  <IconScanFrame className="w-16 h-16 text-white" />
                   <X
-                    className="w-7 h-7 md:w-10 md:h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                    className="w-10 h-10 text-destructive absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
                     strokeWidth={3}
                   />
                 </div>
-                <p className="text-[10px] md:text-sm text-muted-foreground leading-tight md:leading-relaxed">
-                  Évitez tout texte ou objet autour du reçu pour une meilleure détection.
+                <p className="text-sm text-muted-foreground">
+                  Évitez les objets autour du reçu.
                 </p>
               </div>
             </div>
 
-            {clients.length === 0 && (
-              <p className="text-center text-xs md:text-sm text-muted-foreground mb-2">
-                Veuillez ajouter votre premier client.
-              </p>
+            {/* Dropdown client */}
+            {clients.length > 0 ? (
+              <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
+                <SelectTrigger className="w-full h-12 bg-white text-black font-medium rounded-md">
+                  <SelectValue placeholder="Assigner un client (obligatoire)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Button disabled className="w-full h-12 bg-white text-black opacity-50">
+                Assigner un client (obligatoire)
+              </Button>
             )}
 
-            {/* === Les 2 boutons, texte centré === */}
-            <div className="space-y-2 md:space-y-3">
-              {/* Assigner un client (obligatoire) — texte centré, sans chevron */}
-              {clients.length > 0 ? (
-                <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val)}>
-                  <SelectTrigger
-                    className="relative w-full h-11 md:h-12 bg-white text-black hover:bg-white/90 font-medium rounded-md
-                               flex items-center justify-center px-4"
-                  >
-                    <SelectValue placeholder="Assigner un client (obligatoire)" className="w-full text-center" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Button className="w-full h-11 md:h-12 bg-white text-black hover:bg-white/90" disabled>
-                  Assigner un client (obligatoire)
-                </Button>
-              )}
-
-              {/* Déposez votre reçu + */}
-              <div className="relative">
-                <input
-                  key={fileInputKey}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf"
-                  onChange={handleFileSelect}
-                  disabled={isUploading || !selectedClientId || clients.length === 0}
-                  className="hidden"
-                  id="receipt-upload"
-                />
-                <Button
-                  asChild
-                  disabled={isUploading || !selectedClientId || clients.length === 0}
-                  className="w-full bg-white text-black hover:bg-white/90 font-medium disabled:opacity-50 disabled:cursor-not-allowed h-11 md:h-12"
-                >
-                  <label htmlFor="receipt-upload" className="cursor-pointer">
-                    {isUploading ? "Envoi en cours..." : "Déposez votre reçu +"}
-                  </label>
-                </Button>
-              </div>
+            {/* Upload */}
+            <div className="mt-4">
+              <input
+                key={fileInputKey}
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                onChange={handleFileSelect}
+                disabled={isUploading || !selectedClientId || clients.length === 0}
+                className="hidden"
+                id="receipt-upload"
+              />
+              <Button
+                asChild
+                disabled={isUploading || !selectedClientId || clients.length === 0}
+                className="w-full bg-white text-black hover:bg-white/90 font-medium h-12"
+              >
+                <label htmlFor="receipt-upload" className="cursor-pointer">
+                  {isUploading ? "Envoi en cours..." : "Déposez votre reçu +"}
+                </label>
+              </Button>
             </div>
           </>
         )}
