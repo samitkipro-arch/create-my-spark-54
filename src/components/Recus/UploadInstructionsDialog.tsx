@@ -129,7 +129,7 @@ export const UploadInstructionsDialog = ({ open, onOpenChange }: UploadInstructi
       formData.append("user_id", user.id);
       formData.append("client_id", selectedClientId);
 
-      const response = await fetch("http://0.0.0.0:5678/webhook-test/b9bdd19b-6e33-485c-8190-7c53ee4f088e", {
+      const response = await fetch("http://62.84.190.215:5678/webhook-test/b9bdd19b-6e33-485c-8190-7c53ee4f088e", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: formData,
